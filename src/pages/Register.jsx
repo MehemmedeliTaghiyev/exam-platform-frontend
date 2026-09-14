@@ -1,17 +1,18 @@
-import { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useContext, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { GraduationCap } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { Button, Input, Select } from '../components/ui';
 
 export default function Register() {
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
-    role: 'Student' // Default role
+    role: 'Student',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -23,10 +24,8 @@ export default function Register() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await register(formData);
-      alert('Qeydiyyat uğurla tamamlandı! İndi daxil ola bilərsiniz.');
       navigate('/login');
     } catch (err) {
       setError(err.response?.data?.message || 'Qeydiyyat zamanı xəta baş verdi.');
@@ -36,62 +35,38 @@ export default function Register() {
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '60px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px' }}>
-      <h2>Qeydiyyat</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Ad və Soyad:</label>
-          <input
-            type="text"
-            name="fullName"
-            value={formData.fullName}
-            onChange={handleChange}
-            required
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          />
+    <div className="flex min-h-screen items-center justify-center bg-surface px-4 dark:bg-[#0b1220]">
+      <div className="w-full max-w-md">
+        <div className="mb-8 flex items-center justify-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
+            <GraduationCap size={20} />
+          </div>
+          <span className="text-lg font-bold text-ink dark:text-white">ExamPulse</span>
         </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label>E-poçt:</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          />
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
+          <h1 className="text-2xl font-bold text-ink dark:text-white">Qeydiyyat</h1>
+          {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <Input label="Ad və soyad" name="fullName" value={formData.fullName} onChange={handleChange} required />
+            <Input label="E-poçt" type="email" name="email" value={formData.email} onChange={handleChange} required />
+            <Input label="Şifrə" type="password" name="password" value={formData.password} onChange={handleChange} required />
+            <Select label="Rol" name="role" value={formData.role} onChange={handleChange}>
+              <option value="Student">Tələbə</option>
+              <option value="Teacher">Müəllim</option>
+              <option value="Admin">Admin</option>
+            </Select>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan keç'}
+            </Button>
+          </form>
+          <p className="mt-6 text-center text-sm text-gray-500">
+            Hesabınız var?{' '}
+            <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
+              Daxil olun
+            </Link>
+          </p>
         </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Şifrə:</label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Rollar:</label>
-          <select
-            name="role"
-            value={formData.role}
-            onChange={handleChange}
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          >
-            <option value="Student">Tələbə (Student)</option>
-            <option value="Teacher">Müəllim (Teacher)</option>
-          </select>
-        </div>
-        <button type="submit" disabled={loading} style={{ width: '100%', padding: '10px', cursor: 'pointer' }}>
-          {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan Keç'}
-        </button>
-      </form>
-      <p style={{ marginTop: '15px', textAlign: 'center' }}>
-        Hesabınız var? <Link to="/login">Daxil olun</Link>
-      </p>
+      </div>
     </div>
   );
 }

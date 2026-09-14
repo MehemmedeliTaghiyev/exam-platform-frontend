@@ -1,1 +1,49 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-surface: #f9fafb;
+  --color-ink: #111827;
+  --radius-card: 16px;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #f9fafb;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dark body {
+  background: #0b1220;
+  color: #e5e7eb;
+}
+
+.paper-sheet {
+  background: #fffef8;
+  box-shadow:
+    0 1px 1px rgba(15, 23, 42, 0.04),
+    0 12px 40px rgba(15, 23, 42, 0.08);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .paper-sheet {
+    box-shadow: none;
+  }
+}

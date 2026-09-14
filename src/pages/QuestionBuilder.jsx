@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import API from '../api/axios';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, FileDown, BarChart3 } from 'lucide-react';
+import AppShell from '../components/AppShell';
+import PaperPreview from '../components/PaperPreview';
+import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
+import { addQuestion, fetchExam, fetchQuestions } from '../lib/examApi';
+import { exportExamToDocx } from '../lib/exportDocx';
 
 export default function QuestionBuilder() {
-  const { id } = useParams(); // Exam ID from URL
+  const { id } = useParams();
   const navigate = useNavigate();
-
+  const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // New Question Form State
+  const [tab, setTab] = useState('edit');
   const [text, setText] = useState('');
   const [optionA, setOptionA] = useState('');
   const [optionB, setOptionB] = useState('');
@@ -18,178 +22,155 @@ export default function QuestionBuilder() {
   const [correctAnswer, setCorrectAnswer] = useState('A');
   const [submitting, setSubmitting] = useState(false);
 
+  const load = async () => {
+    setLoading(true);
+    const [examData, qs] = await Promise.all([fetchExam(id), fetchQuestions(id)]);
+    setExam(examData);
+    setQuestions(qs);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    fetchQuestions();
+    load();
   }, [id]);
 
-  const fetchQuestions = async () => {
+  const handleAddQuestion = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
     try {
-      // Endpoint to fetch questions for this specific exam
-      const response = await API.get(`/Questions/exam/${id}`);
-      setQuestions(response.data || []);
-    } catch (err) {
-      console.error('Suallar yüklənərkən xəta:', err);
+      await addQuestion(id, {
+        text,
+        points: 1,
+        type: 0,
+        options: [
+          { optionText: optionA, isCorrect: correctAnswer === 'A' },
+          { optionText: optionB, isCorrect: correctAnswer === 'B' },
+          { optionText: optionC, isCorrect: correctAnswer === 'C' },
+          { optionText: optionD, isCorrect: correctAnswer === 'D' },
+        ],
+      });
+      setText('');
+      setOptionA('');
+      setOptionB('');
+      setOptionC('');
+      setOptionD('');
+      setCorrectAnswer('A');
+      await load();
+    } catch {
+      alert('Sual əlavə edilərkən xəta baş verdi.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  const handleAddQuestion = async (e) => {
-  e.preventDefault();
-  setSubmitting(true);
-
-  try {
-    const payload = {
-      text,
-      points: 1,
-      type: 0, // QuestionType.SingleChoice
-      options: [
-        { optionText: optionA, isCorrect: correctAnswer === 'A' },
-        { optionText: optionB, isCorrect: correctAnswer === 'B' },
-        { optionText: optionC, isCorrect: correctAnswer === 'C' },
-        { optionText: optionD, isCorrect: correctAnswer === 'D' }
-      ]
-    };
-
-    // Include /exam/${id} in the POST URL
-    await API.post(`/Questions/exam/${id}`, payload);
-
-    // Reset Form
-    setText('');
-    setOptionA('');
-    setOptionB('');
-    setOptionC('');
-    setOptionD('');
-    setCorrectAnswer('A');
-
-    fetchQuestions();
-  } catch (err) {
-    console.error('Sual əlavə edilərkən xəta:', err);
-    alert('Sual əlavə edərkən xəta baş verdi.');
-  } finally {
-    setSubmitting(false);
-  }
-};
-
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <button 
-        onClick={() => navigate('/teacher')} 
-        style={{ marginBottom: '20px', padding: '8px 16px', cursor: 'pointer' }}
-      >
-        ← Geriyə (Müəllim Paneli)
-      </button>
-
-      <h2>Sual Qurucusu (İmtahan ID: {id})</h2>
-
-      {/* Add Question Form */}
-      <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '8px', marginBottom: '30px' }}>
-        <h3>Yeni Sual Əlavə Et</h3>
-        <form onSubmit={handleAddQuestion}>
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Sualın mətni:</label>
-            <textarea
-              required
-              rows="3"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              placeholder="Sualı buraya yazın..."
-            />
+    <AppShell title="İmtahan vərəqi">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" onClick={() => navigate('/teacher')}>
+            <ArrowLeft size={16} /> Geri
+          </Button>
+          <div>
+            <h2 className="text-xl font-bold">{exam?.title || `İmtahan #${id}`}</h2>
+            <p className="text-sm text-gray-500">{exam?.subjectName} · {questions.length} sual</p>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-            <div>
-              <label>A Varianti:</label>
-              <input
-                type="text"
-                required
-                value={optionA}
-                onChange={(e) => setOptionA(e.target.value)}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label>B Varianti:</label>
-              <input
-                type="text"
-                required
-                value={optionB}
-                onChange={(e) => setOptionB(e.target.value)}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label>C Varianti:</label>
-              <input
-                type="text"
-                required
-                value={optionC}
-                onChange={(e) => setOptionC(e.target.value)}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label>D Varianti:</label>
-              <input
-                type="text"
-                required
-                value={optionD}
-                onChange={(e) => setOptionD(e.target.value)}
-                style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Düzgün Cavab:</label>
-            <select
-              value={correctAnswer}
-              onChange={(e) => setCorrectAnswer(e.target.value)}
-              style={{ padding: '8px', width: '100px' }}
-            >
-              <option value="A">A</option>
-              <option value="B">B</option>
-              <option value="C">C</option>
-              <option value="D">D</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{ padding: '10px 20px', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-          >
-            {submitting ? 'Əlavə edilir...' : 'Sualı Əlavə Et'}
-          </button>
-        </form>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
+            <BarChart3 size={16} /> Statistika
+          </Button>
+          <Button variant="secondary" onClick={() => exportExamToDocx(exam, questions)}>
+            <FileDown size={16} /> Word export
+          </Button>
+        </div>
       </div>
 
-      {/* Existing Questions List */}
-      <h3>Mövcud Suallar ({questions.length})</h3>
-      {loading ? (
-        <p>Yüklənir...</p>
-      ) : questions.length === 0 ? (
-        <p>Hələ heç bir sual əlavə edilməyib.</p>
+      <div className="mb-6 flex w-fit gap-1 rounded-xl bg-gray-100 p-1 dark:bg-slate-800">
+        <button
+          onClick={() => setTab('edit')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            tab === 'edit' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-gray-500'
+          }`}
+        >
+          Sualları idarə et
+        </button>
+        <button
+          onClick={() => setTab('paper')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            tab === 'paper' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-gray-500'
+          }`}
+        >
+          Vərəq görünüşü
+        </button>
+      </div>
+
+      {tab === 'paper' ? (
+        loading ? (
+          <Skeleton className="h-[480px]" />
+        ) : (
+          <PaperPreview exam={exam} questions={questions} />
+        )
       ) : (
-        <ol style={{ paddingLeft: '20px' }}>
-          {questions.map((q, idx) => (
-            <li key={q.id || idx} style={{ marginBottom: '15px', padding: '10px', border: '1px solid #eee', borderRadius: '4px' }}>
-              <strong>{q.text}</strong> ({q.points} ball)
-              <ul style={{ listStyleType: 'none', paddingLeft: '10px', marginTop: '5px' }}>
-                {q.options?.map((opt, optIdx) => (
-                  <li 
-                    key={opt.id || optIdx} 
-                    style={{ color: opt.isCorrect ? 'green' : 'inherit', fontWeight: opt.isCorrect ? 'bold' : 'normal' }}
-                  >
-                    {String.fromCharCode(65 + optIdx)}) {opt.text} {opt.isCorrect && '✓'}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ol>
+        <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <Card>
+            <h3 className="mb-4 text-base font-bold">Yeni sual</h3>
+            <form onSubmit={handleAddQuestion} className="space-y-4">
+              <Textarea
+                label="Sualın mətni"
+                rows={3}
+                required
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input label="A" value={optionA} onChange={(e) => setOptionA(e.target.value)} required />
+                <Input label="B" value={optionB} onChange={(e) => setOptionB(e.target.value)} required />
+                <Input label="C" value={optionC} onChange={(e) => setOptionC(e.target.value)} required />
+                <Input label="D" value={optionD} onChange={(e) => setOptionD(e.target.value)} required />
+              </div>
+              <Select label="Düzgün cavab" value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)}>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </Select>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? 'Əlavə edilir...' : 'Sualı əlavə et'}
+              </Button>
+            </form>
+          </Card>
+
+          <div className="space-y-4">
+            <h3 className="text-base font-bold">Mövcud suallar</h3>
+            {loading ? (
+              <>
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+              </>
+            ) : questions.length === 0 ? (
+              <Card className="text-sm text-gray-500">Hələ sual yoxdur.</Card>
+            ) : (
+              questions.map((q, idx) => (
+                <Card key={q.id || idx}>
+                  <p className="font-medium">
+                    {idx + 1}. {q.text}
+                  </p>
+                  <ul className="mt-3 space-y-1 text-sm">
+                    {(q.options || []).map((opt, oi) => (
+                      <li
+                        key={opt.id || oi}
+                        className={opt.isCorrect ? 'font-medium text-emerald-600' : 'text-gray-600 dark:text-gray-300'}
+                      >
+                        {String.fromCharCode(65 + oi)}) {opt.optionText || opt.text} {opt.isCorrect ? '✓' : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
       )}
-    </div>
+    </AppShell>
   );
 }

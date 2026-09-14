@@ -1,210 +1,210 @@
-import { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../api/axios';
+import { Plus } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import AppShell from '../components/AppShell';
+import ExamCard from '../components/ExamCard';
+import { Button, EmptyState, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
+import { createExam, createSubject, fetchExams, fetchSubjects } from '../lib/examApi';
 
 export default function TeacherDashboard() {
-  const { user, logout } = useContext(AuthContext);
-  const [exams, setExams] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-
-  // Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState(30);
-  const [totalQuestions, setTotalQuestions] = useState(10);
-  const [subjectId, setSubjectId] = useState(1);
+  const [exams, setExams] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [questionCount, setQuestionCount] = useState(10);
+  const [durationMinutes, setDurationMinutes] = useState(45);
+  const [subjectMode, setSubjectMode] = useState('existing');
+  const [subjectId, setSubjectId] = useState('');
+  const [newSubject, setNewSubject] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    const [examList, subjectList] = await Promise.all([fetchExams(), fetchSubjects()]);
+    setExams(examList);
+    setSubjects(subjectList);
+    if (subjectList[0]) setSubjectId(String(subjectList[0].id));
+    setLoading(false);
+  };
 
   useEffect(() => {
-    fetchTeacherExams();
+    load();
   }, []);
-
-  const fetchTeacherExams = async () => {
-    try {
-      const response = await API.get('/Exams');
-      const examData = response.data?.items || (Array.isArray(response.data) ? response.data : []);
-      setExams(examData);
-    } catch (err) {
-      console.error('İmtahanlar yüklənərkən xəta:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteExam = async (examId) => {
-  if (!window.confirm('Bu imtahanı silməyə əminsiniz?')) return;
-
-  try {
-    await API.delete(`/Exams/${examId}`);
-    fetchTeacherExams(); // Refresh list
-  } catch (err) {
-    console.error('İmtahan silinərkən xəta:', err);
-    alert('İmtahanı silmək mümkün olmadı.');
-  }
-  };
 
   const handleCreateExam = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setError('');
+    setNotice('');
 
     try {
-      await API.post('/Exams', {
+      let subject = subjects.find((s) => String(s.id) === String(subjectId));
+      if (subjectMode === 'new') {
+        if (!newSubject.trim()) {
+          setError('Yeni fənn adını yazın.');
+          setSubmitting(false);
+          return;
+        }
+        subject = await createSubject(newSubject);
+        setSubjects((prev) => [...prev.filter((s) => s.id !== subject.id), subject]);
+      }
+
+      const exam = await createExam({
         title,
+        description,
+        totalQuestions: Number(questionCount),
         durationMinutes: Number(durationMinutes),
-        totalQuestions: Number(totalQuestions),
-        subjectId: Number(subjectId)
+        teacherId: user?.id ? Number(user.id) || user.id : undefined,
+        subjectId: subject?.id,
+        subjectName: subject?.name,
       });
 
-      // Reset form and close modal
+      setShowModal(false);
       setTitle('');
-      setDurationMinutes(30);
-      setTotalQuestions(10);
-      setSubjectId(1);
-      setIsModalOpen(false);
-
-      // Refresh list
-      fetchTeacherExams();
+      setDescription('');
+      setNewSubject('');
+      setSubjectMode('existing');
+      await load();
+      if (exam.source === 'local') {
+        setNotice('Backend imtahanı qəbul etmədi, imtahan yerli siyahıda saxlanıldı. Kartlar yenilənib.');
+      }
     } catch (err) {
-      console.error('İmtahan yaradılanda xəta:', err);
-      const serverMessage = err.response?.data?.errors?.TotalQuestions?.[0] 
-        || err.response?.data?.title 
-        || 'İmtahan yaradılarkən xəta baş verdi.';
-      alert(serverMessage);
+      setError(err.response?.data?.message || 'İmtahan yaradıla bilmədi.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h2>Müəllim Paneli - Xoş gəldiniz, {user?.fullName || user?.email}</h2>
-        <button onClick={logout} style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '4px' }}>
-          Çıxış Et
-        </button>
+    <AppShell title="İmtahanlar">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Müəllim'}</p>
+          <p className="mt-1 text-2xl font-bold">Yaradılmış imtahanlar</p>
+        </div>
+        <Button onClick={() => setShowModal(true)}>
+          <Plus size={16} /> Yeni imtahan
+        </Button>
       </div>
 
-      {/* Action Button */}
-      <div style={{ marginBottom: '20px' }}>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px' }}
-        >
-          + Yeni İmtahan Yarat
-        </button>
-      </div>
-
-      {/* Exam List */}
-      <h3>Mövcud İmtahanlar</h3>
-      {loading ? (
-        <p>Yüklənir...</p>
-      ) : exams.length === 0 ? (
-        <p>Hələ heç bir imtahan yaradılmayıb.</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f2f2f2', textAlign: 'left' }}>
-              <th style={{ padding: '10px', border: '1px solid #ddd' }}>İmtahan Adı</th>
-              <th style={{ padding: '10px', border: '1px solid #ddd' }}>Müddət (dəq)</th>
-              <th style={{ padding: '10px', border: '1px solid #ddd' }}>Əməliyyatlar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {exams.map((exam) => (
-              <tr key={exam.id}>
-                <td style={{ padding: '10px', border: '1px solid #ddd' }}>{exam.title}</td>
-                <td style={{ padding: '10px', border: '1px solid #ddd' }}>{exam.durationMinutes}</td>
-
-                {/* UPDATED ACTION BUTTONS */}
-                <td style={{ padding: '10px', border: '1px solid #ddd' }}>
-                  <button 
-                    onClick={() => navigate(`/teacher/exams/${exam.id}`)} 
-                    style={{ marginRight: '10px', cursor: 'pointer' }}
-                  >
-                    Bax / Suallar
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteExam(exam.id)} 
-                    style={{ color: 'red', cursor: 'pointer' }}
-                  >
-                    Sil
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Modal Overlay */}
-      {isModalOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-          <div style={{ backgroundColor: '#fff', padding: '25px', borderRadius: '8px', width: '400px' }}>
-            <h3>Yeni İmtahan Yarat</h3>
-            <form onSubmit={handleCreateExam}>
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>İmtahan Adı:</label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-                  placeholder="Məs: C# / .NET Midterm"
-                />
-              </div>
-
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Sual Sayı (1 - 200):</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  max="200"
-                  value={totalQuestions}
-                  onChange={(e) => setTotalQuestions(e.target.value)}
-                  style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>Müddət (Dəqiqə):</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(e.target.value)}
-                  style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#ccc', border: 'none', borderRadius: '4px' }}
-                >
-                  Ləğv Et
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{ padding: '8px 16px', cursor: 'pointer', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px' }}
-                >
-                  {submitting ? 'Yaradılır...' : 'Yarat'}
-                </button>
-              </div>
-            </form>
-          </div>
+      {notice && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          {notice}
         </div>
       )}
-    </div>
+
+      {loading ? (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-44" />
+          <Skeleton className="h-44" />
+          <Skeleton className="h-44" />
+        </div>
+      ) : exams.length === 0 ? (
+        <EmptyState
+          title="Hələ imtahan yoxdur"
+          text="Fənn seçərək və ya yeni fənn yaradaraq ilk imtahanı əlavə edin."
+          action={
+            <Button onClick={() => setShowModal(true)}>
+              <Plus size={16} /> İmtahan yarat
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {exams.map((exam) => (
+            <ExamCard
+              key={exam.id}
+              exam={exam}
+              actionLabel="Statistika və suallar"
+              onOpen={() => navigate(`/teacher/exams/${exam.id}`)}
+            />
+          ))}
+        </div>
+      )}
+
+      <Modal open={showModal} title="Yeni imtahan yarat" onClose={() => setShowModal(false)}>
+        <form onSubmit={handleCreateExam} className="space-y-4">
+          <Input label="İmtahan adı" value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <Textarea
+            label="Qısa təsvir"
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <div className="flex gap-2 rounded-xl bg-gray-50 p-1 dark:bg-slate-800">
+            <button
+              type="button"
+              onClick={() => setSubjectMode('existing')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${
+                subjectMode === 'existing' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-gray-500'
+              }`}
+            >
+              Mövcud fənn
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubjectMode('new')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all duration-200 ${
+                subjectMode === 'new' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-gray-500'
+              }`}
+            >
+              Yeni fənn
+            </button>
+          </div>
+          {subjectMode === 'existing' ? (
+            <Select label="Fənn" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input
+              label="Yeni fənn adı"
+              value={newSubject}
+              onChange={(e) => setNewSubject(e.target.value)}
+              placeholder="məs. Kimya"
+              required
+            />
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Sual sayı"
+              type="number"
+              min="1"
+              value={questionCount}
+              onChange={(e) => setQuestionCount(e.target.value)}
+              required
+            />
+            <Input
+              label="Müddət (dəqiqə)"
+              type="number"
+              min="1"
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(e.target.value)}
+              required
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{typeof error === 'string' ? error : 'Xəta baş verdi'}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setShowModal(false)}>
+              Ləğv et
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Yaradılır...' : 'Yarat'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </AppShell>
   );
 }

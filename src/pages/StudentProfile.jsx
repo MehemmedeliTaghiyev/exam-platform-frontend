@@ -6,7 +6,7 @@ import ProgressChart from '../components/ProgressChart';
 import { Badge, Button, Card } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { localDb } from '../lib/localDb';
-import { formatDate, fullNameOf } from '../lib/utils';
+import { formatDate, fullNameOf, percent } from '../lib/utils';
 
 export default function StudentProfile() {
   const { id } = useParams();
@@ -15,13 +15,21 @@ export default function StudentProfile() {
   const teacherId = user?.id || 'me';
   const student = localDb.getStudents(teacherId).find((s) => s.id === id);
   const group = localDb.getGroups(teacherId).find((g) => g.id === student?.groupId);
-  const results = useMemo(
-    () =>
-      localDb
-        .getSubmissions()
-        .filter((s) => String(s.studentId) === String(id) || s.studentName === fullNameOf(student)),
-    [id, student],
-  );
+  const results = useMemo(() => {
+    const name = fullNameOf(student);
+    return localDb
+      .getSubmissions()
+      .filter(
+        (s) =>
+          String(s.studentId) === String(id) ||
+          s.studentName === name ||
+          (student?.email && (s.studentEmail === student.email || s.email === student.email)),
+      )
+      .map((s) => ({
+        ...s,
+        percent: s.percent ?? percent(s.score ?? s.correctAnswersCount ?? 0, s.totalQuestions || 1),
+      }));
+  }, [id, student]);
 
   if (!student) {
     return (
@@ -54,6 +62,10 @@ export default function StudentProfile() {
             <div>
               <dt className="text-gray-400">Qrup</dt>
               <dd className="font-medium">{group?.name || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">E-poçt</dt>
+              <dd className="font-medium">{student.email || '—'}</dd>
             </div>
             <div>
               <dt className="text-gray-400">Doğum tarixi</dt>
@@ -103,15 +115,23 @@ export default function StudentProfile() {
                 </tr>
               </thead>
               <tbody>
-                {results.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
-                    <td className="px-5 py-3">{r.examTitle || r.examId}</td>
-                    <td className="px-5 py-3 text-gray-500">{formatDate(r.submittedAt)}</td>
-                    <td className="px-5 py-3">
-                      <Badge tone={(r.percent || 0) >= 50 ? 'success' : 'danger'}>{r.percent || 0}%</Badge>
+                {results.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-5 py-8 text-gray-400">
+                      Bu tələbə hələ imtahan verməyib.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  results.map((r) => (
+                    <tr key={r.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
+                      <td className="px-5 py-3">{r.examTitle || r.examId}</td>
+                      <td className="px-5 py-3 text-gray-500">{formatDate(r.submittedAt)}</td>
+                      <td className="px-5 py-3">
+                        <Badge tone={(r.percent || 0) >= 50 ? 'success' : 'danger'}>{r.percent || 0}%</Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </Card>

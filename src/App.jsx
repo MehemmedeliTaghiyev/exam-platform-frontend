@@ -12,6 +12,8 @@ import TeacherCabinet from './pages/TeacherCabinet';
 import GroupDetail from './pages/GroupDetail';
 import StudentProfile from './pages/StudentProfile';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminUsers from './pages/AdminUsers';
+import TeacherUsers from './pages/TeacherUsers';
 
 function App() {
   return (
@@ -27,7 +29,23 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute allowedRoles={['Admin']}>
+            <AdminUsers />
+          </ProtectedRoute>
+        }
+      />
 
+      <Route
+        path="/teacher/users"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <TeacherUsers />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/teacher"
         element={
@@ -61,10 +79,10 @@ function App() {
         }
       />
       <Route
-        path="/teacher/exams/:id"
+        path="/teacher/exams/:examId/review"
         element={
           <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
-            <QuestionBuilder />
+            <ExamResult />
           </ProtectedRoute>
         }
       />
@@ -73,6 +91,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
             <ExamStats />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/exams/:id"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <QuestionBuilder />
           </ProtectedRoute>
         }
       />
@@ -86,10 +112,26 @@ function App() {
         }
       />
       <Route
+        path="/student/exams/:examId/review"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <ExamResult />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/student/exams/:id"
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <TakeExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/exam-result/exam/:examId"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <ExamResult />
           </ProtectedRoute>
         }
       />

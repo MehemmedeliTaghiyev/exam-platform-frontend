@@ -1,6 +1,8 @@
 import { createContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { normalizeRole } from '../lib/utils';
+import { Button } from '../components/ui';
 
 export const AuthContext = createContext();
 
@@ -19,6 +21,15 @@ function normalizeUser(raw) {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [accessClosed, setAccessClosed] = useState(false);
+  const navigate = useNavigate();
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('userId');
+    setUser(null);
+  };
 
   useEffect(() => {
     try {
@@ -35,6 +46,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  useEffect(() => {
+    const onClosed = () => {
+      logout();
+      setAccessClosed(true);
+    };
+    window.addEventListener('access-closed', onClosed);
+    return () => window.removeEventListener('access-closed', onClosed);
+  }, []);
+
   const login = async (credentials) => {
     const response = await API.post('/Auth/login', credentials);
     const data = response.data;
@@ -43,6 +63,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(normalized));
     if (normalized?.id) localStorage.setItem('userId', String(normalized.id));
+    setAccessClosed(false);
     setUser(normalized);
     return normalized;
   };
@@ -52,15 +73,27 @@ export const AuthProvider = ({ children }) => {
     return response.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('userId');
-    setUser(null);
-  };
-
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, accessClosed, setAccessClosed }}>
+      {accessClosed && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl dark:bg-slate-900">
+            <h1 className="text-2xl font-bold text-ink dark:text-white">Pəncərə bağlıdır</h1>
+            <p className="mt-3 text-sm text-gray-500">
+              Hesabınızın girişi bağlanıb. Ödəniş edəndən sonra admin pəncərəni açacaq.
+            </p>
+            <Button
+              className="mt-6 w-full"
+              onClick={() => {
+                setAccessClosed(false);
+                navigate('/login');
+              }}
+            >
+              Giriş səhifəsinə qayıt
+            </Button>
+          </div>
+        </div>
+      )}
       {children}
     </AuthContext.Provider>
   );

@@ -1,8 +1,10 @@
 import { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Button, Input, Select } from '../components/ui';
+import { errorMessage } from '../lib/utils';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -14,6 +16,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
+  const { dark, toggle } = useTheme();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -28,7 +31,7 @@ export default function Register() {
       await register(formData);
       navigate('/login');
     } catch (err) {
-      setError(err.response?.data?.message || 'Qeydiyyat zamanı xəta baş verdi.');
+      setError(errorMessage(err, 'Qeydiyyat zamanı xəta baş verdi.'));
     } finally {
       setLoading(false);
     }
@@ -37,6 +40,16 @@ export default function Register() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 dark:bg-[#0b1220]">
       <div className="w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={toggle}
+            className="rounded-xl p-2.5 text-gray-500 transition-all duration-200 hover:bg-white dark:hover:bg-slate-800"
+            title="Tema"
+          >
+            {dark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
         <div className="mb-8 flex items-center justify-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
             <GraduationCap size={20} />

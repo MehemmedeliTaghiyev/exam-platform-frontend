@@ -20,8 +20,11 @@ export default function AdminDashboard() {
       const examList = await fetchExams();
       setExams(examList);
       try {
-        const res = await API.get('/Users');
-        setUsers(unwrapList(res.data));
+        const [teachers, students] = await Promise.all([
+          API.get('/Users', { params: { role: 'Teacher', includeDeleted: false } }),
+          API.get('/Users', { params: { role: 'Student', includeDeleted: false } }),
+        ]);
+        setUsers([...unwrapList(teachers.data), ...unwrapList(students.data)]);
       } catch {
         setUsers([]);
       }

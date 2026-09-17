@@ -10,6 +10,7 @@ import {
   X,
   GraduationCap,
   Shield,
+  KeyRound,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -18,6 +19,7 @@ import { normalizeRole } from '../lib/utils';
 const navByRole = {
   Teacher: [
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen, end: true },
+    { to: '/teacher/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
   ],
   Student: [
@@ -25,6 +27,7 @@ const navByRole = {
   ],
   Admin: [
     { to: '/admin', label: 'İdarə paneli', icon: Shield, end: true },
+    { to: '/admin/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
   ],

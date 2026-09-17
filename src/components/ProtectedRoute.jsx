@@ -2,6 +2,14 @@ import { useContext } from 'react';
 import { Navigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Skeleton } from './ui';
+import { normalizeRole } from '../lib/utils';
+
+function homeForRole(role) {
+  if (role === 'Admin') return '/admin';
+  if (role === 'Teacher') return '/teacher';
+  if (role === 'Student') return '/student';
+  return '/login';
+}
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading } = useContext(AuthContext);
@@ -19,6 +27,9 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/login" replace />;
+  const role = normalizeRole(user.role);
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to={homeForRole(role)} replace />;
+  }
   return children;
 }

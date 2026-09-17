@@ -3,10 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Users, Percent, TrendingUp, HelpCircle } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import ProgressChart from '../components/ProgressChart';
-import { Badge, Button, Card, Skeleton, StatCard } from '../components/ui';
-import { fetchExam, fetchExamSubmissions, fetchQuestions } from '../lib/examApi';
+import { Button, Card, Skeleton, StatCard } from '../components/ui';
+import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestions } from '../lib/examApi';
 import { buildExamStats } from '../lib/stats';
-import { formatDate } from '../lib/utils';
+import LeaderboardTable from '../components/LeaderboardTable';
 
 export default function ExamStats() {
   const { id } = useParams();
@@ -14,27 +14,30 @@ export default function ExamStats() {
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [difficultyRows, setDifficultyRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const run = async () => {
       setLoading(true);
-      const [e, q, s] = await Promise.all([
+      const [e, q, s, d] = await Promise.all([
         fetchExam(id),
         fetchQuestions(id),
         fetchExamSubmissions(id),
+        fetchQuestionDifficulty(id),
       ]);
       setExam(e);
       setQuestions(q);
       setSubmissions(s);
+      setDifficultyRows(d);
       setLoading(false);
     };
     run();
   }, [id]);
 
   const stats = useMemo(
-    () => buildExamStats(exam, questions, submissions),
-    [exam, questions, submissions],
+    () => buildExamStats(exam, questions, submissions, difficultyRows),
+    [exam, questions, submissions, difficultyRows],
   );
 
   return (
@@ -49,9 +52,14 @@ export default function ExamStats() {
             <p className="text-sm text-gray-500">{exam?.subjectName}</p>
           </div>
         </div>
-        <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}`)}>
-          Suallar və vərəq
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}`)}>
+            Suallar və vərəq
+          </Button>
+          <Button onClick={() => navigate(`/teacher/exams/${id}/review`)}>
+            Sıralama cədvəli
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -84,76 +92,50 @@ export default function ExamStats() {
 
           <Card className="mt-6 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
-              <h3 className="font-bold">Bütün nəticələr</h3>
+              <h3 className="font-bold">İştirakçılar (sıralama)</h3>
+              <p className="mt-1 px-0 text-sm text-gray-500">Bal, sonra bitirmə müddəti (saat:dəqiqə:saniyə)</p>
             </div>
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
-                  <th className="px-5 py-3 font-medium">Tələbə</th>
-                  <th className="px-5 py-3 font-medium">Tarix</th>
-                  <th className="px-5 py-3 font-medium">Bal</th>
-                  <th className="px-5 py-3 font-medium">Uğur</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.scores.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-gray-400">
-                      Hələ heç kim imtahan verməyib.
-                    </td>
-                  </tr>
-                ) : (
-                  stats.scores.map((row) => (
-                    <tr key={row.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
-                      <td className="px-5 py-3 font-medium">{row.studentName}</td>
-                      <td className="px-5 py-3 text-gray-500">{formatDate(row.submittedAt)}</td>
-                      <td className="px-5 py-3">{row.score ?? row.correctAnswersCount ?? 0}</td>
-                      <td className="px-5 py-3">{row.percent}%</td>
-                      <td className="px-5 py-3">
-                        <Badge tone={row.percent >= 50 ? 'success' : 'danger'}>
-                          {row.percent >= 50 ? 'Keçdi' : 'Kəsildi'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            <LeaderboardTable rows={stats.scores} emptyText="Hələ heç kim imtahan verməyib." />
           </Card>
 
           <Card className="mt-6 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
               <h3 className="font-bold">Sual çətinliyi</h3>
+              <p className="mt-1 text-sm text-gray-500">Çətinlik = bu sualda səhv edən tələbə sayı</p>
             </div>
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
                   <th className="px-5 py-3 font-medium">#</th>
                   <th className="px-5 py-3 font-medium">Sual</th>
-                  <th className="px-5 py-3 font-medium">Cavab sayı</th>
-                  <th className="px-5 py-3 font-medium">Çətinlik</th>
+                  <th className="px-5 py-3 font-medium">İştirakçı</th>
+                  <th className="px-5 py-3 font-medium">Səhv edənlər</th>
+                  <th className="px-5 py-3 font-medium">Çətinlik dərəcəsi</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.difficulty.map((q) => (
+                {stats.difficulty.map((q) => {
+                  const share = q.asked ? Math.round((q.wrongCount / q.asked) * 100) : 0;
+                  return (
                   <tr key={q.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
                     <td className="px-5 py-3">{q.index}</td>
                     <td className="px-5 py-3">{q.text}</td>
                     <td className="px-5 py-3">{q.asked}</td>
+                    <td className="px-5 py-3">{q.wrongCount} nəfər</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
                           <div
                             className="h-full rounded-full bg-brand-600"
-                            style={{ width: `${q.difficulty}%` }}
+                            style={{ width: `${share}%` }}
                           />
                         </div>
-                        <span className="font-medium">{q.difficulty}%</span>
+                        <span className="font-medium">{q.difficulty}</span>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </Card>

@@ -1,8 +1,10 @@
 import { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Button, Input } from '../components/ui';
+import { errorMessage } from '../lib/utils';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -10,6 +12,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
+  const { dark, toggle } = useTheme();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -22,7 +25,11 @@ export default function Login() {
       else if (userData?.role === 'Teacher') navigate('/teacher');
       else navigate('/student');
     } catch (err) {
-      setError(err.response?.data?.message || 'Giriş uğursuz oldu. E-poçt və ya şifrə yanlışdır.');
+      if (err?.response?.data?.code === 'ACCESS_CLOSED') {
+        setError(err.response.data.message || 'Hesabınız bağlanıb. Giriş üçün adminə müraciət edin.');
+      } else {
+        setError(errorMessage(err, 'Giriş uğursuz oldu. E-poçt və ya şifrə yanlışdır.'));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -31,6 +38,16 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 dark:bg-[#0b1220]">
       <div className="w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={toggle}
+            className="rounded-xl p-2.5 text-gray-500 transition-all duration-200 hover:bg-white dark:hover:bg-slate-800"
+            title="Tema"
+          >
+            {dark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+        </div>
         <div className="mb-8 flex items-center justify-center gap-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
             <GraduationCap size={20} />

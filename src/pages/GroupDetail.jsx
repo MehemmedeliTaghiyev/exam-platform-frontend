@@ -21,6 +21,7 @@ export default function GroupDetail() {
     firstName: '',
     lastName: '',
     fatherName: '',
+    email: '',
     birthDate: '',
     contractStart: '',
     contractEnd: '',
@@ -49,6 +50,7 @@ export default function GroupDetail() {
       firstName: '',
       lastName: '',
       fatherName: '',
+      email: '',
       birthDate: '',
       contractStart: '',
       contractEnd: '',
@@ -108,16 +110,27 @@ export default function GroupDetail() {
           <Input label="Ad" required value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
           <Input label="Soyad" required value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
           <Input label="Ata adı" value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} />
+          <Input label="E-poçt" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="Doğum tarixi" type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
           <Input label="Müqavilə başlanğıcı" type="date" value={form.contractStart} onChange={(e) => setForm({ ...form, contractStart: e.target.value })} />
           <Input label="Müqavilə sonu" type="date" value={form.contractEnd} onChange={(e) => setForm({ ...form, contractEnd: e.target.value })} />
           <label className="block space-y-1.5 text-sm">
             <span className="font-medium text-gray-600 dark:text-gray-300">Şəkil</span>
-            <input type="file" accept="image/*" onChange={onFile('photo')} />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={onFile('photo')}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 dark:border-slate-700"
+            />
           </label>
           <label className="block space-y-1.5 text-sm">
             <span className="font-medium text-gray-600 dark:text-gray-300">Müqavilə şəkli</span>
-            <input type="file" accept="image/*" onChange={onFile('contractPhoto')} />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={onFile('contractPhoto')}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-brand-700 dark:border-slate-700"
+            />
           </label>
           <div className="sm:col-span-2 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setOpen(false)}>Ləğv et</Button>

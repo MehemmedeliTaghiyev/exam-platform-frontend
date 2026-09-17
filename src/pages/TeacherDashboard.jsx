@@ -6,6 +6,13 @@ import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import { Button, EmptyState, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, fetchExams, fetchSubjects } from '../lib/examApi';
+import { errorMessage } from '../lib/utils';
+
+function toDatetimeLocalValue(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function TeacherDashboard() {
   const { user } = useContext(AuthContext);
@@ -17,6 +24,7 @@ export default function TeacherDashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [, setTick] = useState(0);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,14 +33,26 @@ export default function TeacherDashboard() {
   const [subjectMode, setSubjectMode] = useState('existing');
   const [subjectId, setSubjectId] = useState('');
   const [newSubject, setNewSubject] = useState('');
+  const [startLocal, setStartLocal] = useState(() => toDatetimeLocalValue(new Date()));
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const load = async () => {
     setLoading(true);
-    const [examList, subjectList] = await Promise.all([fetchExams(), fetchSubjects()]);
-    setExams(examList);
-    setSubjects(subjectList);
-    if (subjectList[0]) setSubjectId(String(subjectList[0].id));
-    setLoading(false);
+    try {
+      const [examList, subjectList] = await Promise.all([fetchExams(), fetchSubjects()]);
+      setExams(examList);
+      setSubjects(subjectList);
+      if (subjectList[0]) setSubjectId(String(subjectList[0].id));
+      else setSubjectMode('new');
+    } catch {
+      setExams([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -57,27 +77,45 @@ export default function TeacherDashboard() {
         setSubjects((prev) => [...prev.filter((s) => s.id !== subject.id), subject]);
       }
 
+      if (subjectMode === 'existing' && !subject) {
+        setError('Fənn seçin və ya yeni fənn yaradın.');
+        setSubmitting(false);
+        return;
+      }
+
+      const start = new Date(startLocal);
+      if (Number.isNaN(start.getTime())) {
+        setError('Başlama tarixini seçin.');
+        setSubmitting(false);
+        return;
+      }
+      const end = new Date(start.getTime() + Number(durationMinutes) * 60 * 1000);
+
       const exam = await createExam({
         title,
         description,
         totalQuestions: Number(questionCount),
         durationMinutes: Number(durationMinutes),
-        teacherId: user?.id ? Number(user.id) || user.id : undefined,
+        teacherId: user?.id,
         subjectId: subject?.id,
         subjectName: subject?.name,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        status: start.getTime() > Date.now() ? 'Scheduled' : 'Live',
       });
 
       setShowModal(false);
       setTitle('');
       setDescription('');
       setNewSubject('');
-      setSubjectMode('existing');
+      setStartLocal(toDatetimeLocalValue(new Date()));
+      setSubjectMode(subjects.length ? 'existing' : 'new');
       await load();
-      if (exam.source === 'local') {
-        setNotice('Backend imtahanı qəbul etmədi, imtahan yerli siyahıda saxlanıldı. Kartlar yenilənib.');
-      }
+      navigate(`/teacher/exams/${exam.id}`, {
+        state: exam.source === 'local' ? { localSaved: true } : undefined,
+      });
     } catch (err) {
-      setError(err.response?.data?.message || 'İmtahan yaradıla bilmədi.');
+      setError(errorMessage(err, 'İmtahan yaradıla bilmədi.'));
     } finally {
       setSubmitting(false);
     }
@@ -123,8 +161,8 @@ export default function TeacherDashboard() {
             <ExamCard
               key={exam.id}
               exam={exam}
-              actionLabel="Statistika və suallar"
-              onOpen={() => navigate(`/teacher/exams/${exam.id}`)}
+              actionLabel="Statistika"
+              onOpen={() => navigate(`/teacher/exams/${exam.id}/stats`)}
             />
           ))}
         </div>
@@ -132,9 +170,9 @@ export default function TeacherDashboard() {
 
       <Modal open={showModal} title="Yeni imtahan yarat" onClose={() => setShowModal(false)}>
         <form onSubmit={handleCreateExam} className="space-y-4">
-          <Input label="İmtahan adı" value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <Input label="İmtahan mövzusu" value={title} onChange={(e) => setTitle(e.target.value)} required />
           <Textarea
-            label="Qısa təsvir"
+            label="Əlavə qeyd (istəyə bağlı)"
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -161,6 +199,7 @@ export default function TeacherDashboard() {
           </div>
           {subjectMode === 'existing' ? (
             <Select label="Fənn" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required>
+              {!subjects.length && <option value="">Fənn tapılmadı</option>}
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -176,6 +215,13 @@ export default function TeacherDashboard() {
               required
             />
           )}
+          <Input
+            label="Başlama tarixi və saatı"
+            type="datetime-local"
+            value={startLocal}
+            onChange={(e) => setStartLocal(e.target.value)}
+            required
+          />
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Sual sayı"
@@ -194,6 +240,9 @@ export default function TeacherDashboard() {
               required
             />
           </div>
+          <p className="text-xs text-gray-500">
+            Gələcək tarix seçsəniz imtahan Scheduled olacaq. Tələbələr kartı və mövzunu görəcək, suallar yalnız başlama vaxtında açılacaq. Müddət başlama saatından etibarən {durationMinutes} dəqiqədir.
+          </p>
           {error && <p className="text-sm text-red-600">{typeof error === 'string' ? error : 'Xəta baş verdi'}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setShowModal(false)}>

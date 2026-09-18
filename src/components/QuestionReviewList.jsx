@@ -56,6 +56,21 @@ export default function QuestionReviewList({ questions = [], reveal = true }) {
                 {reveal && opt.isCorrect ? '  · düzgün cavab' : ''}
               </div>
             ))}
+            {(q.selectedText || q.correctText) && (
+              <div className="space-y-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700">
+                {q.selectedText ? (
+                  <p>
+                    <span className="text-gray-500">Tələbənin cavabı: </span>
+                    {q.selectedText}
+                  </p>
+                ) : null}
+                {reveal && q.correctText ? (
+                  <p className="text-emerald-700 dark:text-emerald-300">
+                    Düzgün cavab: {q.correctText}
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
         </Card>
       ))}

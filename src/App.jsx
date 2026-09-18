@@ -13,6 +13,8 @@ import GroupDetail from './pages/GroupDetail';
 import StudentProfile from './pages/StudentProfile';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminUsers from './pages/AdminUsers';
+import AdminTeachers from './pages/AdminTeachers';
+import AdminExamDetail from './pages/AdminExamDetail';
 import TeacherUsers from './pages/TeacherUsers';
 
 function App() {
@@ -26,6 +28,22 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Admin']}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/teachers"
+        element={
+          <ProtectedRoute allowedRoles={['Admin']}>
+            <AdminTeachers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/exams/:id"
+        element={
+          <ProtectedRoute allowedRoles={['Admin']}>
+            <AdminExamDetail />
           </ProtectedRoute>
         }
       />

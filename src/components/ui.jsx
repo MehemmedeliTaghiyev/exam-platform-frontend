@@ -165,6 +165,7 @@ export function Badge({ children, tone = 'neutral' }) {
     neutral: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-300',
     brand: 'bg-brand-50 text-brand-700 dark:bg-brand-600/20 dark:text-brand-300',
     success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    warning: 'bg-amber-50 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
     danger: 'bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300',
   };
   return (

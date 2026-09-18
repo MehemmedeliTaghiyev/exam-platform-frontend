@@ -14,17 +14,25 @@ export default function TeacherCabinet() {
   const [groups, setGroups] = useState(() => localDb.getGroups(teacherId));
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const [number, setNumber] = useState('');
   const [schedule, setSchedule] = useState('');
 
   const students = useMemo(() => localDb.getStudents(teacherId), [groups, teacherId]);
 
   const createGroup = (e) => {
     e.preventDefault();
-    const group = { id: uid('grp'), name, schedule, createdAt: new Date().toISOString() };
+    const group = {
+      id: uid('grp'),
+      name: name.trim(),
+      number: (number.trim() || name.trim()),
+      schedule,
+      createdAt: new Date().toISOString(),
+    };
     const next = [group, ...groups];
     localDb.saveGroups(teacherId, next);
     setGroups(next);
     setName('');
+    setNumber('');
     setSchedule('');
     setOpen(false);
   };
@@ -54,7 +62,7 @@ export default function TeacherCabinet() {
             return (
               <Card key={g.id} onClick={() => navigate(`/teacher/groups/${g.id}`)}>
                 <div className="flex items-start justify-between">
-                  <h3 className="text-lg font-bold">{g.name}</h3>
+                  <h3 className="text-lg font-bold">{g.number || g.name}</h3>
                   <Badge>{count} tələbə</Badge>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-gray-500">
@@ -68,6 +76,7 @@ export default function TeacherCabinet() {
 
       <Modal open={open} title="Yeni qrup" onClose={() => setOpen(false)}>
         <form onSubmit={createGroup} className="space-y-4">
+          <Input label="Qrup nömrəsi" value={number} onChange={(e) => setNumber(e.target.value)} required placeholder="məs. 11A" />
           <Input label="Qrup adı" value={name} onChange={(e) => setName(e.target.value)} required placeholder="məs. 11A Riyaziyyat" />
           <Textarea
             label="Dərs cədvəli"

@@ -34,7 +34,12 @@ export default function LeaderboardTable({ rows = [], emptyText = 'Hələ iştir
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.id || row.studentExamId} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
+              <tr
+                key={row.id || row.studentExamId}
+                className={`border-b border-gray-100 last:border-0 dark:border-slate-800 ${
+                  row.highlight ? 'bg-brand-50/70 dark:bg-brand-950/30' : ''
+                }`}
+              >
                 <td className="px-5 py-3 font-bold text-brand-600">#{row.rank || '—'}</td>
                 <td className="px-5 py-3 font-medium">{row.studentName || `Tələbə #${row.studentId}`}</td>
                 <td className="px-5 py-3">

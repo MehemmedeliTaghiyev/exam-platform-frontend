@@ -104,6 +104,7 @@ export function resolveExamStatus(exam) {
   const end = parseExamDate(exam.endTime || exam.EndTime);
   const now = Date.now();
   const raw = String(exam.status || exam.Status || '').toLowerCase();
+  if (raw === 'draft' || raw === '0') return 'Draft';
 
   if (end && end.getTime() <= now) return 'Finished';
   if (start && start.getTime() > now) return 'Scheduled';
@@ -123,6 +124,10 @@ export function isExamLive(exam) {
 
 export function isExamScheduled(exam) {
   return resolveExamStatus(exam) === 'Scheduled';
+}
+
+export function isExamDraft(exam) {
+  return resolveExamStatus(exam) === 'Draft';
 }
 
 export function percent(part, total) {
@@ -148,7 +153,9 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   }
   const data = err?.response?.data;
   if (typeof data === 'string' && data.trim()) return data;
-  if (typeof data?.message === 'string') return data.message;
+  if (typeof data?.message === 'string') {
+    return data.detail ? `${data.message} (${data.detail})` : data.message;
+  }
   if (typeof data?.title === 'string') return data.title;
   if (typeof err?.message === 'string' && err.message !== 'Network Error') return err.message;
   return fallback;

@@ -5,7 +5,7 @@ import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import { Badge, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchExams, fetchStudentHistory } from '../lib/examApi';
-import { formatDate, isExamEnded, isExamLive, isExamScheduled } from '../lib/utils';
+import { formatDate, isExamEnded, isExamLive, isExamScheduled, resolveExamStatus } from '../lib/utils';
 
 export default function StudentDashboard() {
   const { user } = useContext(AuthContext);
@@ -28,7 +28,7 @@ export default function StudentDashboard() {
           fetchExams(),
           fetchStudentHistory(user?.id),
         ]);
-        setExams(examList);
+        setExams(examList.filter((e) => resolveExamStatus(e) !== 'Draft'));
         setHistory(hist);
       } finally {
         setLoading(false);

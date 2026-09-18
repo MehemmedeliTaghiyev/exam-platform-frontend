@@ -5,15 +5,29 @@ import AppShell from '../components/AppShell';
 import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, fetchExam, fetchQuestions, saveAnswerKey, uploadExamPdfPack } from '../lib/examApi';
-import { errorMessage, examPdfUrl } from '../lib/utils';
+import { addQuestion, fetchExam, fetchQuestions, saveAnswerKey, updateExam, uploadExamPdfPack } from '../lib/examApi';
+import { errorMessage, examPdfUrl, isExamDraft } from '../lib/utils';
 import { exportExamToDocx } from '../lib/exportDocx';
 
-const LETTERS = ['A', 'B', 'C', 'D'];
+const LETTERS = [
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
+  { value: 'E', label: 'Digər' },
+];
+
+function isOpenQuestion(question) {
+  const type = String(question?.type || '');
+  const kind = String(question?.inputKind || '');
+  return type === 'OpenEnded' || ['Text', 'Integer', 'Decimal', 'Number'].includes(kind);
+}
 
 function letterOf(question) {
+  if (isOpenQuestion(question)) return '';
   const idx = (question.options || []).findIndex((o) => o.isCorrect);
-  return idx >= 0 ? LETTERS[idx] : '';
+  if (idx < 0) return 'A';
+  return LETTERS[idx]?.value || 'A';
 }
 
 export default function QuestionBuilder() {
@@ -24,11 +38,14 @@ export default function QuestionBuilder() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('edit');
+  const [questionKind, setQuestionKind] = useState('choice');
   const [text, setText] = useState('');
   const [optionA, setOptionA] = useState('');
   const [optionB, setOptionB] = useState('');
   const [optionC, setOptionC] = useState('');
   const [optionD, setOptionD] = useState('');
+  const [optionOther, setOptionOther] = useState('Digər');
+  const [openAnswer, setOpenAnswer] = useState('');
   const [correctAnswer, setCorrectAnswer] = useState('A');
   const [submitting, setSubmitting] = useState(false);
   const [pdfFile, setPdfFile] = useState(null);
@@ -36,6 +53,8 @@ export default function QuestionBuilder() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [keyBusy, setKeyBusy] = useState(false);
   const [answerKey, setAnswerKey] = useState({});
+  const [openKeys, setOpenKeys] = useState({});
+  const [kinds, setKinds] = useState({});
   const [message, setMessage] = useState('');
 
   const load = async () => {
@@ -45,10 +64,16 @@ export default function QuestionBuilder() {
       setExam(examData);
       setQuestions(qs);
       const nextKey = {};
+      const nextOpen = {};
+      const nextKinds = {};
       qs.forEach((q) => {
-        nextKey[q.id] = letterOf(q) || 'A';
+        nextKinds[q.id] = isOpenQuestion(q) ? (q.inputKind || 'Text') : 'Choice';
+        nextKey[q.id] = letterOf(q);
+        nextOpen[q.id] = q.correctText || '';
       });
       setAnswerKey(nextKey);
+      setOpenKeys(nextOpen);
+      setKinds(nextKinds);
     } finally {
       setLoading(false);
     }
@@ -62,22 +87,37 @@ export default function QuestionBuilder() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await addQuestion(id, {
-        text,
-        points: 1,
-        type: 0,
-        options: [
-          { optionText: optionA, isCorrect: correctAnswer === 'A' },
-          { optionText: optionB, isCorrect: correctAnswer === 'B' },
-          { optionText: optionC, isCorrect: correctAnswer === 'C' },
-          { optionText: optionD, isCorrect: correctAnswer === 'D' },
-        ],
-      });
+      if (questionKind === 'choice') {
+        await addQuestion(id, {
+          text,
+          points: 1,
+          type: 'SingleChoice',
+          inputKind: 'Choice',
+          options: [
+            { optionText: optionA, isCorrect: correctAnswer === 'A' },
+            { optionText: optionB, isCorrect: correctAnswer === 'B' },
+            { optionText: optionC, isCorrect: correctAnswer === 'C' },
+            { optionText: optionD, isCorrect: correctAnswer === 'D' },
+            { optionText: optionOther || 'Digər', isCorrect: correctAnswer === 'E' },
+          ],
+        });
+      } else {
+        await addQuestion(id, {
+          text,
+          points: 1,
+          type: 'OpenEnded',
+          inputKind: questionKind === 'integer' ? 'Integer' : questionKind === 'decimal' ? 'Decimal' : 'Text',
+          correctText: openAnswer,
+          options: [],
+        });
+      }
       setText('');
       setOptionA('');
       setOptionB('');
       setOptionC('');
       setOptionD('');
+      setOptionOther('Digər');
+      setOpenAnswer('');
       setCorrectAnswer('A');
       await load();
     } catch {
@@ -106,7 +146,7 @@ export default function QuestionBuilder() {
       setPdfFile(null);
       setPdfCount(String(count));
       await load();
-      setMessage('PDF yükləndi, cavab yerləri açıldı. PDF-ə baxıb düzgün variantları işarələyin.');
+      setMessage('PDF yükləndi. Variantlar A–D və Digər, açıq suallar üçün isə mətn/rəqəm sahəsi mövcuddur.');
     } catch (err) {
       setMessage(errorMessage(err, 'PDF yüklənmədi.'));
     } finally {
@@ -118,10 +158,24 @@ export default function QuestionBuilder() {
     setKeyBusy(true);
     setMessage('');
     try {
-      const answers = questions.map((q) => ({
-        questionId: q.id,
-        correctLetter: answerKey[q.id] || 'A',
-      }));
+      const answers = questions.map((q) => {
+        const kind = kinds[q.id] || (isOpenQuestion(q) ? q.inputKind : 'Choice');
+        if (kind !== 'Choice') {
+          return {
+            questionId: q.id,
+            type: 'OpenEnded',
+            inputKind: kind,
+            correctText: openKeys[q.id] || '',
+            correctLetter: '',
+          };
+        }
+        return {
+          questionId: q.id,
+          type: 'SingleChoice',
+          inputKind: 'Choice',
+          correctLetter: answerKey[q.id] || 'A',
+        };
+      });
       const list = await saveAnswerKey(id, answers);
       setQuestions(list);
       setMessage('Cavab açarı saxlanıldı.');
@@ -129,6 +183,29 @@ export default function QuestionBuilder() {
       setMessage(errorMessage(err, 'Cavab açarı yazılmadı.'));
     } finally {
       setKeyBusy(false);
+    }
+  };
+
+  const publishDraft = async () => {
+    if (!exam) return;
+    try {
+      const start = exam.startTime || new Date().toISOString();
+      const duration = exam.durationMinutes || 45;
+      const end = exam.endTime || new Date(Date.now() + duration * 60 * 1000).toISOString();
+      const status = new Date(start).getTime() > Date.now() ? 'Scheduled' : 'Live';
+      await updateExam(id, {
+        subjectId: exam.subjectId,
+        title: exam.title,
+        durationMinutes: duration,
+        totalQuestions: questions.length || exam.totalQuestions || 1,
+        startTime: start,
+        endTime: end,
+        status,
+      });
+      setMessage('İmtahan dərc olundu.');
+      await load();
+    } catch (err) {
+      setMessage(errorMessage(err, 'İmtahan dərc olunmadı.'));
     }
   };
 
@@ -145,6 +222,9 @@ export default function QuestionBuilder() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isExamDraft(exam) && (
+            <Button onClick={publishDraft}>İmtahanı dərc et</Button>
+          )}
           <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
             <BarChart3 size={16} /> Statistika
           </Button>
@@ -196,8 +276,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">PDF ilə sual yüklə</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF-i yükləyin, altda sual sayını yazın. İmtahanda həmin sayda yer və 4 variant (A–D) açılacaq.
-              Siz PDF-ə baxıb düzgün cavabı işarələyəcəksiniz.
+              PDF-i yükləyin, altda sual sayını yazın. Hər sual üçün A–D və Digər variantları, istəsəniz açıq mətn/rəqəm cavabı da qura bilərsiniz.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -221,7 +300,7 @@ export default function QuestionBuilder() {
             </form>
           </Card>
 
-          {exam?.id && <PdfViewer exam={exam} title="Yüklənən PDF" />}
+          {exam?.id || id ? <PdfViewer exam={exam || { id }} title="Yüklənən PDF" /> : null}
 
           {questions.length > 0 && (
             <Card>
@@ -232,32 +311,57 @@ export default function QuestionBuilder() {
                 </Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {questions.map((q, idx) => (
-                  <div key={q.id} className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
-                    <p className="mb-2 text-sm font-medium">{idx + 1}. {q.text}</p>
-                    <div className="flex gap-2">
-                      {LETTERS.map((letter) => (
-                        <label
-                          key={letter}
-                          className={`flex flex-1 cursor-pointer items-center justify-center rounded-lg border py-2 text-sm ${
-                            answerKey[q.id] === letter
-                              ? 'border-brand-500 bg-brand-50 font-semibold dark:bg-brand-600/20'
-                              : 'border-gray-200 dark:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            className="sr-only"
-                            name={`key-${q.id}`}
-                            checked={answerKey[q.id] === letter}
-                            onChange={() => setAnswerKey((p) => ({ ...p, [q.id]: letter }))}
+                {questions.map((q, idx) => {
+                  const kind = kinds[q.id] || 'Choice';
+                  return (
+                    <div key={q.id} className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
+                      <p className="mb-2 text-sm font-medium">{idx + 1}. {q.text}</p>
+                      <Select
+                        label="Cavab növü"
+                        value={kind}
+                        onChange={(e) => setKinds((p) => ({ ...p, [q.id]: e.target.value }))}
+                      >
+                        <option value="Choice">A–D / Digər</option>
+                        <option value="Text">Açıq mətn</option>
+                        <option value="Integer">Tam ədəd</option>
+                        <option value="Decimal">Onluq ədəd</option>
+                      </Select>
+                      {kind === 'Choice' ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {LETTERS.map((letter) => (
+                            <label
+                              key={letter.value}
+                              className={`flex flex-1 min-w-[3.5rem] cursor-pointer items-center justify-center rounded-lg border py-2 text-sm ${
+                                answerKey[q.id] === letter.value
+                                  ? 'border-brand-500 bg-brand-50 font-semibold dark:bg-brand-600/20'
+                                  : 'border-gray-200 dark:border-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                className="sr-only"
+                                name={`key-${q.id}`}
+                                checked={answerKey[q.id] === letter.value}
+                                onChange={() => setAnswerKey((p) => ({ ...p, [q.id]: letter.value }))}
+                              />
+                              {letter.label}
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          <Input
+                            label="Düzgün cavab"
+                            type={kind === 'Text' ? 'text' : 'number'}
+                            step={kind === 'Decimal' ? 'any' : kind === 'Integer' ? '1' : undefined}
+                            value={openKeys[q.id] || ''}
+                            onChange={(e) => setOpenKeys((p) => ({ ...p, [q.id]: e.target.value }))}
                           />
-                          {letter}
-                        </label>
-                      ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -266,6 +370,12 @@ export default function QuestionBuilder() {
             <Card>
               <h3 className="mb-4 text-base font-bold">Əl ilə yeni sual</h3>
               <form onSubmit={handleAddQuestion} className="space-y-4">
+                <Select label="Sual tipi" value={questionKind} onChange={(e) => setQuestionKind(e.target.value)}>
+                  <option value="choice">Variantlı (A–D + Digər)</option>
+                  <option value="text">Açıq mətn</option>
+                  <option value="integer">Tam ədəd</option>
+                  <option value="decimal">Onluq ədəd</option>
+                </Select>
                 <Textarea
                   label="Sualın mətni"
                   rows={3}
@@ -273,18 +383,33 @@ export default function QuestionBuilder() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Input label="A" value={optionA} onChange={(e) => setOptionA(e.target.value)} required />
-                  <Input label="B" value={optionB} onChange={(e) => setOptionB(e.target.value)} required />
-                  <Input label="C" value={optionC} onChange={(e) => setOptionC(e.target.value)} required />
-                  <Input label="D" value={optionD} onChange={(e) => setOptionD(e.target.value)} required />
-                </div>
-                <Select label="Düzgün cavab" value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)}>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D</option>
-                </Select>
+                {questionKind === 'choice' ? (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input label="A" value={optionA} onChange={(e) => setOptionA(e.target.value)} required />
+                      <Input label="B" value={optionB} onChange={(e) => setOptionB(e.target.value)} required />
+                      <Input label="C" value={optionC} onChange={(e) => setOptionC(e.target.value)} required />
+                      <Input label="D" value={optionD} onChange={(e) => setOptionD(e.target.value)} required />
+                      <Input label="Digər" value={optionOther} onChange={(e) => setOptionOther(e.target.value)} />
+                    </div>
+                    <Select label="Düzgün cavab" value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)}>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                      <option value="D">D</option>
+                      <option value="E">Digər</option>
+                    </Select>
+                  </>
+                ) : (
+                  <Input
+                    label="Düzgün cavab"
+                    type={questionKind === 'text' ? 'text' : 'number'}
+                    step={questionKind === 'decimal' ? 'any' : '1'}
+                    value={openAnswer}
+                    onChange={(e) => setOpenAnswer(e.target.value)}
+                    required
+                  />
+                )}
                 <Button type="submit" disabled={submitting}>
                   {submitting ? 'Əlavə edilir...' : 'Sualı əlavə et'}
                 </Button>
@@ -306,16 +431,24 @@ export default function QuestionBuilder() {
                     <p className="font-medium">
                       {idx + 1}. {q.text}
                     </p>
-                    <ul className="mt-3 space-y-1 text-sm">
-                      {(q.options || []).map((opt, oi) => (
-                        <li
-                          key={opt.id || oi}
-                          className={opt.isCorrect ? 'font-medium text-emerald-600' : 'text-gray-600 dark:text-gray-300'}
-                        >
-                          {String.fromCharCode(65 + oi)}) {opt.optionText || opt.text} {opt.isCorrect ? '✓' : ''}
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {isOpenQuestion(q) ? `Açıq cavab (${q.inputKind || 'Text'})` : 'Variantlı'}
+                    </p>
+                    {isOpenQuestion(q) ? (
+                      <p className="mt-2 text-sm text-emerald-600">Düzgün: {q.correctText || '—'}</p>
+                    ) : (
+                      <ul className="mt-3 space-y-1 text-sm">
+                        {(q.options || []).map((opt, oi) => (
+                          <li
+                            key={opt.id || oi}
+                            className={opt.isCorrect ? 'font-medium text-emerald-600' : 'text-gray-600 dark:text-gray-300'}
+                          >
+                            {LETTERS[oi]?.label || String.fromCharCode(65 + oi)}) {opt.optionText || opt.text}{' '}
+                            {opt.isCorrect ? '✓' : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </Card>
                 ))
               )}

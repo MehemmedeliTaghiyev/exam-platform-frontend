@@ -7,6 +7,34 @@ import { AuthContext } from '../context/AuthContext';
 import { examPdfUrl, formatDateTime, isExamEnded, isExamScheduled, parseExamDate } from '../lib/utils';
 import PdfViewer from '../components/PdfViewer';
 
+function isOpenQuestion(q) {
+  const type = String(q?.type || '');
+  const kind = String(q?.inputKind || '');
+  return type === 'OpenEnded' || ['Text', 'Integer', 'Decimal', 'Number'].includes(kind);
+}
+
+function isOtherOption(opt) {
+  const t = String(opt?.optionText || opt?.text || '').trim();
+  return /^(digər|diger|other|e)$/i.test(t);
+}
+
+function serializeAnswers(map) {
+  return Object.entries(map).map(([qId, val]) => {
+    if (val && typeof val === 'object') {
+      return {
+        questionId: parseInt(qId, 10),
+        selectedOptionId: val.optionId ? Number(val.optionId) : 0,
+        textAnswer: val.text || '',
+      };
+    }
+    return {
+      questionId: parseInt(qId, 10),
+      selectedOptionId: parseInt(val, 10) || 0,
+      textAnswer: '',
+    };
+  });
+}
+
 export default function TakeExam() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -83,10 +111,7 @@ export default function TakeExam() {
     const sessionId = sessionRef.current || studentExamId;
     if (!sessionId || submittedRef.current || submitting) return undefined;
     const timer = setTimeout(() => {
-      const payloadAnswers = Object.entries(answersRef.current).map(([qId, optId]) => ({
-        questionId: parseInt(qId, 10),
-        selectedOptionId: parseInt(optId, 10),
-      }));
+      const payloadAnswers = serializeAnswers(answersRef.current);
       saveExamProgress({
         studentExamId: sessionId,
         examId: parseInt(id, 10),
@@ -113,10 +138,7 @@ export default function TakeExam() {
         examId: parseInt(id, 10),
         studentId: user?.id,
         studentName: user?.fullName,
-        answers: Object.entries(answersRef.current).map(([qId, optId]) => ({
-          questionId: parseInt(qId, 10),
-          selectedOptionId: parseInt(optId, 10),
-        })),
+        answers: serializeAnswers(answersRef.current),
       };
       await submitExam(payload);
       navigate(`/student/exams/${parseInt(id, 10)}/review`, { replace: true });
@@ -159,26 +181,49 @@ export default function TakeExam() {
           )}
           <p className="mt-3 text-sm text-gray-500">Suallar yalnız Live olanda görünəcək.</p>
         </Card>
-      ) : questions.length === 0 ? (
-        <Card>Bu imtahanda hələ sual yoxdur.</Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <PdfViewer exam={exam} title="İmtahan PDF" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div className="min-w-0">
+            <PdfViewer exam={exam || { id }} title="İmtahan PDF" />
+          </div>
           <div className="space-y-4">
-          {questions.map((q, index) => (
+          {questions.length === 0 ? (
+            <Card>Bu imtahanda hələ sual yoxdur.</Card>
+          ) : (
+            questions.map((q, index) => {
+              const current = answers[q.id] && typeof answers[q.id] === 'object' ? answers[q.id] : { optionId: answers[q.id], text: '' };
+              const open = isOpenQuestion(q);
+              const selectedOther = (q.options || []).some((opt) => isOtherOption(opt) && String(current.optionId) === String(opt.id));
+              return (
             <Card key={q.id}>
               <h4 className="font-semibold">
                 Sual {index + 1}
                 {q.text && q.text !== `Sual ${index + 1}` ? `: ${q.text}` : ''}
               </h4>
-              <div className={`mt-4 ${examPdfUrl(exam) ? 'grid grid-cols-4 gap-2' : 'space-y-2'}`}>
+              {open ? (
+                <input
+                  className="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  type={q.inputKind === 'Text' ? 'text' : 'number'}
+                  step={q.inputKind === 'Decimal' ? 'any' : q.inputKind === 'Integer' ? '1' : undefined}
+                  inputMode={q.inputKind === 'Text' ? 'text' : 'decimal'}
+                  placeholder={q.inputKind === 'Text' ? 'Cavabı yazın' : 'Rəqəm daxil edin'}
+                  disabled={submitting}
+                  value={current.text || ''}
+                  onChange={(e) => {
+                    if (submittedRef.current || submitting) return;
+                    setAnswers((p) => ({ ...p, [q.id]: { text: e.target.value } }));
+                  }}
+                />
+              ) : (
+                <>
+              <div className={`mt-4 ${examPdfUrl(exam) ? 'grid grid-cols-2 gap-2 sm:grid-cols-5' : 'space-y-2'}`}>
                 {(q.options || []).map((opt) => (
                   <label
                     key={opt.id}
                     className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all duration-200 ${
                       submitting ? 'cursor-not-allowed' : 'cursor-pointer'
                     } ${
-                      String(answers[q.id]) === String(opt.id)
+                      String(current.optionId) === String(opt.id)
                         ? 'border-brand-500 bg-brand-50 dark:bg-brand-600/10'
                         : submitting
                           ? 'border-gray-200 dark:border-slate-700'
@@ -190,18 +235,40 @@ export default function TakeExam() {
                       name={`question-${q.id}`}
                       disabled={submitting}
                       className={examPdfUrl(exam) ? 'sr-only' : ''}
-                      checked={String(answers[q.id]) === String(opt.id)}
+                      checked={String(current.optionId) === String(opt.id)}
                       onChange={() => {
                         if (submittedRef.current || submitting) return;
-                        setAnswers((p) => ({ ...p, [q.id]: opt.id }));
+                        setAnswers((p) => ({
+                          ...p,
+                          [q.id]: { optionId: opt.id, text: isOtherOption(opt) ? (current.text || '') : '' },
+                        }));
                       }}
                     />
                     {opt.optionText || opt.text}
                   </label>
                 ))}
               </div>
+              {selectedOther && (
+                <input
+                  className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+                  placeholder="Digər cavabı yazın"
+                  disabled={submitting}
+                  value={current.text || ''}
+                  onChange={(e) => {
+                    if (submittedRef.current || submitting) return;
+                    setAnswers((p) => ({
+                      ...p,
+                      [q.id]: { optionId: current.optionId, text: e.target.value },
+                    }));
+                  }}
+                />
+              )}
+                </>
+              )}
             </Card>
-          ))}
+              );
+            })
+          )}
           <Button onClick={handleSubmit} disabled={submitting} className="w-full sm:w-auto">
             {submitting ? 'Göndərilir...' : 'İmtahanı bitir'}
           </Button>

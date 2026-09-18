@@ -4,8 +4,9 @@ import { ArrowLeft, Users, Percent, TrendingUp, HelpCircle } from 'lucide-react'
 import AppShell from '../components/AppShell';
 import ProgressChart from '../components/ProgressChart';
 import { Button, Card, Skeleton, StatCard } from '../components/ui';
-import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestions } from '../lib/examApi';
+import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestions, deleteExam } from '../lib/examApi';
 import { buildExamStats } from '../lib/stats';
+import { errorMessage } from '../lib/utils';
 import LeaderboardTable from '../components/LeaderboardTable';
 
 export default function ExamStats() {
@@ -58,6 +59,20 @@ export default function ExamStats() {
           </Button>
           <Button onClick={() => navigate(`/teacher/exams/${id}/review`)}>
             Sıralama cədvəli
+          </Button>
+          <Button
+            variant="danger"
+            onClick={async () => {
+              if (!window.confirm('Bu imtahanı silmək istəyirsiniz?')) return;
+              try {
+                await deleteExam(id);
+                navigate('/teacher');
+              } catch (err) {
+                alert(errorMessage(err, 'İmtahan silinmədi.'));
+              }
+            }}
+          >
+            Sil
           </Button>
         </div>
       </div>

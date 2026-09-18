@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Shield,
   KeyRound,
+  Mail,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -27,6 +28,7 @@ const navByRole = {
   ],
   Admin: [
     { to: '/admin', label: 'İdarə paneli', icon: Shield, end: true },
+    { to: '/admin/teachers', label: 'Müəllim qeydiyyatı', icon: Mail },
     { to: '/admin/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },

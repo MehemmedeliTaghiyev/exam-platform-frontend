@@ -1,17 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Ban, CheckCircle2, RotateCcw, Trash2, Users } from 'lucide-react';
 import AppShell from './AppShell';
 import { Badge, Button, Card, EmptyState, Skeleton } from './ui';
+import { AuthContext } from '../context/AuthContext';
 import API from '../api/axios';
+import { localDb } from '../lib/localDb';
 import { errorMessage, formatDate, unwrapList } from '../lib/utils';
 
-function normalizeAdminUser(u) {
+function groupLookup(teacherId) {
+  const groups = localDb.getGroups(teacherId);
+  const students = localDb.getStudents(teacherId);
+  return { groups, students };
+}
+
+function resolveGroupName(u, teacherId) {
+  const fromApi = u.groupName || u.GroupName;
+  if (fromApi) return fromApi;
+  const { groups, students } = groupLookup(teacherId);
+  const local = students.find(
+    (s) =>
+      String(s.id) === String(u.id) ||
+      (u.email && s.email && s.email.toLowerCase() === u.email.toLowerCase()),
+  );
+  if (!local) return '—';
+  const group = groups.find((g) => String(g.id) === String(local.groupId));
+  return local.groupName || group?.number || group?.name || '—';
+}
+
+function normalizeAdminUser(u, teacherId) {
   return {
     id: u.id,
     fullName: u.fullName,
     email: u.email,
     role: u.role,
-    isAccessEnabled: Boolean(u.isAccessEnabled),
+    userName: u.userName || u.UserName,
+    groupName: resolveGroupName(u, teacherId),
+    isAccessEnabled: (u.isAccessEnabled ?? u.IsAccessEnabled) !== false,
     isDeleted: Boolean(u.isDeleted),
     createdAt: u.createdAt,
     deletedAt: u.deletedAt,
@@ -19,18 +43,44 @@ function normalizeAdminUser(u) {
 }
 
 export default function AccessUsersPanel({ title, description, roles }) {
+  const { user } = useContext(AuthContext);
+  const teacherId = user?.id || 'me';
   const [tab, setTab] = useState(roles[0].id);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  const showGroup = tab === 'Student';
 
   const load = async (role = tab) => {
     setLoading(true);
     setError('');
     try {
       const res = await API.get('/Users', { params: { role, includeDeleted: true } });
-      setUsers(unwrapList(res.data).map(normalizeAdminUser));
+      const remote = unwrapList(res.data).map((row) => normalizeAdminUser(row, teacherId));
+      if (role === 'Student') {
+        const seen = new Set(remote.map((u) => String(u.id)));
+        const emails = new Set(remote.map((u) => (u.email || '').toLowerCase()).filter(Boolean));
+        const { groups, students } = groupLookup(teacherId);
+        students.forEach((s) => {
+          const email = (s.email || '').toLowerCase();
+          if (seen.has(String(s.id)) || (email && emails.has(email))) return;
+          const group = groups.find((g) => String(g.id) === String(s.groupId));
+          remote.unshift({
+            id: s.id,
+            fullName: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.fullName || 'Tələbə',
+            email: s.email || '—',
+            role: 'Student',
+            userName: s.userName,
+            groupName: s.groupName || group?.number || group?.name || '—',
+            isAccessEnabled: true,
+            isDeleted: false,
+            createdAt: s.createdAt,
+            localOnly: !Number(s.id),
+          });
+        });
+      }
+      setUsers(remote);
     } catch (err) {
       setUsers([]);
       setError(errorMessage(err, 'İstifadəçilər yüklənmədi.'));
@@ -97,6 +147,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
               <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
                 <th className="px-5 py-3 font-medium">Ad</th>
                 <th className="px-5 py-3 font-medium">E-poçt</th>
+                {showGroup && <th className="px-5 py-3 font-medium">Qrup</th>}
                 <th className="px-5 py-3 font-medium">Qeydiyyat</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium"></th>
@@ -107,6 +158,11 @@ export default function AccessUsersPanel({ title, description, roles }) {
                 <tr key={u.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
                   <td className="px-5 py-3 font-medium">{u.fullName}</td>
                   <td className="px-5 py-3 text-gray-500">{u.email}</td>
+                  {showGroup && (
+                    <td className="px-5 py-3">
+                      <Badge tone="brand">{u.groupName || '—'}</Badge>
+                    </td>
+                  )}
                   <td className="px-5 py-3 text-gray-500">{formatDate(u.createdAt)}</td>
                   <td className="px-5 py-3">
                     {u.isDeleted ? (
@@ -119,7 +175,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex flex-wrap justify-end gap-2">
-                      {!u.isDeleted && (
+                      {!u.isDeleted && Number(u.id) > 0 && (
                         <Button
                           variant={u.isAccessEnabled ? 'danger' : 'success'}
                           disabled={busyId === u.id}
@@ -139,7 +195,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
                         >
                           <RotateCcw size={14} /> Bərpa et
                         </Button>
-                      ) : (
+                      ) : Number(u.id) > 0 ? (
                         <Button
                           variant="ghost"
                           disabled={busyId === u.id}
@@ -150,7 +206,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
                         >
                           <Trash2 size={14} /> Sil
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                 </tr>

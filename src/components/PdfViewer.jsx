@@ -1,20 +1,64 @@
 import { useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { fetchExamPdfBytes } from '../lib/examApi';
 
-GlobalWorkerOptions.workerSrc = pdfWorker;
+try {
+  GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+  ).toString();
+} catch {
+  /* worker optional */
+}
 
 export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
   const examId = exam?.id ?? exam?.Id;
+  const wrapRef = useRef(null);
   const hostRef = useRef(null);
+  const pdfRef = useRef(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [pages, setPages] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    let debounce;
 
-    const draw = async () => {
+    const paint = async () => {
+      const pdf = pdfRef.current;
+      const host = hostRef.current;
+      const wrap = wrapRef.current;
+      if (!pdf || !host || !wrap) return;
+      const width = Math.max(240, wrap.clientWidth - 24);
+      host.replaceChildren();
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+        if (cancelled) return;
+        const page = await pdf.getPage(pageNum);
+        const base = page.getViewport({ scale: 1 });
+        const scale = width / base.width;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(viewport.width * dpr);
+        canvas.height = Math.floor(viewport.height * dpr);
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+        canvas.style.display = 'block';
+        canvas.className = 'mb-3 rounded-md bg-white shadow-sm';
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) continue;
+        const task = page.render({
+          canvasContext: ctx,
+          canvas,
+          viewport,
+          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+        });
+        await task.promise;
+        host.appendChild(canvas);
+      }
+    };
+
+    const load = async () => {
       if (!examId && !exam?.pdfFilePath && !exam?.pdfFileUrl) {
         setLoading(false);
         return;
@@ -24,46 +68,65 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
       try {
         const bytes = await fetchExamPdfBytes(exam);
         if (cancelled) return;
-        const pdf = await getDocument({ data: new Uint8Array(bytes) }).promise;
+        const data = new Uint8Array(bytes.slice ? bytes.slice(0) : bytes);
+        const pdf = await getDocument({ data, disableWorker: true }).promise;
         if (cancelled) return;
-        const host = hostRef.current;
-        if (!host) return;
-        host.innerHTML = '';
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
-          const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 1.25 });
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          canvas.className = 'mb-3 w-full rounded-lg bg-white shadow-sm';
-          const ctx = canvas.getContext('2d');
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          host.appendChild(canvas);
-        }
+        pdfRef.current = pdf;
+        setPages(pdf.numPages);
+        await paint();
       } catch {
         if (!cancelled) {
-          setError('PDF açılmadı. Visual Studio-da API-ni F5 ilə işə salın və səhifəni yeniləyin.');
+          setError('PDF açılmadı. Səhifəni yeniləyin və ya PDF-i yenidən yükləyin.');
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
-    draw();
+    load();
+
+    const onResize = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        paint().catch(() => {});
+      }, 200);
+    };
+    window.addEventListener('resize', onResize);
+
     return () => {
       cancelled = true;
-      if (hostRef.current) hostRef.current.innerHTML = '';
+      clearTimeout(debounce);
+      window.removeEventListener('resize', onResize);
+      pdfRef.current = null;
+      if (hostRef.current) hostRef.current.replaceChildren();
     };
   }, [examId, exam?.pdfFilePath, exam?.pdfFileUrl]);
 
+  if (!examId && !exam?.pdfFilePath && !exam?.pdfFileUrl) {
+    return null;
+  }
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-slate-800">
-      <div className="border-b border-gray-200 px-4 py-2 text-sm font-medium text-ink dark:border-slate-800">
-        {title}
+    <div
+      ref={wrapRef}
+      className="flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-slate-800"
+    >
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2 text-sm font-medium dark:border-slate-800">
+        <span>{title}</span>
+        {pages > 0 && <span className="text-xs font-normal text-gray-500">{pages} səhifə · aşağı sürüşdürün</span>}
       </div>
-      {loading && <div className="flex h-40 items-center justify-center text-sm text-gray-500">PDF yüklənir...</div>}
+      {loading && (
+        <div className="flex h-40 items-center justify-center text-sm text-gray-500">PDF yüklənir...</div>
+      )}
       {error && !loading && <div className="px-4 py-8 text-center text-sm text-red-600">{error}</div>}
-      <div ref={hostRef} className="max-h-[75vh] overflow-auto bg-gray-100 p-3 dark:bg-slate-950" />
+      <div
+        ref={hostRef}
+        className="w-full overflow-y-auto overflow-x-hidden bg-gray-200 p-2 sm:p-3 dark:bg-slate-950"
+        style={{
+          height: 'min(75dvh, 880px)',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      />
     </div>
   );
 }

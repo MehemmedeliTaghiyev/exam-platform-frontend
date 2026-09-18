@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import LeaderboardTable from '../components/LeaderboardTable';
 import QuestionReviewList from '../components/QuestionReviewList';
@@ -19,14 +19,18 @@ function toReviewQuestions(list = []) {
       isSelected: Boolean(opt.isSelected),
     }));
     const selected = options.find((opt) => opt.isSelected);
-    const unanswered = Boolean(q.unanswered) || !selected;
-    const isCorrect = unanswered ? false : Boolean(selected?.isCorrect ?? q.isCorrect);
+    const selectedText = q.selectedText || q.SelectedText || '';
+    const correctText = q.correctText || q.CorrectText || '';
+    const unanswered = Boolean(q.unanswered) || (!selected && !String(selectedText).trim());
+    const isCorrect = unanswered ? false : Boolean(q.isCorrect ?? selected?.isCorrect);
     return {
       questionId: q.id ?? q.questionId,
       index: q.index || index + 1,
       text: q.text,
       isCorrect,
       unanswered,
+      selectedText,
+      correctText,
       options,
     };
   });
@@ -34,8 +38,12 @@ function toReviewQuestions(list = []) {
 
 export default function ExamResult() {
   const { submissionId, examId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const queryStudentExamId = searchParams.get('studentExamId');
+  const queryStudentId = searchParams.get('studentId');
+  const reviewId = queryStudentExamId || submissionId;
   const [review, setReview] = useState(null);
   const [paper, setPaper] = useState([]);
   const [examMeta, setExamMeta] = useState(null);
@@ -47,9 +55,11 @@ export default function ExamResult() {
       setLoading(true);
       setError('');
       try {
-        const data = examId
-          ? await fetchExamReviewByExam(examId)
-          : await fetchExamReview(submissionId);
+        const data = reviewId
+          ? await fetchExamReview(reviewId)
+          : examId
+            ? await fetchExamReviewByExam(examId)
+            : await fetchExamReview(submissionId);
         setReview(data);
 
         const fallbackId = examId || data?.result?.examId;
@@ -100,7 +110,7 @@ export default function ExamResult() {
       }
     };
     run();
-  }, [submissionId, examId, user?.role, navigate]);
+  }, [submissionId, examId, reviewId, user?.role, navigate]);
 
   if (loading) {
     return (
@@ -124,11 +134,15 @@ export default function ExamResult() {
   const correct = result?.correctAnswersCount ?? 0;
   const scorePercentage = Math.round(Number(result?.percent ?? result?.score ?? 0));
   const isPassed = scorePercentage >= 50;
-  const isPersonal = Boolean(result?.studentExamId);
+  const isPersonal = Boolean(result?.studentExamId || reviewId);
   const examEnded = examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded);
   const mistakes = questions.filter((q) => !q.unanswered && q.isCorrect === false);
   const leaderboard = examEnded ? review?.leaderboard || [] : [];
-  const backTo = user?.role === 'Student' ? '/student' : `/teacher/exams/${result?.examId || examId}/stats`;
+  const backTo = queryStudentId
+    ? `/teacher/students/${queryStudentId}`
+    : user?.role === 'Student'
+      ? '/student'
+      : `/teacher/exams/${result?.examId || examId}/stats`;
   const pdfExam = {
     ...(examMeta || {}),
     id: examMeta?.id || examId || result?.examId,

@@ -15,6 +15,8 @@ function withCounts(exams) {
     const localCount = submissions.filter((s) => String(s.examId) === String(exam.id)).length;
     return {
       ...exam,
+      teacherId: exam.teacherId ?? exam.TeacherId,
+      teacherName: exam.teacherName || exam.TeacherName,
       subjectName: exam.subjectName || exam.subject || exam.SubjectName,
       totalQuestions: exam.totalQuestions ?? exam.questionCount ?? exam.TotalQuestions,
       durationMinutes: exam.durationMinutes ?? exam.DurationMinutes,
@@ -43,6 +45,72 @@ export async function fetchSubjects() {
   return localDb.getSubjects();
 }
 
+export async function createStudentAccount(payload) {
+  const body = {
+    fullName: payload.fullName,
+    email: payload.email,
+    userName: payload.userName,
+    password: payload.password,
+    groupName: payload.groupName,
+    closeAccess: Boolean(payload.closeAccess),
+  };
+  const paths = ['/Users/students', '/Users/create-student', '/Users'];
+  let lastError;
+  for (const path of paths) {
+    try {
+      const res = await API.post(path, body);
+      return unwrapItem(res.data) || res.data;
+    } catch (err) {
+      lastError = err;
+      const status = err?.response?.status;
+      if (status !== 404 && status !== 405) throw err;
+    }
+  }
+  throw lastError;
+}
+
+export async function setStudentAccess(id, enabled) {
+  const res = await API.patch(`/Users/${id}/access`, { enabled });
+  return unwrapItem(res.data) || res.data;
+}
+
+export async function createTeacherAccount(payload) {
+  const body = {
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    fullName: `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
+    email: payload.email,
+    phone: payload.phone,
+    userName: payload.userName,
+    password: payload.password,
+    trialEndsAt: payload.trialEndsAt,
+    trialMessage: payload.trialMessage,
+  };
+  const paths = ['/Users/teachers', '/Users/create-teacher'];
+  let lastError;
+  for (const path of paths) {
+    try {
+      const res = await API.post(path, body);
+      return unwrapItem(res.data) || res.data;
+    } catch (err) {
+      lastError = err;
+      const status = err?.response?.status;
+      if (status !== 404 && status !== 405) throw err;
+    }
+  }
+  throw lastError;
+}
+
+export async function updateTeacherTrial(id, payload) {
+  const res = await API.patch(`/Users/${id}/trial`, payload);
+  return unwrapItem(res.data) || res.data;
+}
+
+export async function deleteStudentAccount(id) {
+  const res = await API.delete(`/Users/${id}`);
+  return unwrapItem(res.data) || res.data;
+}
+
 export async function createSubject(name) {
   const trimmed = name.trim();
   try {
@@ -62,25 +130,59 @@ export async function createSubject(name) {
   }
 }
 
+function examOwnerId(exam) {
+  if (!exam) return null;
+  const tid = exam.teacherId ?? exam.TeacherId;
+  return tid == null || tid === '' ? null : tid;
+}
+
+function currentUserSnapshot() {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return { role: null, scope: null };
+    const user = JSON.parse(raw);
+    const role = user.role || user.Role;
+    if (role === 'Admin' || role === 0 || role === '0') return { role: 'Admin', scope: null };
+    if (role === 'Teacher' || role === 1 || role === '1') {
+      return { role: 'Teacher', scope: user.id || user.userId || user.teacherId || null };
+    }
+    return { role: 'Student', scope: user.teacherId ?? user.TeacherId ?? null };
+  } catch {
+    return { role: null, scope: null };
+  }
+}
+
+function visibleForCurrentUser(exams) {
+  const { role, scope } = currentUserSnapshot();
+  if (role === 'Admin') return exams;
+  if (scope == null) return [];
+  return exams.filter((exam) => String(examOwnerId(exam)) === String(scope));
+}
+
 export async function fetchExams() {
+  let remoteOk = false;
   let remote = [];
   try {
     const data = await tryGet('/Exams');
     remote = unwrapList(data);
+    remoteOk = true;
   } catch {
     remote = [];
   }
 
-  const local = localDb.getExams();
-  const map = new Map();
-  [...remote, ...local].forEach((exam) => {
-    if (exam?.id != null) map.set(String(exam.id), exam);
-  });
-  return withCounts(Array.from(map.values()).sort((a, b) => {
+  // Do not merge the shared localStorage exam cache when the API answered —
+  // that cache is per-browser, not per-teacher, and leaked other teachers' exams.
+  const source = remoteOk ? remote : localDb.getExams();
+  const list = withCounts(source.filter((exam) => exam?.id != null).sort((a, b) => {
     const da = new Date(b.createdAt || 0).getTime();
     const db = new Date(a.createdAt || 0).getTime();
     return da - db;
   }));
+  return visibleForCurrentUser(list);
+}
+
+function currentTeacherScope() {
+  return currentUserSnapshot().scope;
 }
 
 function toLocalExam(payload, created = {}, source = 'remote') {
@@ -92,7 +194,7 @@ function toLocalExam(payload, created = {}, source = 'remote') {
     totalQuestions: created.totalQuestions || created.TotalQuestions || payload.totalQuestions,
     durationMinutes: created.durationMinutes || created.DurationMinutes || payload.durationMinutes,
     description: created.description || created.Description || payload.description,
-    teacherId: payload.teacherId,
+    teacherId: created.teacherId ?? created.TeacherId ?? payload.teacherId ?? currentTeacherScope(),
     createdAt: created.createdAt || created.CreatedAt || new Date().toISOString(),
     startTime: created.startTime || created.StartTime || payload.startTime,
     endTime: created.endTime || created.EndTime || payload.endTime,
@@ -101,7 +203,7 @@ function toLocalExam(payload, created = {}, source = 'remote') {
       ...created,
       startTime: created.startTime || created.StartTime || payload.startTime,
       endTime: created.endTime || created.EndTime || payload.endTime,
-      status: created.status || created.Status || payload.status || 'Live',
+      status: created.status || created.Status || payload.status || (payload.isDraft ? 'Draft' : 'Live'),
     }),
     source,
   };
@@ -119,6 +221,8 @@ export async function createExam(payload) {
       subjectName: payload.subjectName,
       startTime: payload.startTime,
       endTime: payload.endTime,
+      isDraft: payload.isDraft === true,
+      status: payload.status,
     },
     {
       Title: payload.title,
@@ -130,6 +234,8 @@ export async function createExam(payload) {
       SubjectName: payload.subjectName,
       StartTime: payload.startTime,
       EndTime: payload.endTime,
+      IsDraft: payload.isDraft === true,
+      Status: payload.status,
     },
     {
       name: payload.title,
@@ -158,6 +264,31 @@ export async function createExam(payload) {
   return localExam;
 }
 
+export async function updateExam(id, payload) {
+  await API.put(`/Exams/${id}`, {
+    subjectId: payload.subjectId,
+    SubjectId: payload.subjectId,
+    title: payload.title,
+    Title: payload.title,
+    durationMinutes: payload.durationMinutes,
+    DurationMinutes: payload.durationMinutes,
+    totalQuestions: payload.totalQuestions,
+    TotalQuestions: payload.totalQuestions,
+    startTime: payload.startTime,
+    StartTime: payload.startTime,
+    endTime: payload.endTime,
+    EndTime: payload.endTime,
+    status: payload.status,
+    Status: payload.status,
+  }, FAST);
+}
+
+export async function deleteExam(id) {
+  await API.delete(`/Exams/${id}`, FAST);
+  const exams = localDb.getExams().filter((e) => String(e.id) !== String(id));
+  localDb.saveExams(exams);
+}
+
 export async function fetchExam(id) {
   let remote = null;
   try {
@@ -171,9 +302,17 @@ export async function fetchExam(id) {
     ? { ...local, ...remote, title: remote.title || remote.Title || local.title }
     : (withCounts([remote || local].filter(Boolean))[0] || local || remote);
   if (!merged) return merged;
+  const remoteOk = Boolean(remote && (remote.id || remote.Id || remote.title || remote.Title || remote.pdfFilePath || remote.PdfFilePath));
+  if (!remoteOk) {
+    const allowed = visibleForCurrentUser([merged]);
+    if (!allowed.length) return null;
+  }
   return {
     ...merged,
     id: merged.id ?? merged.Id ?? id,
+    teacherId: examOwnerId(merged) ?? (remoteOk ? currentTeacherScope() : examOwnerId(merged)),
+    subjectId: merged.subjectId ?? merged.SubjectId,
+    status: merged.status || merged.Status,
     pdfFilePath: merged.pdfFilePath || merged.PdfFilePath || '',
     pdfFileUrl: merged.pdfFileUrl || merged.PdfFileUrl || '',
   };
@@ -194,10 +333,17 @@ export async function fetchQuestions(examId) {
 }
 
 function normalizeQuestion(q) {
+  const type = q.type ?? q.Type;
+  const typeName = typeof type === 'number'
+    ? ['SingleChoice', 'MultipleChoice', 'OpenEnded'][type] || 'SingleChoice'
+    : (type || 'SingleChoice');
   return {
     ...q,
     id: q.id ?? q.questionId,
     text: q.text || q.questionText || q.title,
+    type: typeName,
+    inputKind: q.inputKind || q.InputKind || (typeName === 'OpenEnded' ? 'Text' : 'Choice'),
+    correctText: q.correctText ?? q.CorrectText ?? '',
     options: (q.options || q.answers || []).map((opt) => ({
       ...opt,
       id: opt.id ?? opt.optionId,
@@ -215,6 +361,8 @@ export async function addQuestion(examId, payload) {
       Text: payload.text,
       Points: payload.points ?? 1,
       Type: payload.type ?? 0,
+      InputKind: payload.inputKind,
+      CorrectText: payload.correctText,
       Options: payload.options,
     },
   ];
@@ -238,12 +386,24 @@ export async function addQuestion(examId, payload) {
 export async function fetchExamPdfBytes(exam) {
   const examId = exam?.id ?? exam?.Id;
   const path = examPdfUrl(exam);
+  const token = localStorage.getItem('token');
   const buffers = [];
+
+  const asBuffer = async (res) => {
+    if (!res) return null;
+    if (res.data instanceof ArrayBuffer) return res.data;
+    if (res.data instanceof Blob) return res.data.arrayBuffer();
+    return res.data;
+  };
 
   if (examId) {
     try {
-      const res = await API.get(`/Exams/${examId}/pdf`, { responseType: 'arraybuffer', timeout: 60000 });
-      buffers.push(res.data);
+      const res = await API.get(`/Exams/${examId}/pdf`, {
+        responseType: 'arraybuffer',
+        timeout: 60000,
+        headers: { Accept: 'application/pdf' },
+      });
+      buffers.push(await asBuffer(res));
     } catch {
       /* try public file */
     }
@@ -259,7 +419,9 @@ export async function fetchExamPdfBytes(exam) {
 
   for (const url of urls) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) continue;
       buffers.push(await res.arrayBuffer());
     } catch {
@@ -280,12 +442,21 @@ function isPdfBuffer(buf) {
 
 export async function uploadExamPdfPack(examId, file, questionCount) {
   const form = new FormData();
-  form.append('file', file);
+  form.append('file', file, file.name || 'exam.pdf');
   form.append('questionCount', String(questionCount));
-  const res = await API.post(`/Exams/${examId}/pdf-pack`, form, {
-    timeout: 60000,
-  });
-  return unwrapItem(res.data) || res.data;
+  const paths = [`/Exams/${examId}/pdf-pack`, `/Exams/${examId}/upload-pdf`];
+  let lastError;
+  for (const path of paths) {
+    try {
+      const res = await API.post(path, form, {
+        timeout: 120000,
+      });
+      return unwrapItem(res.data) || res.data;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('PDF yüklənmədi.');
 }
 
 export async function saveAnswerKey(examId, answers) {
@@ -322,6 +493,17 @@ export async function fetchExamReview(studentExamId) {
 export async function fetchExamReviewByExam(examId) {
   const res = await API.get(`/Submissions/exam/${examId}/review`, { timeout: 8000 });
   return unwrapItem(res.data) || res.data;
+}
+
+export async function fetchUsersByRole(role = 'Student') {
+  const res = await API.get('/Users', { params: { role, includeDeleted: false }, timeout: 8000 });
+  return unwrapList(res.data);
+}
+
+export async function fetchStudentHistoryById(studentId) {
+  if (!studentId) return [];
+  const res = await API.get(`/Submissions/history/${studentId}`, { timeout: 8000 });
+  return unwrapList(res.data).map(normalizeSubmission);
 }
 
 export async function fetchStudentHistory(studentId) {

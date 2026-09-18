@@ -1,11 +1,11 @@
-import { Calendar, Users, Clock, HelpCircle } from 'lucide-react';
+import { Calendar, Users, Clock, HelpCircle, Trash2 } from 'lucide-react';
 import { Badge, Card } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
 
-export default function ExamCard({ exam, onOpen, actionLabel = 'Aç' }) {
+export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }) {
   const status = resolveExamStatus(exam);
-  const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : 'brand';
-  const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : 'Scheduled';
+  const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
+  const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : status === 'Draft' ? 'Qaralama' : 'Scheduled';
   const topic = exam.description || exam.title;
   const subject = exam.subjectName || exam.subject;
 
@@ -37,7 +37,21 @@ export default function ExamCard({ exam, onOpen, actionLabel = 'Aç' }) {
           <Users size={14} /> {exam.submissionsCount ?? 0} iştirakçı
         </span>
       </div>
-      <div className="mt-5 text-sm font-medium text-brand-600">{actionLabel} →</div>
+      <div className="mt-5 flex items-center justify-between gap-2">
+        <div className="text-sm font-medium text-brand-600">{actionLabel} →</div>
+        {onDelete ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(exam);
+            }}
+          >
+            <Trash2 size={14} /> Sil
+          </button>
+        ) : null}
+      </div>
     </Card>
   );
 }

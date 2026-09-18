@@ -11,7 +11,7 @@ export default function Register() {
     fullName: '',
     email: '',
     password: '',
-    role: 'Student',
+    role: 'Teacher',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,16 +57,15 @@ export default function Register() {
           <span className="text-lg font-bold text-ink dark:text-white">ExamPulse</span>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
-          <h1 className="text-2xl font-bold text-ink dark:text-white">Qeydiyyat</h1>
+          <h1 className="text-2xl font-bold text-ink dark:text-white">Müəllim qeydiyyatı</h1>
+          <p className="mt-1 text-sm text-gray-500">Tələbəni müəllim öz kabinetindən qeydiyyata salır.</p>
           {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <Input label="Ad və soyad" name="fullName" value={formData.fullName} onChange={handleChange} required />
             <Input label="E-poçt" type="email" name="email" value={formData.email} onChange={handleChange} required />
             <Input label="Şifrə" type="password" name="password" value={formData.password} onChange={handleChange} required />
             <Select label="Rol" name="role" value={formData.role} onChange={handleChange}>
-              <option value="Student">Tələbə</option>
               <option value="Teacher">Müəllim</option>
-              <option value="Admin">Admin</option>
             </Select>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan keç'}

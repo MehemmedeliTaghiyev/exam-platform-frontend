@@ -14,7 +14,7 @@ const LETTERS = [
   { value: 'B', label: 'B' },
   { value: 'C', label: 'C' },
   { value: 'D', label: 'D' },
-  { value: 'E', label: 'Digər' },
+  { value: 'E', label: 'E' },
 ];
 
 function isOpenQuestion(question) {
@@ -44,7 +44,7 @@ export default function QuestionBuilder() {
   const [optionB, setOptionB] = useState('');
   const [optionC, setOptionC] = useState('');
   const [optionD, setOptionD] = useState('');
-  const [optionOther, setOptionOther] = useState('Digər');
+  const [optionE, setOptionE] = useState('E');
   const [openAnswer, setOpenAnswer] = useState('');
   const [correctAnswer, setCorrectAnswer] = useState('A');
   const [submitting, setSubmitting] = useState(false);
@@ -98,7 +98,7 @@ export default function QuestionBuilder() {
             { optionText: optionB, isCorrect: correctAnswer === 'B' },
             { optionText: optionC, isCorrect: correctAnswer === 'C' },
             { optionText: optionD, isCorrect: correctAnswer === 'D' },
-            { optionText: optionOther || 'Digər', isCorrect: correctAnswer === 'E' },
+            { optionText: optionE || 'E', isCorrect: correctAnswer === 'E' },
           ],
         });
       } else {
@@ -116,7 +116,7 @@ export default function QuestionBuilder() {
       setOptionB('');
       setOptionC('');
       setOptionD('');
-      setOptionOther('Digər');
+      setOptionE('E');
       setOpenAnswer('');
       setCorrectAnswer('A');
       await load();
@@ -146,7 +146,7 @@ export default function QuestionBuilder() {
       setPdfFile(null);
       setPdfCount(String(count));
       await load();
-      setMessage('PDF yükləndi. Variantlar A–D və Digər, açıq suallar üçün isə mətn/rəqəm sahəsi mövcuddur.');
+      setMessage('PDF yükləndi. Variantlar A–E və açıq suallar üçün mətn/rəqəm sahəsi mövcuddur.');
     } catch (err) {
       setMessage(errorMessage(err, 'PDF yüklənmədi.'));
     } finally {
@@ -276,7 +276,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">PDF ilə sual yüklə</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF-i yükləyin, altda sual sayını yazın. Hər sual üçün A–D və Digər variantları, istəsəniz açıq mətn/rəqəm cavabı da qura bilərsiniz.
+              PDF-i yükləyin, altda sual sayını yazın. Hər sual üçün A–E variantları, istəsəniz açıq mətn/rəqəm cavabı da qura bilərsiniz.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -321,7 +321,7 @@ export default function QuestionBuilder() {
                         value={kind}
                         onChange={(e) => setKinds((p) => ({ ...p, [q.id]: e.target.value }))}
                       >
-                        <option value="Choice">A–D / Digər</option>
+                        <option value="Choice">A–E</option>
                         <option value="Text">Açıq mətn</option>
                         <option value="Integer">Tam ədəd</option>
                         <option value="Decimal">Onluq ədəd</option>
@@ -371,7 +371,7 @@ export default function QuestionBuilder() {
               <h3 className="mb-4 text-base font-bold">Əl ilə yeni sual</h3>
               <form onSubmit={handleAddQuestion} className="space-y-4">
                 <Select label="Sual tipi" value={questionKind} onChange={(e) => setQuestionKind(e.target.value)}>
-                  <option value="choice">Variantlı (A–D + Digər)</option>
+                  <option value="choice">Variantlı (A–E)</option>
                   <option value="text">Açıq mətn</option>
                   <option value="integer">Tam ədəd</option>
                   <option value="decimal">Onluq ədəd</option>
@@ -390,14 +390,14 @@ export default function QuestionBuilder() {
                       <Input label="B" value={optionB} onChange={(e) => setOptionB(e.target.value)} required />
                       <Input label="C" value={optionC} onChange={(e) => setOptionC(e.target.value)} required />
                       <Input label="D" value={optionD} onChange={(e) => setOptionD(e.target.value)} required />
-                      <Input label="Digər" value={optionOther} onChange={(e) => setOptionOther(e.target.value)} />
+                      <Input label="E" value={optionE} onChange={(e) => setOptionE(e.target.value)} />
                     </div>
                     <Select label="Düzgün cavab" value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)}>
                       <option value="A">A</option>
                       <option value="B">B</option>
                       <option value="C">C</option>
                       <option value="D">D</option>
-                      <option value="E">Digər</option>
+                      <option value="E">E</option>
                     </Select>
                   </>
                 ) : (

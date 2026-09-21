@@ -84,6 +84,8 @@ export async function createTeacherAccount(payload) {
     userName: payload.userName,
     password: payload.password,
     trialEndsAt: payload.trialEndsAt,
+    trialStartsAt: payload.trialStartsAt,
+    billingPlan: payload.billingPlan,
     trialMessage: payload.trialMessage,
   };
   const paths = ['/Users/teachers', '/Users/create-teacher'];

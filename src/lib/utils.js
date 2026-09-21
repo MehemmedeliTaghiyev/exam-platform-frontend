@@ -45,6 +45,22 @@ export function uid(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+export function daysUntil(value) {
+  const d = parseExamDate(value) || (value ? new Date(value) : null);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
+export function toDateInput(value) {
+  const d = parseExamDate(value) || (value ? new Date(value) : null);
+  if (!d || Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function formatDate(value) {
   const d = parseExamDate(value) || (value ? new Date(value) : null);
   if (!d || Number.isNaN(d.getTime())) return value ? String(value) : '—';
@@ -148,8 +164,12 @@ export function classNames(...parts) {
 
 export function errorMessage(err, fallback = 'Xəta baş verdi') {
   const status = err?.response?.status;
+  const api = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://127.0.0.1:5000/api');
+  if (status === 401 && !err?.response?.data) {
+    return 'API şifrə ilə qorunur. SmarterASP-də Temp URL / Directory password-u söndürün, sonra yenidən cəhd edin.';
+  }
   if (status === 502 || status === 503 || status === 504 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
-    return 'API-yə qoşulmaq olmadı. Exam backend-in http://127.0.0.1:5000 ünvanında işlədiyindən əmin olun, sonra səhifəni yeniləyin.';
+    return `API-yə qoşulmaq olmadı (${api}). SmarterASP saytında password protection söndürün və backend-in işlədiyini yoxlayın.`;
   }
   const data = err?.response?.data;
   if (typeof data === 'string' && data.trim()) return data;

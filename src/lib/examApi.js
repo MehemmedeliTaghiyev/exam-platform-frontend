@@ -1,6 +1,6 @@
 import API from '../api/axios';
 import { localDb } from './localDb';
-import { unwrapList, unwrapItem, uid, percent, resolveExamStatus, examPdfUrl } from './utils';
+import { unwrapList, unwrapItem, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 
 const FAST = { timeout: 20000 };
 
@@ -574,7 +574,14 @@ export async function submitExam(payload) {
     payload.answers.forEach((a) => {
       const q = questions.find((x) => String(x.id) === String(a.questionId));
       const opt = q?.options?.find((o) => String(o.id) === String(a.selectedOptionId));
-      if (opt?.isCorrect) correct += 1;
+      const openPick = isOpenChoiceOption(opt);
+      const text = String(a.textAnswer || '').trim().toLowerCase();
+      const expected = String(q?.correctText || '').trim().toLowerCase();
+      if (openPick) {
+        if (text && expected && text === expected) correct += 1;
+      } else if (opt?.isCorrect) {
+        correct += 1;
+      }
     });
     const total = questions.length || payload.answers.length || 1;
     const exam = localDb.getExams().find((e) => String(e.id) === String(payload.examId));

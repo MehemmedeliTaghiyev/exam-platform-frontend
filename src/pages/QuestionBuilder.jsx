@@ -6,7 +6,7 @@ import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, fetchExam, fetchQuestions, saveAnswerKey, updateExam, uploadExamPdfPack } from '../lib/examApi';
-import { errorMessage, examPdfUrl, isExamDraft } from '../lib/utils';
+import { errorMessage, examPdfUrl, isExamDraft, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { exportExamToDocx } from '../lib/exportDocx';
 
 const LETTERS = [
@@ -15,6 +15,7 @@ const LETTERS = [
   { value: 'C', label: 'C' },
   { value: 'D', label: 'D' },
   { value: 'E', label: 'E' },
+  { value: 'OPEN', label: 'Açıq' },
 ];
 
 function isOpenQuestion(question) {
@@ -25,6 +26,9 @@ function isOpenQuestion(question) {
 
 function letterOf(question) {
   if (isOpenQuestion(question)) return '';
+  const correct = (question.options || []).find((o) => o.isCorrect);
+  if (correct && isOpenChoiceOption(correct)) return 'OPEN';
+  if (correct && isLetterOption(correct)) return optionLetter(correct);
   const idx = (question.options || []).findIndex((o) => o.isCorrect);
   if (idx < 0) return 'A';
   return LETTERS[idx]?.value || 'A';
@@ -99,7 +103,9 @@ export default function QuestionBuilder() {
             { optionText: optionC, isCorrect: correctAnswer === 'C' },
             { optionText: optionD, isCorrect: correctAnswer === 'D' },
             { optionText: optionE || 'E', isCorrect: correctAnswer === 'E' },
+            { optionText: 'Açıq', isCorrect: correctAnswer === 'OPEN' },
           ],
+          correctText: correctAnswer === 'OPEN' ? openAnswer : null,
         });
       } else {
         await addQuestion(id, {
@@ -146,7 +152,7 @@ export default function QuestionBuilder() {
       setPdfFile(null);
       setPdfCount(String(count));
       await load();
-      setMessage('PDF yükləndi. Variantlar A–E və açıq suallar üçün mətn/rəqəm sahəsi mövcuddur.');
+      setMessage('PDF yükləndi. Variantlar A–E və ayrıca Açıq sahə, istəsəniz tam açıq sual da qura bilərsiniz.');
     } catch (err) {
       setMessage(errorMessage(err, 'PDF yüklənmədi.'));
     } finally {
@@ -169,11 +175,13 @@ export default function QuestionBuilder() {
             correctLetter: '',
           };
         }
+        const letter = answerKey[q.id] || 'A';
         return {
           questionId: q.id,
           type: 'SingleChoice',
           inputKind: 'Choice',
-          correctLetter: answerKey[q.id] || 'A',
+          correctLetter: letter,
+          correctText: letter === 'OPEN' ? (openKeys[q.id] || '') : '',
         };
       });
       const list = await saveAnswerKey(id, answers);
@@ -276,7 +284,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">PDF ilə sual yüklə</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF-i yükləyin, altda sual sayını yazın. Hər sual üçün A–E variantları, istəsəniz açıq mətn/rəqəm cavabı da qura bilərsiniz.
+              PDF-i yükləyin, altda sual sayını yazın. Hər sual üçün A–E hərf variantları və ayrıca Açıq yazı sahəsi var.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -321,12 +329,13 @@ export default function QuestionBuilder() {
                         value={kind}
                         onChange={(e) => setKinds((p) => ({ ...p, [q.id]: e.target.value }))}
                       >
-                        <option value="Choice">A–E</option>
+                        <option value="Choice">A–E + Açıq</option>
                         <option value="Text">Açıq mətn</option>
                         <option value="Integer">Tam ədəd</option>
                         <option value="Decimal">Onluq ədəd</option>
                       </Select>
                       {kind === 'Choice' ? (
+                        <>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {LETTERS.map((letter) => (
                             <label
@@ -348,6 +357,16 @@ export default function QuestionBuilder() {
                             </label>
                           ))}
                         </div>
+                        {answerKey[q.id] === 'OPEN' && (
+                          <div className="mt-2">
+                            <Input
+                              label="Açıq düzgün cavab"
+                              value={openKeys[q.id] || ''}
+                              onChange={(e) => setOpenKeys((p) => ({ ...p, [q.id]: e.target.value }))}
+                            />
+                          </div>
+                        )}
+                        </>
                       ) : (
                         <div className="mt-2">
                           <Input
@@ -371,7 +390,7 @@ export default function QuestionBuilder() {
               <h3 className="mb-4 text-base font-bold">Əl ilə yeni sual</h3>
               <form onSubmit={handleAddQuestion} className="space-y-4">
                 <Select label="Sual tipi" value={questionKind} onChange={(e) => setQuestionKind(e.target.value)}>
-                  <option value="choice">Variantlı (A–E)</option>
+                  <option value="choice">Variantlı (A–E + Açıq)</option>
                   <option value="text">Açıq mətn</option>
                   <option value="integer">Tam ədəd</option>
                   <option value="decimal">Onluq ədəd</option>
@@ -398,7 +417,16 @@ export default function QuestionBuilder() {
                       <option value="C">C</option>
                       <option value="D">D</option>
                       <option value="E">E</option>
+                      <option value="OPEN">Açıq</option>
                     </Select>
+                    {correctAnswer === 'OPEN' && (
+                      <Input
+                        label="Açıq düzgün cavab"
+                        value={openAnswer}
+                        onChange={(e) => setOpenAnswer(e.target.value)}
+                        required
+                      />
+                    )}
                   </>
                 ) : (
                   <Input

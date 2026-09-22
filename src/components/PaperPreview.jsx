@@ -1,3 +1,11 @@
+import { isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
+
+function isFullyOpen(question) {
+  const type = String(question?.type || '');
+  const kind = String(question?.inputKind || '');
+  return type === 'OpenEnded' || ['Text', 'Integer', 'Decimal', 'Number'].includes(kind);
+}
+
 export default function PaperPreview({ exam, questions }) {
   return (
     <div className="paper-sheet mx-auto min-h-[297mm] max-w-[210mm] rounded-sm border border-amber-100 px-10 py-12 text-[#1f2937]">
@@ -19,13 +27,18 @@ export default function PaperPreview({ exam, questions }) {
               <span className="mr-2 font-bold">{idx + 1}.</span>
               {q.text}
             </p>
-            <div className="mt-3 space-y-1.5 pl-6 text-sm">
-              {(q.options || []).map((opt, oi) => (
-                <p key={opt.id || oi}>
-                  {String.fromCharCode(65 + oi)}) {opt.optionText || opt.text}
-                </p>
-              ))}
-            </div>
+            {isFullyOpen(q) ? (
+              <p className="mt-3 pl-6 text-sm">Açıq cavab: _______________________</p>
+            ) : (
+              <div className="mt-3 space-y-1.5 pl-6 text-sm">
+                {(q.options || []).filter(isLetterOption).map((opt) => (
+                  <p key={opt.id}>
+                    {optionLetter(opt)}) {opt.optionText || opt.text}
+                  </p>
+                ))}
+                <p>Açıq) _______________________</p>
+              </div>
+            )}
           </li>
         ))}
       </ol>

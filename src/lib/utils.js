@@ -45,6 +45,21 @@ export function uid(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+export function isLetterOption(opt) {
+  return /^[A-E]$/i.test(String(opt?.optionText || opt?.text || '').trim());
+}
+
+export function isOpenChoiceOption(opt) {
+  return /^(açıq|aciq|digər|diger|other)$/i.test(String(opt?.optionText || opt?.text || '').trim());
+}
+
+export function optionLetter(opt) {
+  const t = String(opt?.optionText || opt?.text || '').trim();
+  if (/^[A-E]$/i.test(t)) return t.toUpperCase();
+  if (isOpenChoiceOption(opt)) return 'OPEN';
+  return t;
+}
+
 export function daysUntil(value) {
   const d = parseExamDate(value) || (value ? new Date(value) : null);
   if (!d || Number.isNaN(d.getTime())) return null;

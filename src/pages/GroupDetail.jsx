@@ -1,12 +1,11 @@
-import { useContext, useMemo, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Ban, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
-import { localDb } from '../lib/localDb';
+import { createStudentAccount, deleteStudentAccount, fetchGroup, fetchStudents, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
-import { createStudentAccount, deleteStudentAccount, setStudentAccess } from '../lib/examApi';
 
 const emptyForm = {
   firstName: '',
@@ -23,23 +22,50 @@ const emptyForm = {
   closeAccess: false,
 };
 
+function belongsToGroup(student, group) {
+  if (!student || !group) return false;
+  if (student.groupId != null && String(student.groupId) === String(group.id)) return true;
+  const keys = [group.number, group.name].map((v) => String(v || '').trim().toLowerCase()).filter(Boolean);
+  const studentKey = String(student.groupName || '').trim().toLowerCase();
+  return keys.includes(studentKey);
+}
+
 export default function GroupDetail() {
   const { id } = useParams();
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const teacherId = user?.id || 'me';
-  const group = localDb.getGroups(teacherId).find((g) => g.id === id);
-  const [students, setStudents] = useState(() =>
-    localDb.getStudents(teacherId).filter((s) => s.groupId === id),
-  );
+  const [group, setGroup] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [all, setAll] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [removingId, setRemovingId] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
 
-  const all = useMemo(() => localDb.getStudents(teacherId), [students, teacherId]);
   const groupLabel = group?.number || group?.name || '';
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [g, list] = await Promise.all([fetchGroup(id), fetchStudents()]);
+      setGroup(g);
+      setAll(list);
+      setStudents(list.filter((s) => belongsToGroup(s, g)));
+    } catch (err) {
+      setGroup(null);
+      setError(errorMessage(err, 'Qrup yüklənmədi.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [id, user?.id]);
 
   const onFile = (key) => (e) => {
     const file = e.target.files?.[0];
@@ -72,41 +98,26 @@ export default function GroupDetail() {
         return;
       }
       const fullName = [form.firstName, form.lastName, form.fatherName].filter(Boolean).join(' ').trim();
-      const created = await createStudentAccount({
+      await createStudentAccount({
         fullName,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        fatherName: form.fatherName,
         email: form.email.trim(),
         userName: form.userName.trim(),
         password: form.password,
         groupName: groupLabel,
+        groupId: Number(id) || undefined,
+        birthDate: form.birthDate || null,
+        contractStart: form.contractStart || null,
+        contractEnd: form.contractEnd || null,
+        photo: form.photo || null,
+        contractPhoto: form.contractPhoto || null,
         closeAccess: form.closeAccess,
       });
-      let accessEnabled = created.isAccessEnabled ?? created.IsAccessEnabled;
-      if (form.closeAccess && Number(created.id ?? created.Id) > 0) {
-        try {
-          const updated = await setStudentAccess(created.id ?? created.Id, false);
-          accessEnabled = updated?.isAccessEnabled ?? updated?.IsAccessEnabled ?? false;
-        } catch {
-          accessEnabled = false;
-        }
-      }
-      if (accessEnabled == null) accessEnabled = !form.closeAccess;
-      const student = {
-        ...form,
-        password: undefined,
-        closeAccess: undefined,
-        id: created.id ?? created.Id,
-        userId: created.id ?? created.Id,
-        email: created.email || form.email.trim(),
-        userName: created.userName || created.UserName || form.userName.trim(),
-        groupId: id,
-        groupName: groupLabel,
-        isAccessEnabled: accessEnabled !== false,
-      };
-      const nextAll = [student, ...all.filter((s) => String(s.id) !== String(student.id))];
-      localDb.saveStudents(teacherId, nextAll);
-      setStudents(nextAll.filter((s) => s.groupId === id));
       setOpen(false);
       setForm(emptyForm);
+      await load();
     } catch (err) {
       setError(errorMessage(err, 'Tələbə saxlanılmadı. E-poçt və istifadəçi adı unikal olmalıdır.'));
     } finally {
@@ -125,20 +136,40 @@ export default function GroupDetail() {
       if (Number(student.id) > 0) {
         await deleteStudentAccount(student.id);
       }
+      await load();
     } catch (err) {
       setError(errorMessage(err, 'Tələbə silinmədi.'));
+    } finally {
       setRemovingId(null);
-      return;
     }
-    const nextAll = all.filter((s) => String(s.id) !== String(student.id));
-    localDb.saveStudents(teacherId, nextAll);
-    setStudents(nextAll.filter((s) => s.groupId === id));
-    setRemovingId(null);
   };
 
-  const persistStudents = (nextAll) => {
-    localDb.saveStudents(teacherId, nextAll);
-    setStudents(nextAll.filter((s) => s.groupId === id));
+  const openEdit = (student, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setError('');
+    setEditing(student);
+    setEditForm({
+      firstName: student.firstName || '',
+      lastName: student.lastName || '',
+      fatherName: student.fatherName || '',
+    });
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (!editing || saving) return;
+    setError('');
+    setSaving(true);
+    try {
+      await updateStudentProfile(editing.id, editForm);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(errorMessage(err, 'Ad soyad saxlanılmadı.'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleAccess = async (student, e) => {
@@ -149,11 +180,8 @@ export default function GroupDetail() {
     setError('');
     try {
       const enabled = student.isAccessEnabled !== false;
-      const updated = await setStudentAccess(student.id, !enabled);
-      const nextEnabled = updated?.isAccessEnabled ?? updated?.IsAccessEnabled ?? !enabled;
-      persistStudents(
-        all.map((s) => (String(s.id) === String(student.id) ? { ...s, isAccessEnabled: nextEnabled } : s)),
-      );
+      await setStudentAccess(student.id, !enabled);
+      await load();
     } catch (err) {
       setError(errorMessage(err, 'Giriş hüququ dəyişmədi.'));
     } finally {
@@ -161,10 +189,18 @@ export default function GroupDetail() {
     }
   };
 
+  if (loading) {
+    return (
+      <AppShell title="Qrup">
+        <p className="text-sm text-gray-500">Yüklənir...</p>
+      </AppShell>
+    );
+  }
+
   if (!group) {
     return (
       <AppShell title="Qrup">
-        <p>Qrup tapılmadı.</p>
+        <p>{error || 'Qrup tapılmadı.'}</p>
       </AppShell>
     );
   }
@@ -177,7 +213,7 @@ export default function GroupDetail() {
             <ArrowLeft size={16} /> Kabinet
           </Button>
           <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule}</p>
-          {error && !open && <p className="mt-3 text-sm text-red-600">{error}</p>}
+          {error && !open && !editing && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </div>
         <Button onClick={() => { setError(''); setOpen(true); }}>
           <Plus size={16} /> Tələbə əlavə et
@@ -199,7 +235,7 @@ export default function GroupDetail() {
                     <img src={s.photo} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full items-center justify-center text-sm font-bold text-brand-600">
-                      {(s.firstName || '?')[0]}
+                      {(s.firstName || s.fullName || '?')[0]}
                     </div>
                   )}
                 </div>
@@ -215,6 +251,11 @@ export default function GroupDetail() {
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
+                {Number(s.id) > 0 && (
+                  <Button variant="secondary" disabled={removingId === s.id || saving} onClick={(e) => openEdit(s, e)}>
+                    <Pencil size={14} /> Düzəliş
+                  </Button>
+                )}
                 {Number(s.id) > 0 && (
                   <Button
                     variant={s.isAccessEnabled === false ? 'success' : 'danger'}
@@ -282,6 +323,33 @@ export default function GroupDetail() {
           </label>
           <div className="sm:col-span-2 flex justify-end gap-2">
             <Button variant="secondary" disabled={saving} onClick={() => setOpen(false)}>Ləğv et</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saxlanılır...' : 'Saxla'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={Boolean(editing)} title="Şəxsi məlumatlar" onClose={() => !saving && setEditing(null)}>
+        <form onSubmit={saveEdit} className="grid gap-4">
+          <Input
+            label="Ad"
+            required
+            value={editForm.firstName}
+            onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+          />
+          <Input
+            label="Soyad"
+            required
+            value={editForm.lastName}
+            onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+          />
+          <Input
+            label="Ata adı"
+            value={editForm.fatherName}
+            onChange={(e) => setEditForm({ ...editForm, fatherName: e.target.value })}
+          />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" disabled={saving} onClick={() => setEditing(null)}>Ləğv et</Button>
             <Button type="submit" disabled={saving}>{saving ? 'Saxlanılır...' : 'Saxla'}</Button>
           </div>
         </form>

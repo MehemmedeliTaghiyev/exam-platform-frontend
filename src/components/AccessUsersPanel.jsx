@@ -4,37 +4,16 @@ import AppShell from './AppShell';
 import { Badge, Button, Card, EmptyState, Skeleton } from './ui';
 import { AuthContext } from '../context/AuthContext';
 import API from '../api/axios';
-import { localDb } from '../lib/localDb';
 import { errorMessage, formatDate, unwrapList } from '../lib/utils';
 
-function groupLookup(teacherId) {
-  const groups = localDb.getGroups(teacherId);
-  const students = localDb.getStudents(teacherId);
-  return { groups, students };
-}
-
-function resolveGroupName(u, teacherId) {
-  const fromApi = u.groupName || u.GroupName;
-  if (fromApi) return fromApi;
-  const { groups, students } = groupLookup(teacherId);
-  const local = students.find(
-    (s) =>
-      String(s.id) === String(u.id) ||
-      (u.email && s.email && s.email.toLowerCase() === u.email.toLowerCase()),
-  );
-  if (!local) return '—';
-  const group = groups.find((g) => String(g.id) === String(local.groupId));
-  return local.groupName || group?.number || group?.name || '—';
-}
-
-function normalizeAdminUser(u, teacherId) {
+function normalizeAdminUser(u) {
   return {
     id: u.id,
     fullName: u.fullName,
     email: u.email,
     role: u.role,
     userName: u.userName || u.UserName,
-    groupName: resolveGroupName(u, teacherId),
+    groupName: u.groupName || u.GroupName || '—',
     isAccessEnabled: (u.isAccessEnabled ?? u.IsAccessEnabled) !== false,
     isDeleted: Boolean(u.isDeleted),
     createdAt: u.createdAt,
@@ -57,29 +36,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
     setError('');
     try {
       const res = await API.get('/Users', { params: { role, includeDeleted: true } });
-      const remote = unwrapList(res.data).map((row) => normalizeAdminUser(row, teacherId));
-      if (role === 'Student') {
-        const seen = new Set(remote.map((u) => String(u.id)));
-        const emails = new Set(remote.map((u) => (u.email || '').toLowerCase()).filter(Boolean));
-        const { groups, students } = groupLookup(teacherId);
-        students.forEach((s) => {
-          const email = (s.email || '').toLowerCase();
-          if (seen.has(String(s.id)) || (email && emails.has(email))) return;
-          const group = groups.find((g) => String(g.id) === String(s.groupId));
-          remote.unshift({
-            id: s.id,
-            fullName: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.fullName || 'Tələbə',
-            email: s.email || '—',
-            role: 'Student',
-            userName: s.userName,
-            groupName: s.groupName || group?.number || group?.name || '—',
-            isAccessEnabled: true,
-            isDeleted: false,
-            createdAt: s.createdAt,
-            localOnly: !Number(s.id),
-          });
-        });
-      }
+      const remote = unwrapList(res.data).map((row) => normalizeAdminUser(row));
       setUsers(remote);
     } catch (err) {
       setUsers([]);

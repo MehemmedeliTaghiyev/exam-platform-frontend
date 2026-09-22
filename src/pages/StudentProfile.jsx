@@ -1,19 +1,21 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Percent, UserX } from 'lucide-react';
+import { ArrowLeft, BookOpen, Pencil, Percent, UserX } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import ProgressChart from '../components/ProgressChart';
 import LeaderboardTable from '../components/LeaderboardTable';
-import { Badge, Button, Card, Skeleton, StatCard } from '../components/ui';
+import { Badge, Button, Card, Input, Modal, Skeleton, StatCard } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
-import { localDb } from '../lib/localDb';
 import {
   fetchExamSubmissions,
   fetchExams,
   fetchStudentHistoryById,
+  fetchUserById,
   fetchUsersByRole,
+  mapStudent,
+  updateStudentProfile,
 } from '../lib/examApi';
-import { formatDate, formatDateTime, fullNameOf, parseExamDate, resolveExamStatus } from '../lib/utils';
+import { errorMessage, formatDate, formatDateTime, fullNameOf, parseExamDate, resolveExamStatus } from '../lib/utils';
 
 function examSortDate(exam) {
   return (
@@ -34,64 +36,43 @@ export default function StudentProfile() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const teacherId = user?.id || 'me';
-  const localStudent = useMemo(
-    () => localDb.getStudents(teacherId).find((s) => String(s.id) === String(id)),
-    [id, teacherId],
-  );
-  const group = localDb.getGroups(teacherId).find((g) => g.id === localStudent?.groupId);
-
-  const [student, setStudent] = useState(localStudent || null);
+  const [student, setStudent] = useState(null);
   const [exams, setExams] = useState([]);
   const [history, setHistory] = useState([]);
   const [classmates, setClassmates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
 
   useEffect(() => {
     const run = async () => {
       setLoading(true);
       try {
-        const [examList, hist, users] = await Promise.all([
+        const [examList, hist, users, apiUser] = await Promise.all([
           fetchExams(),
           fetchStudentHistoryById(id).catch(() => []),
           fetchUsersByRole('Student').catch(() => []),
+          fetchUserById(id).catch(() => null),
         ]);
         const published = examList.filter((e) => resolveExamStatus(e) !== 'Draft');
         setExams(published);
         setHistory(hist);
 
-        const apiUser = users.find((u) => String(u.id ?? u.Id) === String(id));
-        const mergedStudent = {
-          ...(localStudent || {}),
-          ...(apiUser || {}),
-          id: apiUser?.id ?? apiUser?.Id ?? localStudent?.id ?? id,
-          fullName: apiUser?.fullName || apiUser?.FullName || fullNameOf(localStudent),
-          email: apiUser?.email || localStudent?.email,
-          userName: apiUser?.userName || apiUser?.UserName || localStudent?.userName,
-          groupName: apiUser?.groupName || apiUser?.GroupName || localStudent?.groupName || group?.name,
-        };
+        const fromList = users.find((u) => String(u.id ?? u.Id) === String(id));
+        const mergedStudent = mapStudent(apiUser || fromList) || { id };
         setStudent(mergedStudent);
 
-        const groupKey = String(mergedStudent.groupName || group?.name || group?.number || '').trim().toLowerCase();
-        const localClassmates = localDb
-          .getStudents(teacherId)
-          .filter((s) => String(s.groupId) === String(localStudent?.groupId) || String(s.groupName || '').toLowerCase() === groupKey);
-
+        const groupKey = String(mergedStudent.groupName || '').trim().toLowerCase();
         const apiClassmates = users.filter((u) => {
           const g = String(u.groupName || u.GroupName || '').trim().toLowerCase();
           return groupKey && g === groupKey;
         });
 
         const byId = new Map();
-        [...localClassmates, ...apiClassmates.map((u) => ({
-          id: u.id ?? u.Id,
-          fullName: u.fullName || u.FullName,
-          firstName: u.firstName,
-          lastName: u.lastName,
-          email: u.email,
-          groupName: u.groupName || u.GroupName,
-        }))].forEach((s) => {
-          const key = String(s.id);
-          if (!byId.has(key)) byId.set(key, s);
+        apiClassmates.map(mapStudent).filter(Boolean).forEach((s) => {
+          byId.set(String(s.id), s);
         });
         if (!byId.has(String(mergedStudent.id))) byId.set(String(mergedStudent.id), mergedStudent);
 
@@ -134,7 +115,7 @@ export default function StudentProfile() {
       }
     };
     run();
-  }, [id, teacherId, localStudent, group?.name, group?.number]);
+  }, [id, teacherId]);
 
   const rows = useMemo(() => {
     const byExam = new Map();
@@ -168,6 +149,39 @@ export default function StudentProfile() {
     .sort((a, b) => a.date - b.date)
     .map((r) => r.percent || 0);
 
+  const openEdit = () => {
+    setEditError('');
+    setEditForm({
+      firstName: student?.firstName || '',
+      lastName: student?.lastName || '',
+      fatherName: student?.fatherName || '',
+    });
+    setEditOpen(true);
+  };
+
+  const saveNames = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    setEditError('');
+    setSaving(true);
+    try {
+      const updated = await updateStudentProfile(id, editForm);
+      setStudent((prev) => ({ ...prev, ...updated }));
+      setClassmates((rows) =>
+        rows.map((row) =>
+          String(row.studentId) === String(id)
+            ? { ...row, studentName: fullNameOf(updated) || updated.fullName }
+            : row,
+        ),
+      );
+      setEditOpen(false);
+    } catch (err) {
+      setEditError(errorMessage(err, 'Ad soyad saxlanılmadı.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openExam = (row) => {
     const params = new URLSearchParams({ studentId: String(id) });
     if (row.studentExamId) params.set('studentExamId', String(row.studentExamId));
@@ -190,7 +204,7 @@ export default function StudentProfile() {
     );
   }
 
-  const backGroup = student.groupId || localStudent?.groupId;
+  const backGroup = student.groupId;
 
   return (
     <AppShell title={fullNameOf(student) || student.fullName || 'Tələbə'}>
@@ -209,10 +223,31 @@ export default function StudentProfile() {
               </div>
             )}
           </div>
+          <div className="mt-5 flex items-start justify-between gap-3">
+            <div>
+              <p className="font-bold">{fullNameOf(student)}</p>
+              <p className="text-xs text-gray-500">Şəxsi məlumatlar</p>
+            </div>
+            <Button variant="secondary" className="px-3 py-2" onClick={openEdit}>
+              <Pencil size={14} /> Düzəliş
+            </Button>
+          </div>
           <dl className="mt-5 space-y-3 text-sm">
             <div>
+              <dt className="text-gray-400">Ad</dt>
+              <dd className="font-medium">{student.firstName || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">Soyad</dt>
+              <dd className="font-medium">{student.lastName || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">Ata adı</dt>
+              <dd className="font-medium">{student.fatherName || '—'}</dd>
+            </div>
+            <div>
               <dt className="text-gray-400">Qrup</dt>
-              <dd className="font-medium">{student.groupName || group?.name || '—'}</dd>
+              <dd className="font-medium">{student.groupName || '—'}</dd>
             </div>
             <div>
               <dt className="text-gray-400">E-poçt</dt>
@@ -306,6 +341,33 @@ export default function StudentProfile() {
           </Card>
         </div>
       </div>
+
+      <Modal open={editOpen} title="Şəxsi məlumatlar" onClose={() => !saving && setEditOpen(false)}>
+        <form onSubmit={saveNames} className="grid gap-4">
+          <Input
+            label="Ad"
+            required
+            value={editForm.firstName}
+            onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+          />
+          <Input
+            label="Soyad"
+            required
+            value={editForm.lastName}
+            onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+          />
+          <Input
+            label="Ata adı"
+            value={editForm.fatherName}
+            onChange={(e) => setEditForm({ ...editForm, fatherName: e.target.value })}
+          />
+          {editError && <p className="text-sm text-red-600">{editError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" disabled={saving} onClick={() => setEditOpen(false)}>Ləğv et</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saxlanılır...' : 'Saxla'}</Button>
+          </div>
+        </form>
+      </Modal>
     </AppShell>
   );
 }

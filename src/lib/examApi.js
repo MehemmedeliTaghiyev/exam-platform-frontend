@@ -52,6 +52,15 @@ export async function createStudentAccount(payload) {
     userName: payload.userName,
     password: payload.password,
     groupName: payload.groupName,
+    groupId: payload.groupId ? Number(payload.groupId) : null,
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    fatherName: payload.fatherName,
+    birthDate: payload.birthDate || null,
+    contractStart: payload.contractStart || null,
+    contractEnd: payload.contractEnd || null,
+    photo: payload.photo || null,
+    contractPhoto: payload.contractPhoto || null,
     closeAccess: Boolean(payload.closeAccess),
   };
   const paths = ['/Users/students', '/Users/create-student', '/Users'];
@@ -69,9 +78,117 @@ export async function createStudentAccount(payload) {
   throw lastError;
 }
 
+function mapGroup(g) {
+  return {
+    id: g.id ?? g.Id,
+    name: g.name || g.Name || '',
+    number: g.number || g.Number || g.name || g.Name || '',
+    schedule: g.schedule || g.Schedule || '',
+    studentCount: g.studentCount ?? g.StudentCount ?? 0,
+    createdAt: g.createdAt || g.CreatedAt,
+  };
+}
+
+export function mapStudent(u) {
+  if (!u) return null;
+  return {
+    id: u.id ?? u.Id,
+    fullName: u.fullName || u.FullName,
+    email: u.email || u.Email,
+    userName: u.userName || u.UserName,
+    groupName: u.groupName || u.GroupName || '',
+    groupId: u.groupId ?? u.GroupId,
+    firstName: u.firstName || u.FirstName,
+    lastName: u.lastName || u.LastName,
+    fatherName: u.fatherName || u.FatherName,
+    birthDate: u.birthDate || u.BirthDate,
+    contractStart: u.contractStart || u.ContractStart,
+    contractEnd: u.contractEnd || u.ContractEnd,
+    photo: u.photo || u.Photo,
+    contractPhoto: u.contractPhoto || u.ContractPhoto,
+    isAccessEnabled: (u.isAccessEnabled ?? u.IsAccessEnabled) !== false,
+    createdAt: u.createdAt || u.CreatedAt,
+  };
+}
+
+function currentTeacherId() {
+  return currentUserSnapshot().scope;
+}
+
+export async function fetchGroups() {
+  const teacherId = currentTeacherId();
+  try {
+    const local = localDb.getGroups(teacherId);
+    for (const g of local) {
+      if (Number(g.id) > 0) continue;
+      if (!String(g.name || g.number || '').trim()) continue;
+      try {
+        await API.post('/Groups', {
+          name: g.name || g.number,
+          number: g.number || g.name,
+          schedule: g.schedule || '',
+        });
+      } catch {
+        /* duplicate or offline */
+      }
+    }
+    const data = await tryGet('/Groups');
+    const list = unwrapList(data).map(mapGroup);
+    localDb.saveGroups(teacherId, list);
+    return list;
+  } catch {
+    return localDb.getGroups(teacherId);
+  }
+}
+
+export async function createGroup(payload) {
+  const res = await API.post('/Groups', {
+    name: payload.name,
+    number: payload.number,
+    schedule: payload.schedule,
+  }, FAST);
+  const group = mapGroup(unwrapItem(res.data) || res.data);
+  const teacherId = currentTeacherId();
+  const next = [group, ...localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(group.id))];
+  localDb.saveGroups(teacherId, next);
+  return group;
+}
+
+export async function fetchGroup(id) {
+  const res = await API.get(`/Groups/${id}`, FAST);
+  return mapGroup(unwrapItem(res.data) || res.data);
+}
+
+export async function fetchStudents() {
+  const list = await fetchUsersByRole('Student');
+  return list.map(mapStudent).filter(Boolean);
+}
+
+export async function fetchUserById(id) {
+  const res = await API.get(`/Users/${id}`, FAST);
+  return mapStudent(unwrapItem(res.data) || res.data);
+}
+
 export async function setStudentAccess(id, enabled) {
   const res = await API.patch(`/Users/${id}/access`, { enabled });
   return unwrapItem(res.data) || res.data;
+}
+
+export async function updateStudentProfile(id, payload) {
+  const body = {
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    fatherName: payload.fatherName ?? '',
+  };
+  try {
+    const res = await API.patch(`/Users/${id}/profile`, body);
+    return mapStudent(unwrapItem(res.data) || res.data);
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status !== 404 && status !== 405) throw err;
+    const res = await API.put(`/Users/${id}/profile`, body);
+    return mapStudent(unwrapItem(res.data) || res.data);
+  }
 }
 
 export async function createTeacherAccount(payload) {

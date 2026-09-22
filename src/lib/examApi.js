@@ -390,6 +390,7 @@ export async function fetchExamPdfBytes(exam) {
   const path = examPdfUrl(exam);
   const token = localStorage.getItem('token');
   const buffers = [];
+  let notFound = false;
 
   const asBuffer = async (res) => {
     if (!res) return null;
@@ -406,15 +407,16 @@ export async function fetchExamPdfBytes(exam) {
         headers: { Accept: 'application/pdf' },
       });
       buffers.push(await asBuffer(res));
-    } catch {
-      /* try public file */
+    } catch (err) {
+      if (err?.response?.status === 404) notFound = true;
     }
   }
 
   const urls = [];
-  if (path.startsWith('/uploads')) {
-    urls.push(path);
-    urls.push(`http://127.0.0.1:5000${path}`);
+  const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : '');
+  const origin = String(apiBase).replace(/\/api\/?$/, '');
+  if (path.startsWith('/uploads') && origin && origin.startsWith('http')) {
+    urls.push(`${origin}${path}`);
   } else if (/^https?:\/\//i.test(path)) {
     urls.push(path);
   }
@@ -432,7 +434,11 @@ export async function fetchExamPdfBytes(exam) {
   }
 
   const pdf = buffers.find(isPdfBuffer);
-  if (!pdf) throw new Error('PDF tapılmadı');
+  if (!pdf) {
+    const err = new Error('PDF tapılmadı');
+    err.response = { status: notFound ? 404 : 0 };
+    throw err;
+  }
   return pdf;
 }
 

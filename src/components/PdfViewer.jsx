@@ -74,9 +74,14 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
         pdfRef.current = pdf;
         setPages(pdf.numPages);
         await paint();
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          setError('PDF açılmadı. Səhifəni yeniləyin və ya PDF-i yenidən yükləyin.');
+          const status = err?.response?.status;
+          setError(
+            status === 404
+              ? 'PDF tapılmadı. Müəllim imtahanın PDF-ini yenidən yükləməlidir.'
+              : 'PDF açılmadı. Səhifəni yeniləyin və ya PDF-i yenidən yükləyin.',
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);

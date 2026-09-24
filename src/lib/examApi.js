@@ -134,24 +134,46 @@ export async function fetchGroups() {
     }
     const data = await tryGet('/Groups');
     const list = unwrapList(data).map(mapGroup);
-    localDb.saveGroups(teacherId, list);
-    return list;
+    if (list.length) {
+      localDb.saveGroups(teacherId, list);
+      return list;
+    }
+    const localOnly = localDb.getGroups(teacherId);
+    return localOnly.length ? localOnly : list;
   } catch {
     return localDb.getGroups(teacherId);
   }
 }
 
 export async function createGroup(payload) {
-  const res = await API.post('/Groups', {
-    name: payload.name,
-    number: payload.number,
-    schedule: payload.schedule,
-  }, FAST);
-  const group = mapGroup(unwrapItem(res.data) || res.data);
   const teacherId = currentTeacherId();
-  const next = [group, ...localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(group.id))];
+  const fallback = {
+    id: uid('grp'),
+    name: payload.name,
+    number: payload.number || payload.name,
+    schedule: payload.schedule || '',
+    studentCount: 0,
+    createdAt: new Date().toISOString(),
+  };
+  try {
+    const res = await API.post('/Groups', {
+      name: payload.name,
+      number: payload.number,
+      schedule: payload.schedule,
+    }, FAST);
+    const group = mapGroup(unwrapItem(res.data) || res.data);
+    if (group?.id) {
+      const next = [group, ...localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(group.id))];
+      localDb.saveGroups(teacherId, next);
+      return group;
+    }
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 401 || status === 403) throw err;
+  }
+  const next = [fallback, ...localDb.getGroups(teacherId).filter((g) => String(g.number) !== String(fallback.number))];
   localDb.saveGroups(teacherId, next);
-  return group;
+  return fallback;
 }
 
 export async function fetchGroup(id) {
@@ -670,7 +692,7 @@ export async function saveExamProgress(payload) {
 }
 
 export async function startExam({ examId, studentId }) {
-  const res = await API.post('/Submissions', { examId, studentId }, { timeout: 8000 });
+  const res = await API.post('/Submissions', { examId, studentId }, { timeout: 25000 });
   return unwrapItem(res.data) || res.data;
 }
 

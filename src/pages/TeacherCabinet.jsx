@@ -55,11 +55,12 @@ export default function TeacherCabinet() {
     setSaving(true);
     setError('');
     try {
-      await createGroup({
+      const group = await createGroup({
         name: name.trim(),
         number: (number.trim() || name.trim()),
         schedule,
       });
+      setGroups((prev) => [group, ...prev.filter((g) => String(g.id) !== String(group.id))]);
       setName('');
       setNumber('');
       setSchedule('');

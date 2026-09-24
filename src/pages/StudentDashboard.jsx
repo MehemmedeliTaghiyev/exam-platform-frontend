@@ -1,11 +1,20 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
-import { Badge, Card, EmptyState, Skeleton } from '../components/ui';
+import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchExams, fetchStudentHistory } from '../lib/examApi';
-import { formatDate, isExamEnded, isExamLive, isExamScheduled, resolveExamStatus } from '../lib/utils';
+import { formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
+
+function examSortTime(exam) {
+  return (
+    parseExamDate(exam.startTime || exam.StartTime)?.getTime()
+    || parseExamDate(exam.createdAt || exam.CreatedAt)?.getTime()
+    || parseExamDate(exam.endTime || exam.EndTime)?.getTime()
+    || 0
+  );
+}
 
 export default function StudentDashboard() {
   const { user } = useContext(AuthContext);
@@ -13,6 +22,7 @@ export default function StudentDashboard() {
   const [exams, setExams] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAllExams, setShowAllExams] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -39,13 +49,25 @@ export default function StudentDashboard() {
 
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
-    const done = history.some((h) => String(h.examId) === String(exam.id));
-    if (isExamLive(exam) && !done) {
+    const submitted = history.some((h) => {
+      if (String(h.examId) !== String(exam.id)) return false;
+      const status = String(h.status || h.Status || '').toLowerCase();
+      if (status === 'inprogress' || status === 'in_progress') return false;
+      return Boolean(h.submittedAt || h.SubmittedAt);
+    });
+    if (isExamLive(exam) && !submitted) {
       navigate(`/student/exams/${exam.id}`);
       return;
     }
     navigate(`/student/exams/${exam.id}/review`);
   };
+
+  const sortedExams = useMemo(
+    () => [...exams].sort((a, b) => examSortTime(b) - examSortTime(a)),
+    [exams],
+  );
+  const visibleExams = showAllExams ? sortedExams : sortedExams.slice(0, 3);
+  const hiddenExamCount = Math.max(0, sortedExams.length - visibleExams.length);
 
   const historyRows = (() => {
     const byExam = new Map();
@@ -92,29 +114,38 @@ export default function StudentDashboard() {
           {exams.length === 0 ? (
             <EmptyState title="Aktiv imtahan yoxdur" text="Müəllim imtahan yaratdıqda burada görünəcək." />
           ) : (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {exams.map((exam) => {
-                const done = history.some((h) => String(h.examId) === String(exam.id));
-                const live = isExamLive(exam);
-                const ended = isExamEnded(exam);
-                return (
-                  <ExamCard
-                    key={exam.id}
-                    exam={exam}
-                    actionLabel={
-                      live && !done
-                        ? 'İmtahana başla'
-                        : live && done
-                          ? 'Cavablarıma bax'
-                          : ended
-                            ? 'Nəticələrə bax'
-                            : 'Gözləyin'
-                    }
-                    onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
-                  />
-                );
-              })}
-            </div>
+            <>
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                {visibleExams.map((exam) => {
+                  const done = history.some((h) => String(h.examId) === String(exam.id));
+                  const live = isExamLive(exam);
+                  const ended = isExamEnded(exam);
+                  return (
+                    <ExamCard
+                      key={exam.id}
+                      exam={exam}
+                      actionLabel={
+                        live && !done
+                          ? 'İmtahana başla'
+                          : live && done
+                            ? 'Cavablarıma bax'
+                            : ended
+                              ? 'Nəticələrə bax'
+                              : 'Gözləyin'
+                      }
+                      onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
+                    />
+                  );
+                })}
+              </div>
+              {hiddenExamCount > 0 && (
+                <div className="mt-5 flex justify-center">
+                  <Button variant="secondary" onClick={() => setShowAllExams(true)}>
+                    Bütün imtahanları yüklə
+                  </Button>
+                </div>
+              )}
+            </>
           )}
 
           <h2 className="mb-4 mt-12 text-lg font-bold">İmtahan tarixçəm</h2>

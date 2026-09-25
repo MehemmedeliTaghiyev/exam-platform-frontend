@@ -1,10 +1,17 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Badge, Button, Card, EmptyState, Input, Modal, Textarea } from '../components/ui';
-import { createGroup, fetchGroups, fetchStudents } from '../lib/examApi';
+import {
+  createGroup,
+  deleteGroup,
+  fetchGroups,
+  fetchStudents,
+  groupsShareName,
+  DUPLICATE_GROUP_MESSAGE,
+} from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
 
 function inGroup(student, group) {
@@ -24,6 +31,7 @@ export default function TeacherCabinet() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
@@ -54,12 +62,18 @@ export default function TeacherCabinet() {
     if (saving) return;
     setSaving(true);
     setError('');
+    const payload = {
+      name: name.trim(),
+      number: number.trim() || name.trim(),
+      schedule,
+    };
+    if (findLocalDuplicate(groups, payload)) {
+      setError(DUPLICATE_GROUP_MESSAGE);
+      setSaving(false);
+      return;
+    }
     try {
-      const group = await createGroup({
-        name: name.trim(),
-        number: (number.trim() || name.trim()),
-        schedule,
-      });
+      const group = await createGroup(payload);
       setGroups((prev) => [group, ...prev.filter((g) => String(g.id) !== String(group.id))]);
       setName('');
       setNumber('');
@@ -71,6 +85,30 @@ export default function TeacherCabinet() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const removeGroup = async (group, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (deletingId) return;
+    const label = group.number || group.name || 'qrup';
+    if (!window.confirm(`${label} silinsin? Tələbələr silinməyəcək, qrup siyahıdan çıxacaq.`)) return;
+    setDeletingId(group.id);
+    setError('');
+    try {
+      const next = await deleteGroup(group.id);
+      setGroups(next);
+    } catch (err) {
+      setError(errorMessage(err, 'Qrup silinmədi.'));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const closeModal = () => {
+    if (saving) return;
+    setOpen(false);
+    setError('');
   };
 
   return (
@@ -101,9 +139,19 @@ export default function TeacherCabinet() {
             const count = g.studentCount || students.filter((s) => inGroup(s, g)).length;
             return (
               <Card key={g.id} onClick={() => navigate(`/teacher/groups/${g.id}`)}>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <h3 className="text-lg font-bold">{g.number || g.name}</h3>
-                  <Badge>{count} tələbə</Badge>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge>{count} tələbə</Badge>
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                      disabled={deletingId === g.id}
+                      onClick={(e) => removeGroup(g, e)}
+                    >
+                      <Trash2 size={16} /> Sil
+                    </Button>
+                  </div>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-gray-500">
                   {g.schedule || 'Dərs cədvəli əlavə edilməyib'}
@@ -114,7 +162,7 @@ export default function TeacherCabinet() {
         </div>
       )}
 
-      <Modal open={open} title="Yeni qrup" onClose={() => !saving && setOpen(false)}>
+      <Modal open={open} title="Yeni qrup" onClose={closeModal}>
         <form onSubmit={handleCreate} className="space-y-4">
           <Input label="Qrup nömrəsi" value={number} onChange={(e) => setNumber(e.target.value)} required placeholder="məs. 11A" />
           <Input label="Qrup adı" value={name} onChange={(e) => setName(e.target.value)} required placeholder="məs. 11A Riyaziyyat" />
@@ -125,9 +173,9 @@ export default function TeacherCabinet() {
             onChange={(e) => setSchedule(e.target.value)}
             placeholder={'Bazar ertəsi 15:00\nÇərşənbə 17:00'}
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-amber-700 dark:text-amber-400">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" disabled={saving} onClick={() => setOpen(false)}>
+            <Button variant="secondary" disabled={saving} onClick={closeModal}>
               Ləğv et
             </Button>
             <Button type="submit" disabled={saving}>{saving ? 'Saxlanılır...' : 'Yarat'}</Button>
@@ -136,4 +184,8 @@ export default function TeacherCabinet() {
       </Modal>
     </AppShell>
   );
+}
+
+function findLocalDuplicate(groups, payload) {
+  return groups.some((g) => groupsShareName(g, payload));
 }

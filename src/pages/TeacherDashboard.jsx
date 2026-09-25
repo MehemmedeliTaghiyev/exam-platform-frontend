@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
+import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, EmptyState, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, isExamDraft } from '../lib/utils';
@@ -297,6 +298,8 @@ export default function TeacherDashboard() {
           {notice}
         </div>
       )}
+
+      <WeeklyRanking variant="teacher" />
 
       {loading ? (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">

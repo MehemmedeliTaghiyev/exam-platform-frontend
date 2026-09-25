@@ -17,6 +17,8 @@ function normalizeUser(raw) {
     email: user.email,
     userName: user.userName || user.username,
     teacherId: user.teacherId ?? user.TeacherId ?? (normalizeRole(user.role || user.roles?.[0]) === 'Teacher' ? (user.id || user.userId) : null),
+    groupName: user.groupName || user.GroupName || '',
+    groupId: user.groupId ?? user.GroupId ?? null,
   };
 }
 

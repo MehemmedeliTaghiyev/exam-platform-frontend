@@ -89,6 +89,30 @@ function mapGroup(g) {
   };
 }
 
+export const DUPLICATE_GROUP_MESSAGE = 'Bu adda qrup artıq var. Mövcud qrup əvəz olunmur.';
+
+function groupNameKeys(g) {
+  return [g?.name, g?.number]
+    .map((v) => String(v || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function groupsShareName(a, b) {
+  const left = groupNameKeys(a);
+  const right = groupNameKeys(b);
+  return left.some((key) => right.includes(key));
+}
+
+function duplicateGroupError() {
+  const err = new Error(DUPLICATE_GROUP_MESSAGE);
+  err.isDuplicateGroup = true;
+  return err;
+}
+
+function findDuplicateGroup(list, payload) {
+  return (list || []).find((g) => groupsShareName(g, payload));
+}
+
 export function mapStudent(u) {
   if (!u) return null;
   return {
@@ -119,9 +143,16 @@ export async function fetchGroups() {
   const teacherId = currentTeacherId();
   try {
     const local = localDb.getGroups(teacherId);
+    let remote = [];
+    try {
+      remote = unwrapList(await tryGet('/Groups')).map(mapGroup);
+    } catch {
+      remote = [];
+    }
     for (const g of local) {
       if (Number(g.id) > 0) continue;
       if (!String(g.name || g.number || '').trim()) continue;
+      if (findDuplicateGroup(remote, g)) continue;
       try {
         await API.post('/Groups', {
           name: g.name || g.number,
@@ -147,38 +178,80 @@ export async function fetchGroups() {
 
 export async function createGroup(payload) {
   const teacherId = currentTeacherId();
+  const incoming = {
+    name: String(payload.name || '').trim(),
+    number: String(payload.number || payload.name || '').trim(),
+    schedule: payload.schedule || '',
+  };
+  if (findDuplicateGroup(localDb.getGroups(teacherId), incoming)) {
+    throw duplicateGroupError();
+  }
   const fallback = {
     id: uid('grp'),
-    name: payload.name,
-    number: payload.number || payload.name,
-    schedule: payload.schedule || '',
+    name: incoming.name,
+    number: incoming.number,
+    schedule: incoming.schedule,
     studentCount: 0,
     createdAt: new Date().toISOString(),
   };
   try {
     const res = await API.post('/Groups', {
-      name: payload.name,
-      number: payload.number,
-      schedule: payload.schedule,
+      name: incoming.name,
+      number: incoming.number,
+      schedule: incoming.schedule,
     }, FAST);
     const group = mapGroup(unwrapItem(res.data) || res.data);
     if (group?.id) {
-      const next = [group, ...localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(group.id))];
+      const current = localDb.getGroups(teacherId);
+      const next = [group, ...current.filter((g) => String(g.id) !== String(group.id))];
       localDb.saveGroups(teacherId, next);
       return group;
     }
   } catch (err) {
+    if (err?.isDuplicateGroup) throw err;
     const status = err?.response?.status;
     if (status === 401 || status === 403) throw err;
+    if (status === 409) throw duplicateGroupError();
+    if (status === 400) {
+      const data = err?.response?.data;
+      const text = typeof data === 'string' ? data : `${data?.message || ''} ${data?.title || ''}`;
+      if (/duplicate|exists|unique|artıq|eyni/i.test(text)) throw duplicateGroupError();
+      throw err;
+    }
   }
-  const next = [fallback, ...localDb.getGroups(teacherId).filter((g) => String(g.number) !== String(fallback.number))];
+  if (findDuplicateGroup(localDb.getGroups(teacherId), fallback)) {
+    throw duplicateGroupError();
+  }
+  const next = [fallback, ...localDb.getGroups(teacherId)];
   localDb.saveGroups(teacherId, next);
   return fallback;
 }
 
+export async function deleteGroup(id) {
+  const teacherId = currentTeacherId();
+  const numeric = Number(id);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    try {
+      await API.delete(`/Groups/${id}`, FAST);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status && status !== 404) throw err;
+    }
+  }
+  const next = localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(id));
+  localDb.saveGroups(teacherId, next);
+  return next;
+}
+
 export async function fetchGroup(id) {
-  const res = await API.get(`/Groups/${id}`, FAST);
-  return mapGroup(unwrapItem(res.data) || res.data);
+  try {
+    const res = await API.get(`/Groups/${id}`, FAST);
+    return mapGroup(unwrapItem(res.data) || res.data);
+  } catch (err) {
+    const local = localDb.getGroups(currentTeacherId()).find((g) => String(g.id) === String(id));
+    if (local) return local;
+    throw err;
+  }
 }
 
 export async function fetchStudents() {
@@ -630,6 +703,26 @@ export async function fetchExamSubmissions(examId) {
     /* local */
   }
   return localDb.getSubmissions().filter((s) => String(s.examId) === String(examId));
+}
+
+export async function fetchWeeklyRankingSource() {
+  const exams = (await fetchExams()).filter((exam) => resolveExamStatus(exam) !== 'Draft');
+  let students = [];
+  try {
+    students = (await fetchStudents()).filter(Boolean);
+  } catch {
+    students = [];
+  }
+  const lists = [];
+  const chunk = 6;
+  for (let i = 0; i < exams.length; i += chunk) {
+    const part = exams.slice(i, i + chunk);
+    lists.push(
+      ...(await Promise.all(part.map((exam) => fetchExamSubmissions(exam.id).catch(() => [])))),
+    );
+  }
+  const submissions = lists.flat().map(normalizeSubmission).filter(Boolean);
+  return { exams, students, submissions };
 }
 
 export async function fetchExamReview(studentExamId) {

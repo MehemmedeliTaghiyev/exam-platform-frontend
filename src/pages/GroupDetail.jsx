@@ -4,7 +4,7 @@ import { ArrowLeft, Ban, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
-import { createStudentAccount, deleteStudentAccount, fetchGroup, fetchStudents, setStudentAccess, updateStudentProfile } from '../lib/examApi';
+import { createStudentAccount, deleteGroup, deleteStudentAccount, fetchGroup, fetchStudents, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
 
 const emptyForm = {
@@ -43,6 +43,7 @@ export default function GroupDetail() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [removingId, setRemovingId] = useState(null);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
 
@@ -172,6 +173,21 @@ export default function GroupDetail() {
     }
   };
 
+  const removeGroup = async () => {
+    if (deletingGroup || saving) return;
+    const label = groupLabel || 'qrup';
+    if (!window.confirm(`${label} silinsin? Tələbələr silinməyəcək, qrup siyahıdan çıxacaq.`)) return;
+    setDeletingGroup(true);
+    setError('');
+    try {
+      await deleteGroup(id);
+      navigate('/teacher/cabinet');
+    } catch (err) {
+      setError(errorMessage(err, 'Qrup silinmədi.'));
+      setDeletingGroup(false);
+    }
+  };
+
   const toggleAccess = async (student, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -215,9 +231,19 @@ export default function GroupDetail() {
           <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule}</p>
           {error && !open && !editing && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </div>
-        <Button onClick={() => { setError(''); setOpen(true); }}>
-          <Plus size={16} /> Tələbə əlavə et
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+            disabled={deletingGroup}
+            onClick={removeGroup}
+          >
+            <Trash2 size={16} /> Qrupu sil
+          </Button>
+          <Button onClick={() => { setError(''); setOpen(true); }}>
+            <Plus size={16} /> Tələbə əlavə et
+          </Button>
+        </div>
       </div>
 
       {students.length === 0 ? (

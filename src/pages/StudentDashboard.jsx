@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
+import WeeklyRanking from '../components/WeeklyRanking';
 import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchExams, fetchStudentHistory } from '../lib/examApi';
 import { formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
@@ -102,6 +103,8 @@ export default function StudentDashboard() {
   return (
     <AppShell title="Tələbə paneli">
       <p className="mb-8 text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Tələbə'}</p>
+
+      <WeeklyRanking variant="student" />
 
       {loading ? (
         <div className="grid gap-5 sm:grid-cols-2">

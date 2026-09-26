@@ -760,7 +760,7 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     title: payload.title,
     topic: payload.topic,
     subjectName: payload.subjectName,
-    brief: String(payload.brief || '').slice(0, 12000),
+    brief: String(payload.brief || '').slice(0, 24000),
     questionCount: payload.questionCount,
     easy: payload.easy,
     medium: payload.medium,

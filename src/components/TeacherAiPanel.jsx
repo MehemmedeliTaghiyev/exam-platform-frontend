@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Button, Input, Select, Textarea } from './ui';
 import { addQuestion, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, uploadExamPdfPack } from '../lib/examApi';
 import { recordAiUsage } from '../lib/aiUsage';
-import { extractPdfText, parseQuestionsFromText, questionsFromBrief, toAddQuestionPayload } from '../lib/parseExamText';
+import { extractPdfText, isStrongExamParse, parseQuestionsFromText, questionsFromBrief, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -168,24 +168,28 @@ export default function TeacherAiPanel() {
     setMessage('');
     try {
       const text = await extractPdfText(pdfFile);
-      let parsed = null;
+      let parsed = parseQuestionsFromText(text);
       let usedServerAi = false;
-      try {
-        parsed = await tryGenerateAiQuestions({
-          title: title.trim() || pdfFile.name.replace(/\.pdf$/i, ''),
-          topic: 'PDF',
-          subjectName: subjects.find((s) => String(s.id) === String(subjectId))?.name || newSubject.trim(),
-          brief: text,
-          questionCount: 40,
-          source: 'pdf',
-        }, { soft: true });
-        usedServerAi = Boolean(parsed?.length);
-      } catch {
-        parsed = null;
+      if (!isStrongExamParse(parsed)) {
+        try {
+          const aiParsed = await tryGenerateAiQuestions({
+            title: title.trim() || pdfFile.name.replace(/\.pdf$/i, ''),
+            topic: 'PDF',
+            subjectName: subjects.find((s) => String(s.id) === String(subjectId))?.name || newSubject.trim(),
+            brief: text,
+            questionCount: Math.max(parsed.length, 25),
+            source: 'pdf',
+          }, { soft: true });
+          if (aiParsed?.length) {
+            parsed = aiParsed;
+            usedServerAi = true;
+          }
+        } catch {
+          /* keep local parse */
+        }
       }
-      if (!parsed?.length) parsed = parseQuestionsFromText(text);
       if (!parsed.length) {
-        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin və formatı aşağıdakı kimi saxlayın.');
+        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin — iki sütunlu buraxılış testləri də dəstəklənir.');
       }
       setPdfQuestions(parsed);
       if (!title.trim()) {
@@ -195,7 +199,7 @@ export default function TeacherAiPanel() {
       setMessage(
         usedServerAi
           ? `${parsed.length} sual gpt-4o ilə oxundu. İstəsəniz dəyişin, sonra qaralama kimi saxlayın.`
-          : `${parsed.length} sual PDF mətnindən oxundu. İstəsəniz dəyişin, sonra qaralama kimi saxlayın.`,
+          : `${parsed.length} sual PDF-dən oxundu. Cavab açarı yoxdursa düzgün variantı özünüz seçin, sonra qaralama kimi saxlayın.`,
       );
     } catch (err) {
       setError(errorMessage(err, 'PDF oxunmadı.'));
@@ -341,7 +345,7 @@ export default function TeacherAiPanel() {
       ) : (
         <div className="space-y-5">
           <p className="text-sm leading-6 text-indigo-100">
-            Burada mövzu və say yazmağa ehtiyac yoxdur. PDF-i yükləyin — suallar aşağıdakı formatda olmalıdır. Oxunduqdan sonra hər sualı dəyişə bilərsiniz. Şagird imtahanda 5 variant + 6-cı <span className="font-semibold text-amber-200">Açıq</span> görür; Açıq-ı basanda öz cavabını yazır.
+            Burada mövzu və say yazmağa ehtiyac yoxdur. PDF-i yükləyin — iki sütunlu buraxılış testləri (A–E eyni sətirdə) də oxunur. Cavab açarı PDF-də yoxdursa, düzgün variantı özünüz işarələyin. Şagird 5 variant + 6-cı <span className="font-semibold text-amber-200">Açıq</span> görür.
           </p>
           <pre className="overflow-x-auto rounded-2xl bg-black/25 p-4 text-xs leading-6 text-amber-100 ring-1 ring-white/10">{`1. Sualın mətni
 A) variant

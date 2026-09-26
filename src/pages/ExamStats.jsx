@@ -9,6 +9,7 @@ import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestion
 import { buildExamStats } from '../lib/stats';
 import { errorMessage, isAiEnabled } from '../lib/utils';
 import { localDb } from '../lib/localDb';
+import { recordAiUsage } from '../lib/aiUsage';
 import LeaderboardTable from '../components/LeaderboardTable';
 
 export default function ExamStats() {
@@ -36,6 +37,13 @@ export default function ExamStats() {
       setSubmissions(s);
       setDifficultyRows(d);
       setLoading(false);
+      if (aiOn && user?.id) {
+        const stamp = `ai_diff_${id}_${new Date().toISOString().slice(0, 10)}`;
+        if (!sessionStorage.getItem(stamp)) {
+          sessionStorage.setItem(stamp, '1');
+          recordAiUsage(user.id, 'difficulty');
+        }
+      }
     };
     run();
   }, [id]);

@@ -92,4 +92,33 @@ export const localDb = {
     else delete map[String(id)];
     write('teacher_ai', map);
   },
+  getAiUsage(teacherId) {
+    const all = read('teacher_ai_usage', {});
+    const list = all[String(teacherId)] || [];
+    return Array.isArray(list) ? list : [];
+  },
+  addAiUsage(teacherId, event) {
+    const all = read('teacher_ai_usage', {});
+    const key = String(teacherId);
+    const list = Array.isArray(all[key]) ? all[key] : [];
+    list.push(event);
+    all[key] = list;
+    write('teacher_ai_usage', all);
+    return list;
+  },
+  mergeAiUsage(teacherId, events) {
+    const local = this.getAiUsage(teacherId);
+    const map = new Map();
+    [...local, ...(events || [])].forEach((ev) => {
+      const stamp = ev?.at || ev?.At || ev?.createdAt;
+      const feature = ev?.feature || ev?.Feature;
+      if (!feature || !stamp) return;
+      map.set(`${feature}|${stamp}`, { feature, at: stamp });
+    });
+    const merged = Array.from(map.values());
+    const all = read('teacher_ai_usage', {});
+    all[String(teacherId)] = merged;
+    write('teacher_ai_usage', all);
+    return merged;
+  },
 };

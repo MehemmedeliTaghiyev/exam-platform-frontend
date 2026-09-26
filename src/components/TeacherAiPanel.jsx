@@ -4,6 +4,7 @@ import { FileUp, Sparkles, Wand2 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, Input, Select, Textarea } from './ui';
 import { addQuestion, createExam, createSubject, fetchSubjects, uploadExamPdfPack } from '../lib/examApi';
+import { recordAiUsage } from '../lib/aiUsage';
 import { extractPdfText, parseQuestionsFromText, questionsFromBrief, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
 
@@ -114,6 +115,7 @@ export default function TeacherAiPanel() {
         });
       }
       const exam = await buildExam(parsed);
+      await recordAiUsage(user?.id, pdfFile ? 'pdfExtract' : 'autoExam');
       setMessage(`${parsed.length} sual yaradıldı. Cavab açarını yoxlayın.`);
       navigate(`/teacher/exams/${exam.id}`, { state: { fromAi: true } });
     } catch (err) {

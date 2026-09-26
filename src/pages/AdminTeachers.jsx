@@ -5,9 +5,11 @@ import API from '../api/axios';
 import { Ban, CheckCircle2, Sparkles } from 'lucide-react';
 import { createTeacherAccount, setTeacherAiEnabled, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
+import { AI_FEATURES, eventsFromTeacher, filterEventsByRange, groupUsageByDate, totalsByFeature } from '../lib/aiUsage';
 import {
   computeAccessEnd,
   errorMessage,
+  formatDate,
   formatDateTime,
   isAiEnabled,
   remainingUsageLabel,
@@ -121,6 +123,13 @@ export default function AdminTeachers() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [usageFrom, setUsageFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return toDateInput(d);
+  });
+  const [usageTo, setUsageTo] = useState(() => toDateInput(new Date()));
+  const [usageTeacher, setUsageTeacher] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -275,6 +284,11 @@ export default function AdminTeachers() {
         </div>
         <Button onClick={openCreate}>Müəllim qeydə al</Button>
       </div>
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <Input label="AI istifadə (başlanğıc)" type="date" value={usageFrom} onChange={(e) => setUsageFrom(e.target.value)} />
+        <Input label="AI istifadə (son)" type="date" value={usageTo} onChange={(e) => setUsageTo(e.target.value)} />
+        <p className="pb-2 text-xs text-gray-500">Saylar seçilən tarix aralığına görədir.</p>
+      </div>
       {error && !open && <p className="mb-4 text-sm text-red-600">{error}</p>}
       {loading ? (
         <p className="text-sm text-gray-500">Yüklənir...</p>
@@ -282,7 +296,7 @@ export default function AdminTeachers() {
         <EmptyState title="Müəllim yoxdur" text="Qeydiyyat üçün düyməni basın." />
       ) : (
         <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1180px] text-left text-sm">
+          <table className="w-full min-w-[1320px] text-left text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
                 <th className="px-5 py-3 font-medium">Ad</th>
@@ -291,6 +305,7 @@ export default function AdminTeachers() {
                 <th className="px-5 py-3 font-medium">Pəncərə</th>
                 <th className="px-5 py-3 font-medium">İstifadə müddəti</th>
                 <th className="px-5 py-3 font-medium">AI</th>
+                <th className="px-5 py-3 font-medium">AI istifadəsi (tarixə görə)</th>
                 <th className="px-5 py-3 font-medium"></th>
               </tr>
             </thead>
@@ -301,6 +316,8 @@ export default function AdminTeachers() {
                 const plan = teacherPlanOf(t);
                 const end = endsFor(t, toDateInput(t.trialStartsAt || t.createdAt), plan, teacherTrialDaysOf(t));
                 const left = remainingUsageLabel(t.trialEndsAt || end);
+                const events = filterEventsByRange(eventsFromTeacher(t), usageFrom, usageTo);
+                const totals = totalsByFeature(events);
                 return (
                   <tr key={t.id} className="border-b border-gray-100 align-top last:border-0 dark:border-slate-800">
                     <td className="px-5 py-3 font-medium">{t.firstName || t.fullName?.split(' ')[0] || '—'}</td>
@@ -335,6 +352,19 @@ export default function AdminTeachers() {
                         <Sparkles size={14} />
                         {aiOn ? 'AI aktiv' : 'AI yoxdur'}
                       </Button>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="min-w-[180px] space-y-1 text-xs">
+                        {AI_FEATURES.map((f) => (
+                          <p key={f.key} className="flex justify-between gap-3">
+                            <span className="text-gray-500">{f.label}</span>
+                            <span className="font-bold tabular-nums">{totals[f.key] || 0}</span>
+                          </p>
+                        ))}
+                        <Button variant="secondary" className="mt-2 w-full py-1.5 text-xs" onClick={() => setUsageTeacher(t)}>
+                          Günbəgün
+                        </Button>
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex flex-col items-end gap-2">
@@ -420,6 +450,44 @@ export default function AdminTeachers() {
             <Button type="submit" disabled={saving}>{saving ? 'Saxlanılır...' : 'Saxla'}</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(usageTeacher)}
+        title={usageTeacher ? `AI istifadəsi · ${usageTeacher.firstName || ''} ${usageTeacher.lastName || ''}`.trim() : 'AI istifadəsi'}
+        onClose={() => setUsageTeacher(null)}
+        className="max-w-2xl"
+      >
+        {usageTeacher && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              {formatDate(usageFrom)} — {formatDate(usageTo)}
+            </p>
+            {(() => {
+              const days = groupUsageByDate(filterEventsByRange(eventsFromTeacher(usageTeacher), usageFrom, usageTo));
+              if (!days.length) {
+                return <p className="text-sm text-gray-400">Bu tarix aralığında istifadə yoxdur.</p>;
+              }
+              return days.map((row) => (
+                <div key={row.day} className="rounded-xl border border-gray-200 px-4 py-3 dark:border-slate-700">
+                  <p className="mb-2 font-bold">{formatDate(row.day)}</p>
+                  <div className="space-y-1 text-sm">
+                    {AI_FEATURES.map((f) => (
+                      <p key={f.key} className="flex justify-between">
+                        <span className="text-gray-500">{f.label}</span>
+                        <span className="font-semibold tabular-nums">{row.counts[f.key] || 0}</span>
+                      </p>
+                    ))}
+                    <p className="flex justify-between border-t border-gray-100 pt-1 dark:border-slate-800">
+                      <span>Cəmi</span>
+                      <span className="font-bold tabular-nums">{row.total}</span>
+                    </p>
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        )}
       </Modal>
     </AppShell>
   );

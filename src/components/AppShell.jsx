@@ -12,6 +12,7 @@ import {
   Shield,
   KeyRound,
   Mail,
+  Sparkles,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -22,6 +23,7 @@ const navByRole = {
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen, end: true },
     { to: '/teacher/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
+    { to: '/teacher/ai', label: 'AI özəlliyi', icon: Sparkles },
   ],
   Student: [
     { to: '/student', label: 'İmtahanlarım', icon: BookOpen, end: true },
@@ -32,6 +34,7 @@ const navByRole = {
     { to: '/admin/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
+    { to: '/teacher/ai', label: 'AI özəlliyi', icon: Sparkles },
   ],
 };
 

@@ -9,6 +9,7 @@ import TakeExam from './pages/TakeExam';
 import ExamResult from './pages/ExamResult';
 import ExamStats from './pages/ExamStats';
 import TeacherCabinet from './pages/TeacherCabinet';
+import TeacherAi from './pages/TeacherAi';
 import GroupDetail from './pages/GroupDetail';
 import StudentProfile from './pages/StudentProfile';
 import AdminDashboard from './pages/AdminDashboard';
@@ -77,6 +78,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
             <TeacherCabinet />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/ai"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <TeacherAi />
           </ProtectedRoute>
         }
       />

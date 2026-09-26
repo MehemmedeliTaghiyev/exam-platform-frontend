@@ -199,9 +199,12 @@ export default function TakeExam() {
             questions.map((q, index) => {
               const current = answers[q.id] && typeof answers[q.id] === 'object' ? answers[q.id] : { optionId: answers[q.id], text: '' };
               const open = isOpenQuestion(q);
+              const contentOpts = (q.options || []).filter((opt) => !isOpenChoiceOption(opt) && !isLetterOption(opt));
               const letterOpts = (q.options || []).filter(isLetterOption).sort((a, b) => String(a.optionText || a.text).localeCompare(String(b.optionText || b.text)));
               const openOpt = (q.options || []).find(isOpenChoiceOption);
-              const displayOpts = letterOpts.length ? letterOpts : (q.options || []).filter((opt) => !isOpenChoiceOption(opt));
+              const displayOpts = contentOpts.length >= 2
+                ? contentOpts
+                : (letterOpts.length ? letterOpts : (q.options || []).filter((opt) => !isOpenChoiceOption(opt)));
               const hasFullText = displayOpts.some((opt) => !isLetterOption(opt));
               const snapLayout = hasFullText || !examPdfUrl(exam);
               const openId = openOpt?.id ?? OPEN_SENTINEL;

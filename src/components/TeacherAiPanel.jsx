@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Button, Input, Select, Textarea } from './ui';
 import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, tryGradeAiQuestions, uploadExamPdfPack } from '../lib/examApi';
 import { recordAiUsage } from '../lib/aiUsage';
-import { extractPdfText, isStrongExamParse, parseQuestionsFromText, questionsFromBrief, toAddQuestionPayload } from '../lib/parseExamText';
+import { extractPdfText, hasRealChoiceOptions, isStrongExamParse, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -125,31 +125,23 @@ export default function TeacherAiPanel() {
         hard: Number(hard) || 0,
         source: 'text',
       });
-      let usedServerAi = Boolean(parsed?.length);
-
-      if (!parsed?.length && brief.trim() && /\d+[\.\)]/.test(brief)) {
-        parsed = parseQuestionsFromText(brief);
+      parsed = normalizeGeneratedQuestions(parsed);
+      if (!hasRealChoiceOptions(parsed) && brief.trim() && /\d+[\.\)]/.test(brief) && /[A-E]\)/.test(brief)) {
+        parsed = normalizeGeneratedQuestions(parseQuestionsFromText(brief));
       }
-
-      if (!parsed?.length) {
-        parsed = questionsFromBrief({
-          topic: topic.trim() || title.trim() || 'Mövzu',
-          count: questionCount,
-          easy,
-          medium,
-          hard,
-        });
-        usedServerAi = false;
+      if (!hasRealChoiceOptions(parsed)) {
+        throw new Error('AI A–E variantlarını və düzgün cavabı yazmadı. Yenidən daxil olun, Exam API-də OPENAI_API_KEY olduğundan əmin olun və yenidən cəhd edin.');
       }
-
-      const exam = await buildExam(parsed, null);
+      try {
+        const grades = await tryGradeAiQuestions(parsed, { soft: true });
+        if (grades?.length) parsed = applyAiAnswers(parsed, grades);
+      } catch {
+        /* keep model’s own correctLetter */
+      }
+      parsed = normalizeGeneratedQuestions(parsed);
+      setPdfQuestions(parsed);
       await recordAiUsage(user?.id, 'autoExam');
-      setMessage(
-        usedServerAi
-          ? `${parsed.length} sual gpt-4o ilə hazırlandı. Cavab açarını yoxlayın.`
-          : `${parsed.length} sual lokal qaralama kimi yazıldı (AI cavab vermədi). Cavab açarını yoxlayın.`,
-      );
-      navigate(`/teacher/exams/${exam.id}`, { state: { fromAi: true } });
+      setMessage(`${parsed.length} sual, A–E variantları və düzgün cavab hazırlandı. Dairələri yoxlayın, sonra qaralama kimi saxlayın.`);
     } catch (err) {
       setError(errorMessage(err, 'AI imtahanı yaradılmadı.'));
     } finally {
@@ -191,11 +183,12 @@ export default function TeacherAiPanel() {
       if (!parsed.length) {
         throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin — iki sütunlu buraxılış testləri də dəstəklənir.');
       }
+      parsed = normalizeGeneratedQuestions(parsed);
       if (!usedAiAnswers) {
         try {
           const grades = await tryGradeAiQuestions(parsed, { soft: true });
           if (grades?.length) {
-            parsed = applyAiAnswers(parsed, grades);
+            parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
             usedAiAnswers = true;
           }
         } catch (gradeErr) {
@@ -322,7 +315,7 @@ export default function TeacherAiPanel() {
       {tab === 'auto' ? (
         <>
           <p className="mb-5 text-sm leading-6 text-indigo-100">
-            Açar hələ lazım deyil — formu indi doldurub imtahan yarada bilərsiniz. API açarı gələndə eyni düymə sualları modelə göndərəcək; açarı çata yazmayın, yalnız serverə qoyun.
+            A–E variantları və düzgün cavab model tərəfindən yazılır. Əvvəl sualları burada yoxlayın, sonra qaralama kimi saxlayın. API açarı yalnız serverdədir.
           </p>
           <form onSubmit={handleGenerate} className={`grid gap-4 sm:grid-cols-2 ${fieldWrap}`}>
             <Input label="İmtahan başlığı" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="məs. Kvadrat tənliklər" />
@@ -353,7 +346,7 @@ export default function TeacherAiPanel() {
             <div className="sm:col-span-2 flex flex-wrap justify-end gap-2">
               <Button type="submit" disabled={busy} className="bg-amber-400 text-indigo-950 hover:bg-amber-300">
                 <Wand2 size={16} />
-                {busy ? 'Hazırlanır...' : 'İmtahan yarat'}
+                {busy ? 'Hazırlanır...' : 'Sualları hazırla'}
               </Button>
             </div>
           </form>
@@ -399,12 +392,16 @@ Cavab: A`}</pre>
             </Button>
           </div>
           {pdfFile && <p className="text-xs text-indigo-200">{pdfFile.name}</p>}
+          {pdfQuestions.length === 0 && error && <p className="text-sm text-red-200">{error}</p>}
+          {pdfQuestions.length === 0 && message && <p className="text-sm text-emerald-200">{message}</p>}
+        </div>
+      )}
 
-          {pdfQuestions.length > 0 && (
-            <form onSubmit={handleSavePdfExam} className={`space-y-4 ${fieldWrap}`}>
+      {pdfQuestions.length > 0 && (
+            <form onSubmit={handleSavePdfExam} className={`mt-6 space-y-4 ${fieldWrap}`}>
               <div className="flex items-center justify-between gap-3">
                 <h3 className="flex items-center gap-2 text-base font-bold">
-                  <Pencil size={16} /> Oxunan suallar ({pdfQuestions.length})
+                  <Pencil size={16} /> Suallar ({pdfQuestions.length}) — A–E və düzgün dairə
                 </h3>
                 <button
                   type="button"
@@ -506,10 +503,6 @@ Cavab: A`}</pre>
                 </Button>
               </div>
             </form>
-          )}
-          {pdfQuestions.length === 0 && error && <p className="text-sm text-red-200">{error}</p>}
-          {pdfQuestions.length === 0 && message && <p className="text-sm text-emerald-200">{message}</p>}
-        </div>
       )}
     </div>
   );

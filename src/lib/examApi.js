@@ -845,7 +845,9 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
         text: o.text || o.optionText,
         isCorrect: Boolean(o.isCorrect),
       })),
-      correctLetter: q.correctLetter || 'A',
+      correctLetter: q.correctLetter
+        || (q.options || []).find((o) => o.isCorrect)?.letter
+        || 'A',
       difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
     }));
   } catch (err) {

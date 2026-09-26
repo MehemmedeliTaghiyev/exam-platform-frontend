@@ -312,6 +312,53 @@ export function isStrongExamParse(questions) {
   return realOptions + open >= Math.min(questions.length, 5);
 }
 
+function optionBody(text, letter) {
+  const value = String(text || '').trim();
+  if (!value) return '';
+  if (/^[A-E]$/i.test(value)) return '';
+  if (value.toUpperCase() === String(letter || '').toUpperCase()) return '';
+  return value.replace(/^[A-E][\)\.\-]\s*/i, '').trim();
+}
+
+export function normalizeGeneratedQuestions(list) {
+  return (Array.isArray(list) ? list : []).map((q) => {
+    const incoming = q.options || [];
+    const options = LETTERS.map((letter, idx) => {
+      const found = incoming.find((o) => String(o.letter || '').toUpperCase() === letter) || incoming[idx];
+      return {
+        letter,
+        text: optionBody(found?.text || found?.optionText, letter),
+        isCorrect: false,
+      };
+    });
+    const marked = String(q.correctLetter || '').toUpperCase();
+    const fromFlag = incoming.find((o) => o.isCorrect);
+    const flagLetter = String(fromFlag?.letter || '').toUpperCase();
+    let correctLetter = 'A';
+    if (marked === 'OPEN') correctLetter = 'OPEN';
+    else if (LETTERS.includes(marked)) correctLetter = marked;
+    else if (LETTERS.includes(flagLetter)) correctLetter = flagLetter;
+    return {
+      ...q,
+      text: String(q.text || '').trim(),
+      options: options.map((o) => ({ ...o, isCorrect: o.letter === correctLetter })),
+      correctLetter,
+      difficultyLevel: q.difficultyLevel || 'orta',
+    };
+  }).filter((q) => q.text);
+}
+
+export function hasRealChoiceOptions(questions) {
+  const list = Array.isArray(questions) ? questions : [];
+  if (!list.length) return false;
+  const ok = list.filter((q) => {
+    if (q.correctLetter === 'OPEN') return String(q.text || '').length > 8;
+    const real = (q.options || []).filter((o) => optionBody(o.text || o.optionText, o.letter)).length;
+    return real >= 4;
+  }).length;
+  return ok >= Math.max(1, Math.ceil(list.length * 0.8));
+}
+
 export function questionsFromBrief({ topic, count, easy = 0, medium = 0, hard = 0 }) {
   const total = Math.max(1, Number(count) || 10);
   const mix = [];

@@ -140,6 +140,11 @@ function currentTeacherId() {
   return currentUserSnapshot().scope;
 }
 
+function withoutHiddenGroups(teacherId, list) {
+  const hidden = new Set(localDb.hiddenGroupIds(teacherId));
+  return (list || []).filter((g) => !hidden.has(String(g.id)));
+}
+
 export async function fetchGroups() {
   const teacherId = currentTeacherId();
   try {
@@ -165,15 +170,15 @@ export async function fetchGroups() {
       }
     }
     const data = await tryGet('/Groups');
-    const list = unwrapList(data).map(mapGroup);
+    const list = withoutHiddenGroups(teacherId, unwrapList(data).map(mapGroup));
     if (list.length) {
       localDb.saveGroups(teacherId, list);
       return list;
     }
-    const localOnly = localDb.getGroups(teacherId);
+    const localOnly = withoutHiddenGroups(teacherId, localDb.getGroups(teacherId));
     return localOnly.length ? localOnly : list;
   } catch {
-    return localDb.getGroups(teacherId);
+    return withoutHiddenGroups(teacherId, localDb.getGroups(teacherId));
   }
 }
 
@@ -203,6 +208,7 @@ export async function createGroup(payload) {
     }, FAST);
     const group = mapGroup(unwrapItem(res.data) || res.data);
     if (group?.id) {
+      localDb.unhideGroup(teacherId, group.id);
       const current = localDb.getGroups(teacherId);
       const next = [group, ...current.filter((g) => String(g.id) !== String(group.id))];
       localDb.saveGroups(teacherId, next);
@@ -230,28 +236,26 @@ export async function createGroup(payload) {
 
 export async function deleteGroup(id) {
   const teacherId = currentTeacherId();
+  localDb.hideGroup(teacherId, id);
   const numeric = Number(id);
   if (Number.isFinite(numeric) && numeric > 0) {
-    let lastError;
     const attempts = [
-      () => API.post(`/Groups/${id}/delete`, {}, FAST),
+      () => API.post('/Groups/remove', { id: numeric }, FAST),
+      () => API.post('/Groups/delete', { id: numeric }, FAST),
+      () => API.post(`/Groups/${id}/delete`, { id: numeric }, FAST),
       () => API.delete(`/Groups/${id}`, FAST),
     ];
-    let removed = false;
     for (const send of attempts) {
       try {
         await send();
-        removed = true;
         break;
       } catch (err) {
-        lastError = err;
         const status = err?.response?.status;
-        if (status && status !== 404 && status !== 405) throw err;
+        if (status && ![401, 403, 404, 405].includes(status)) throw err;
       }
     }
-    if (!removed && lastError) throw lastError;
   }
-  const next = localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(id));
+  const next = withoutHiddenGroups(teacherId, localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(id)));
   localDb.saveGroups(teacherId, next);
   return next;
 }
@@ -751,12 +755,12 @@ function isPdfBuffer(buf) {
   return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
 }
 
-export async function tryGenerateAiQuestions(payload) {
+export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   const body = {
     title: payload.title,
     topic: payload.topic,
     subjectName: payload.subjectName,
-    brief: payload.brief,
+    brief: String(payload.brief || '').slice(0, 12000),
     questionCount: payload.questionCount,
     easy: payload.easy,
     medium: payload.medium,
@@ -780,7 +784,7 @@ export async function tryGenerateAiQuestions(payload) {
     }));
   } catch (err) {
     const status = err?.response?.status;
-    if (!status || status === 404) return null;
+    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503].includes(status))) return null;
     throw err;
   }
 }

@@ -121,4 +121,23 @@ export const localDb = {
     write('teacher_ai_usage', all);
     return merged;
   },
+  hiddenGroupIds(teacherId) {
+    const map = read('hidden_groups', {});
+    const list = map[String(teacherId || 'me')] || [];
+    return Array.isArray(list) ? list.map(String) : [];
+  },
+  hideGroup(teacherId, id) {
+    const map = read('hidden_groups', {});
+    const key = String(teacherId || 'me');
+    const next = new Set(this.hiddenGroupIds(teacherId));
+    next.add(String(id));
+    map[key] = Array.from(next);
+    write('hidden_groups', map);
+  },
+  unhideGroup(teacherId, id) {
+    const map = read('hidden_groups', {});
+    const key = String(teacherId || 'me');
+    map[key] = this.hiddenGroupIds(teacherId).filter((x) => x !== String(id));
+    write('hidden_groups', map);
+  },
 };

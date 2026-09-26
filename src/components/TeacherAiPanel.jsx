@@ -178,11 +178,10 @@ export default function TeacherAiPanel() {
           brief: text,
           questionCount: 40,
           source: 'pdf',
-        });
+        }, { soft: true });
         usedServerAi = Boolean(parsed?.length);
-      } catch (aiErr) {
-        const status = aiErr?.response?.status;
-        if (status && status !== 404) throw aiErr;
+      } catch {
+        parsed = null;
       }
       if (!parsed?.length) parsed = parseQuestionsFromText(text);
       if (!parsed.length) {

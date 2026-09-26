@@ -1,5 +1,6 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Card } from './ui';
+import { difficultyLabel, pointsForDifficulty } from '../lib/questionDifficulty';
 
 function optionClass(opt, reveal) {
   if (reveal && opt.isCorrect) {
@@ -45,6 +46,13 @@ export default function QuestionReviewList({ questions = [], reveal = true }) {
               </span>
             )}
           </div>
+          {(difficultyLabel(q.difficultyLevel) || q.points) ? (
+            <p className="mt-1 text-xs text-gray-500">
+              {difficultyLabel(q.difficultyLevel) ? `${difficultyLabel(q.difficultyLevel)} · ` : ''}
+              {q.points || pointsForDifficulty(q.difficultyLevel)} bal
+              {q.isCorrect ? ' alındı' : ''}
+            </p>
+          ) : null}
           <div className="mt-4 space-y-2">
             {(q.options || []).map((opt, oi) => (
               <div

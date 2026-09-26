@@ -1,6 +1,7 @@
-import { Calendar, Users, Clock, HelpCircle, Trash2 } from 'lucide-react';
+import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles } from 'lucide-react';
 import { Badge, Card } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
+import { isAiExam } from '../lib/questionDifficulty';
 
 export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }) {
   const status = resolveExamStatus(exam);
@@ -8,9 +9,13 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }
   const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : status === 'Draft' ? 'Qaralama' : 'Scheduled';
   const topic = exam.description || exam.title;
   const subject = exam.subjectName || exam.subject;
+  const ai = isAiExam(exam);
 
   return (
-    <Card onClick={onOpen} className="flex h-full flex-col">
+    <Card
+      onClick={onOpen}
+      className={`flex h-full flex-col ${ai ? 'ring-2 ring-violet-400/80 dark:ring-violet-500/70' : ''}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Mövzu</p>
@@ -19,7 +24,14 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }
             <p className="mt-1 text-sm font-medium text-brand-600">{subject}</p>
           ) : null}
         </div>
-        <Badge tone={tone}>{label}</Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {ai ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-800 dark:bg-violet-950/70 dark:text-violet-200">
+              <Sparkles size={12} /> AI
+            </span>
+          ) : null}
+          <Badge tone={tone}>{label}</Badge>
+        </div>
       </div>
       {status === 'Scheduled' && (exam.startTime || exam.StartTime) && (
         <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">

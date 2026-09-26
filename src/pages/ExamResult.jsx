@@ -8,6 +8,7 @@ import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchQuestions } fro
 import { AuthContext } from '../context/AuthContext';
 import { Award, CheckCircle2, Percent, XCircle } from 'lucide-react';
 import { durationSecondsBetween, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
+import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
 import PdfViewer from '../components/PdfViewer';
 
 function toReviewQuestions(list = []) {
@@ -31,6 +32,8 @@ function toReviewQuestions(list = []) {
       unanswered,
       selectedText,
       correctText,
+      difficultyLevel: q.difficultyLevel || q.DifficultyLevel,
+      points: Number(q.points ?? q.Points) || 0,
       options,
     };
   });
@@ -132,7 +135,11 @@ export default function ExamResult() {
   const questions = paper.length ? paper : toReviewQuestions(review?.questions || []);
   const total = result?.totalQuestions || questions.length || 1;
   const correct = result?.correctAnswersCount ?? 0;
-  const scorePercentage = Math.round(Number(result?.percent ?? result?.score ?? 0));
+  const weightedMax = Number(result?.maxPoints ?? result?.MaxPoints) || questions.reduce((sum, q) => sum + (q.points || pointsForDifficulty(q.difficultyLevel)), 0);
+  const weightedEarned = Number(result?.earnedPoints ?? result?.EarnedPoints)
+    || questions.filter((q) => q.isCorrect).reduce((sum, q) => sum + (q.points || pointsForDifficulty(q.difficultyLevel)), 0);
+  const scorePercentage = Math.round(Number(result?.percent ?? result?.score ?? (weightedMax ? (weightedEarned / weightedMax) * 100 : 0)));
+  const aiWeighted = isAiExam(examMeta) || questions.some((q) => q.difficultyLevel);
   const isPassed = scorePercentage >= 50;
   const isPersonal = Boolean(result?.studentExamId || reviewId);
   const examEnded = examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded);
@@ -181,6 +188,12 @@ export default function ExamResult() {
               <StatCard icon={CheckCircle2} label="Düzgün" value={`${correct} / ${total}`} />
               <StatCard icon={XCircle} label="Səhv" value={result.wrongAnswersCount ?? Math.max(total - correct, 0)} />
             </div>
+            {aiWeighted && weightedMax > 0 ? (
+              <p className="mt-4 text-sm text-gray-500">
+                Çətinlik balı: <span className="font-semibold text-ink dark:text-white">{weightedEarned} / {weightedMax}</span>
+                {' '}(asan 1 · orta 2 · çətin 3). Orta faiz bu ballara görə hesablanıb.
+              </p>
+            ) : null}
           </Card>
         )}
 

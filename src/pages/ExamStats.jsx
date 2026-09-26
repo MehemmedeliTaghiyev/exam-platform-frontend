@@ -8,6 +8,7 @@ import { AuthContext } from '../context/AuthContext';
 import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestions, deleteExam } from '../lib/examApi';
 import { buildExamStats } from '../lib/stats';
 import { errorMessage, isAiEnabled } from '../lib/utils';
+import { difficultyLabel } from '../lib/questionDifficulty';
 import { localDb } from '../lib/localDb';
 import { recordAiUsage } from '../lib/aiUsage';
 import LeaderboardTable from '../components/LeaderboardTable';
@@ -130,7 +131,7 @@ export default function ExamStats() {
               <h3 className="font-bold">Sual çətinliyi</h3>
               <p className="mt-1 text-sm text-gray-500">
                 {aiOn
-                  ? 'AI açıqdır: çətinlik hər sualda səhv payına görə avtomatik hesablanır.'
+                  ? 'AI açıqdır: hər sualın saxlanmış çətinliyi (asan 1 · orta 2 · çətin 3 bal) və səhv payı göstərilir.'
                   : 'AI yoxdur: bütün suallarda çətinlik eyni göstərilir.'}
               </p>
             </div>
@@ -147,7 +148,10 @@ export default function ExamStats() {
               <tbody>
                 {stats.difficulty.map((q) => {
                   const share = aiOn && q.asked ? Math.round((q.wrongCount / q.asked) * 100) : 50;
-                  const label = aiOn ? q.difficulty : 'Eyni';
+                  const saved = difficultyLabel(q.difficultyLevel);
+                  const label = aiOn
+                    ? (saved ? `${saved}${q.points ? ` · ${q.points} bal` : ''}` : `${q.wrongCount}`)
+                    : 'Eyni';
                   return (
                   <tr key={q.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
                     <td className="px-5 py-3">{q.index}</td>

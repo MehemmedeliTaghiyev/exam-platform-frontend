@@ -1,4 +1,5 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import { pointsForDifficulty } from './questionDifficulty';
 
 try {
   GlobalWorkerOptions.workerSrc = new URL(
@@ -166,7 +167,7 @@ export function toAddQuestionPayload(q) {
   });
   return {
     text: q.text,
-    points: 1,
+    points: pointsForDifficulty(q.difficultyLevel),
     type: 'SingleChoice',
     inputKind: 'Choice',
     difficultyLevel: q.difficultyLevel || 'orta',

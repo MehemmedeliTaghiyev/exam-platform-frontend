@@ -1,6 +1,7 @@
 import API from '../api/axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
+import { pointsForDifficulty } from './questionDifficulty';
 
 const FAST = { timeout: 20000 };
 
@@ -231,12 +232,24 @@ export async function deleteGroup(id) {
   const teacherId = currentTeacherId();
   const numeric = Number(id);
   if (Number.isFinite(numeric) && numeric > 0) {
-    try {
-      await API.delete(`/Groups/${id}`, FAST);
-    } catch (err) {
-      const status = err?.response?.status;
-      if (status && status !== 404) throw err;
+    let lastError;
+    const attempts = [
+      () => API.post(`/Groups/${id}/delete`, {}, FAST),
+      () => API.delete(`/Groups/${id}`, FAST),
+    ];
+    let removed = false;
+    for (const send of attempts) {
+      try {
+        await send();
+        removed = true;
+        break;
+      } catch (err) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status && status !== 404 && status !== 405) throw err;
+      }
     }
+    if (!removed && lastError) throw lastError;
   }
   const next = localDb.getGroups(teacherId).filter((g) => String(g.id) !== String(id));
   localDb.saveGroups(teacherId, next);
@@ -484,6 +497,7 @@ function toLocalExam(payload, created = {}, source = 'remote') {
     startTime: created.startTime || created.StartTime || payload.startTime,
     endTime: created.endTime || created.EndTime || payload.endTime,
     submissionsCount: created.submissionsCount || 0,
+    isAiGenerated: created.isAiGenerated === true || created.IsAiGenerated === true || payload.isAiGenerated === true,
     status: resolveExamStatus({
       ...created,
       startTime: created.startTime || created.StartTime || payload.startTime,
@@ -508,6 +522,7 @@ export async function createExam(payload) {
       endTime: payload.endTime,
       isDraft: payload.isDraft === true,
       status: payload.status,
+      isAiGenerated: payload.isAiGenerated === true,
     },
     {
       Title: payload.title,
@@ -521,6 +536,7 @@ export async function createExam(payload) {
       EndTime: payload.endTime,
       IsDraft: payload.isDraft === true,
       Status: payload.status,
+      IsAiGenerated: payload.isAiGenerated === true,
     },
     {
       name: payload.title,
@@ -600,6 +616,7 @@ export async function fetchExam(id) {
     status: merged.status || merged.Status,
     pdfFilePath: merged.pdfFilePath || merged.PdfFilePath || '',
     pdfFileUrl: merged.pdfFileUrl || merged.PdfFileUrl || '',
+    isAiGenerated: merged.isAiGenerated === true || merged.IsAiGenerated === true,
   };
 }
 
@@ -629,6 +646,8 @@ function normalizeQuestion(q) {
     type: typeName,
     inputKind: q.inputKind || q.InputKind || (typeName === 'OpenEnded' ? 'Text' : 'Choice'),
     correctText: q.correctText ?? q.CorrectText ?? '',
+    difficultyLevel: q.difficultyLevel || q.DifficultyLevel || '',
+    points: Number(q.points ?? q.Points ?? pointsForDifficulty(q.difficultyLevel || q.DifficultyLevel)) || 1,
     options: (q.options || q.answers || []).map((opt) => ({
       ...opt,
       id: opt.id ?? opt.optionId,
@@ -648,6 +667,7 @@ export async function addQuestion(examId, payload) {
       Type: payload.type ?? 0,
       InputKind: payload.inputKind,
       CorrectText: payload.correctText,
+      DifficultyLevel: payload.difficultyLevel,
       Options: payload.options,
     },
   ];
@@ -758,8 +778,10 @@ export async function tryGenerateAiQuestions(payload) {
       correctLetter: q.correctLetter || 'A',
       difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
     }));
-  } catch {
-    return null;
+  } catch (err) {
+    const status = err?.response?.status;
+    if (!status || status === 404) return null;
+    throw err;
   }
 }
 

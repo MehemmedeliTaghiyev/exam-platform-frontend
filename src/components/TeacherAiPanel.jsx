@@ -87,6 +87,7 @@ export default function TeacherAiPanel() {
       endTime: end.toISOString(),
       isDraft: true,
       status: 'Draft',
+      isAiGenerated: true,
     });
     for (const q of questions) {
       try {
@@ -145,8 +146,8 @@ export default function TeacherAiPanel() {
       await recordAiUsage(user?.id, 'autoExam');
       setMessage(
         usedServerAi
-          ? `${parsed.length} sual AI ilə hazırlandı. Cavab açarını yoxlayın.`
-          : `${parsed.length} sual qaralama kimi yazıldı. API açarı gələndə eyni forma server AI-yə keçəcək. İndi cavab açarını yoxlayın.`,
+          ? `${parsed.length} sual gpt-4o ilə hazırlandı. Cavab açarını yoxlayın.`
+          : `${parsed.length} sual lokal qaralama kimi yazıldı (AI cavab vermədi). Cavab açarını yoxlayın.`,
       );
       navigate(`/teacher/exams/${exam.id}`, { state: { fromAi: true } });
     } catch (err) {
@@ -167,7 +168,23 @@ export default function TeacherAiPanel() {
     setMessage('');
     try {
       const text = await extractPdfText(pdfFile);
-      const parsed = parseQuestionsFromText(text);
+      let parsed = null;
+      let usedServerAi = false;
+      try {
+        parsed = await tryGenerateAiQuestions({
+          title: title.trim() || pdfFile.name.replace(/\.pdf$/i, ''),
+          topic: 'PDF',
+          subjectName: subjects.find((s) => String(s.id) === String(subjectId))?.name || newSubject.trim(),
+          brief: text,
+          questionCount: 40,
+          source: 'pdf',
+        });
+        usedServerAi = Boolean(parsed?.length);
+      } catch (aiErr) {
+        const status = aiErr?.response?.status;
+        if (status && status !== 404) throw aiErr;
+      }
+      if (!parsed?.length) parsed = parseQuestionsFromText(text);
       if (!parsed.length) {
         throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin və formatı aşağıdakı kimi saxlayın.');
       }
@@ -176,7 +193,11 @@ export default function TeacherAiPanel() {
         setTitle(pdfFile.name.replace(/\.pdf$/i, '').trim());
       }
       await recordAiUsage(user?.id, 'pdfExtract');
-      setMessage(`${parsed.length} sual oxundu. İstəsəniz mətni və variantları dəyişin, sonra qaralama kimi saxlayın.`);
+      setMessage(
+        usedServerAi
+          ? `${parsed.length} sual gpt-4o ilə oxundu. İstəsəniz dəyişin, sonra qaralama kimi saxlayın.`
+          : `${parsed.length} sual PDF mətnindən oxundu. İstəsəniz dəyişin, sonra qaralama kimi saxlayın.`,
+      );
     } catch (err) {
       setError(errorMessage(err, 'PDF oxunmadı.'));
     } finally {
@@ -444,6 +465,17 @@ Cavab: A`}</pre>
                     <p className="mt-2 text-xs text-indigo-200">
                       Düzgün cavab: {q.correctLetter === 'OPEN' ? 'Açıq' : q.correctLetter} (soldakı dairəni dəyişin)
                     </p>
+                    <div className="mt-3">
+                      <Select
+                        label="Çətinlik (AI)"
+                        value={q.difficultyLevel || 'orta'}
+                        onChange={(e) => updatePdfQuestion(index, { difficultyLevel: e.target.value })}
+                      >
+                        <option value="asan">Asan · 1 bal</option>
+                        <option value="orta">Orta · 2 bal</option>
+                        <option value="çətin">Çətin · 3 bal</option>
+                      </Select>
+                    </div>
                   </div>
                 ))}
               </div>

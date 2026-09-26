@@ -217,8 +217,11 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   if (err?.isDuplicateGroup && typeof err?.message === 'string') return err.message;
   const status = err?.response?.status;
   const api = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://127.0.0.1:5000/api');
-  if (status === 401 && !err?.response?.data) {
-    return 'API şifrə ilə qorunur. SmarterASP-də Temp URL / Directory password-u söndürün, sonra yenidən cəhd edin.';
+  if (status === 405) {
+    return 'Bu əməliyyat serverdə hələ açıq deyil. API-ni yeniləyib qrupu yenidən silin.';
+  }
+  if ((status === 502 || status === 503) && typeof err?.response?.data?.message === 'string') {
+    return err.response.data.message;
   }
   if (status === 502 || status === 503 || status === 504 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
     return `API-yə qoşulmaq olmadı (${api}). SmarterASP saytında password protection söndürün və backend-in işlədiyini yoxlayın.`;

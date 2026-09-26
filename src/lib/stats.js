@@ -32,6 +32,8 @@ export function buildExamStats(exam, questions, submissions, difficultyRows = []
     asked: q.participants ?? participants,
     wrongCount: q.wrongCount ?? q.difficulty ?? 0,
     difficulty: q.wrongCount ?? q.difficulty ?? 0,
+    difficultyLevel: q.difficultyLevel || q.DifficultyLevel || '',
+    points: q.points ?? q.Points,
   }));
 
   const canGrade = submissions.some((s) => (s.answers || s.studentAnswers || []).length);
@@ -54,6 +56,8 @@ export function buildExamStats(exam, questions, submissions, difficultyRows = []
       asked: participants,
       wrongCount: wrong,
       difficulty: wrong,
+      difficultyLevel: q.difficultyLevel || q.DifficultyLevel || '',
+      points: q.points ?? q.Points,
     };
   });
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FileUp, Pencil, ScanLine, Trash2, Wand2 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Input, Select, Textarea } from './ui';
-import { addQuestion, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, uploadExamPdfPack } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, tryGradeAiQuestions, uploadExamPdfPack } from '../lib/examApi';
 import { recordAiUsage } from '../lib/aiUsage';
 import { extractPdfText, isStrongExamParse, parseQuestionsFromText, questionsFromBrief, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
@@ -169,7 +169,7 @@ export default function TeacherAiPanel() {
     try {
       const text = await extractPdfText(pdfFile);
       let parsed = parseQuestionsFromText(text);
-      let usedServerAi = false;
+      let usedAiAnswers = false;
       if (!isStrongExamParse(parsed)) {
         try {
           const aiParsed = await tryGenerateAiQuestions({
@@ -182,7 +182,7 @@ export default function TeacherAiPanel() {
           }, { soft: true });
           if (aiParsed?.length) {
             parsed = aiParsed;
-            usedServerAi = true;
+            usedAiAnswers = true;
           }
         } catch {
           /* keep local parse */
@@ -191,15 +191,26 @@ export default function TeacherAiPanel() {
       if (!parsed.length) {
         throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin — iki sütunlu buraxılış testləri də dəstəklənir.');
       }
+      if (!usedAiAnswers) {
+        try {
+          const grades = await tryGradeAiQuestions(parsed, { soft: true });
+          if (grades?.length) {
+            parsed = applyAiAnswers(parsed, grades);
+            usedAiAnswers = true;
+          }
+        } catch {
+          /* keep unmarked answers */
+        }
+      }
       setPdfQuestions(parsed);
       if (!title.trim()) {
         setTitle(pdfFile.name.replace(/\.pdf$/i, '').trim());
       }
       await recordAiUsage(user?.id, 'pdfExtract');
       setMessage(
-        usedServerAi
-          ? `${parsed.length} sual gpt-4o ilə oxundu. İstəsəniz dəyişin, sonra qaralama kimi saxlayın.`
-          : `${parsed.length} sual PDF-dən oxundu. Cavab açarı yoxdursa düzgün variantı özünüz seçin, sonra qaralama kimi saxlayın.`,
+        usedAiAnswers
+          ? `${parsed.length} sual oxundu, cavabları gpt-4o qeyd etdi. Dairələri yoxlayın, sonra qaralama kimi saxlayın.`
+          : `${parsed.length} sual PDF-dən oxundu. Cavab açarı yazılmadı (AI API hələ işləmir) — düzgün variantı özünüz seçin.`,
       );
     } catch (err) {
       setError(errorMessage(err, 'PDF oxunmadı.'));

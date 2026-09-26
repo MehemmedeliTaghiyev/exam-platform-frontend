@@ -755,6 +755,62 @@ function isPdfBuffer(buf) {
   return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
 }
 
+export async function tryGradeAiQuestions(questions, { soft = true } = {}) {
+  const list = Array.isArray(questions) ? questions : [];
+  if (!list.length) return null;
+  const body = {
+    questions: list.map((q) => ({
+      text: q.text,
+      options: (q.options || []).map((o, idx) => ({
+        letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
+        text: o.text || o.optionText,
+        isCorrect: Boolean(o.isCorrect),
+      })),
+      correctLetter: q.correctLetter || 'A',
+      correctText: q.correctText || null,
+      difficultyLevel: q.difficultyLevel || 'orta',
+    })),
+  };
+  try {
+    const res = await API.post('/Ai/answers', body, { timeout: 120000 });
+    const data = unwrapItem(res.data) || res.data || {};
+    const answers = unwrapList(data.answers || data);
+    if (!answers.length) return null;
+    return answers.map((a) => ({
+      index: Number(a.index ?? a.Index) || 0,
+      correctLetter: String(a.correctLetter || a.answer || 'A').toUpperCase(),
+      correctText: a.correctText || a.openAnswer || '',
+      difficultyLevel: a.difficultyLevel || a.difficulty || 'orta',
+    }));
+  } catch (err) {
+    const status = err?.response?.status;
+    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503].includes(status))) return null;
+    throw err;
+  }
+}
+
+export function applyAiAnswers(questions, answers) {
+  const list = Array.isArray(questions) ? questions : [];
+  const grades = Array.isArray(answers) ? answers : [];
+  if (!list.length || !grades.length) return list;
+  const letters = ['A', 'B', 'C', 'D', 'E'];
+  return list.map((q, i) => {
+    const grade = grades.find((a) => Number(a.index) === i + 1) || grades[i];
+    const letter = String(grade?.correctLetter || '').toUpperCase();
+    if (!['A', 'B', 'C', 'D', 'E', 'OPEN'].includes(letter)) return q;
+    return {
+      ...q,
+      correctLetter: letter,
+      correctText: letter === 'OPEN' ? String(grade.correctText || q.correctText || '').trim() : '',
+      difficultyLevel: grade.difficultyLevel || q.difficultyLevel || 'orta',
+      options: letters.map((L) => {
+        const found = (q.options || []).find((o) => o.letter === L);
+        return { letter: L, text: found?.text || L, isCorrect: L === letter };
+      }),
+    };
+  });
+}
+
 export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   const body = {
     title: payload.title,

@@ -1,58 +1,10 @@
 import { useContext } from 'react';
-import { FileText, Lock, ScanLine, Sparkles, Wand2 } from 'lucide-react';
+import { Lock, Sparkles } from 'lucide-react';
 import AppShell from '../components/AppShell';
+import TeacherAiPanel from '../components/TeacherAiPanel';
 import { AuthContext } from '../context/AuthContext';
 import { localDb } from '../lib/localDb';
 import { isAiEnabled, normalizeRole } from '../lib/utils';
-
-const COMING_SOON = [
-  {
-    icon: Wand2,
-    title: 'Avtomatik imtahan yaratma',
-    text: 'Mövzu, sinif və çətinliyi yazın — suallar və A–E variantları hazırlansın.',
-  },
-  {
-    icon: ScanLine,
-    title: 'PDF-dən sual çıxarma',
-    text: 'İmtahan PDF-i yükləyin, hər sualın altında variantlar mətnə çevrilsin.',
-  },
-  {
-    icon: FileText,
-    title: 'Çətinlik dərəcəsi və mövzu anlayışı',
-    text: 'Hər sualın çətinliyi və şagirdin mövzunu nə dərəcədə başa düşdüyü aydın görünsün.',
-  },
-];
-
-function ComingSoon() {
-  return (
-    <div className="mx-auto max-w-5xl p-6 sm:p-10">
-      <div className="mb-8 flex items-start gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 text-indigo-950 shadow-md">
-          <Sparkles size={26} />
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">Tezliklə</p>
-          <h2 className="mt-1 text-2xl font-black">AI funksionallıqları yolda</h2>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-indigo-100">
-            Paketiniz açıqdır. Aşağıdakı alətlər yaxın günlərdə bu səhifədə görünəcək — hazırda onları bir-bir əlavə edirik.
-          </p>
-        </div>
-      </div>
-      <ul className="grid gap-4 sm:grid-cols-3">
-        {COMING_SOON.map((item) => {
-          const Icon = item.icon;
-          return (
-            <li key={item.title} className="rounded-2xl bg-indigo-950/50 p-5 ring-1 ring-white/15">
-              <Icon className="text-amber-300" size={22} />
-              <p className="mt-3 font-bold">{item.title}</p>
-              <p className="mt-1 text-sm leading-6 text-indigo-200">{item.text}</p>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
 
 function Locked() {
   return (
@@ -78,7 +30,25 @@ export default function TeacherAi() {
   return (
     <AppShell title="AI özəlliyi" mainClassName="!mx-0 !max-w-none !px-0 !py-0">
       <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-indigo-900 via-violet-900 to-slate-950 text-white">
-        {unlocked ? <ComingSoon /> : <Locked />}
+        {unlocked ? (
+          <div className="mx-auto max-w-5xl p-6 sm:p-10">
+            <div className="mb-6 flex items-start gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 text-indigo-950 shadow-md">
+                <Sparkles size={26} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">AI studio</p>
+                <h2 className="mt-1 text-2xl font-black">İmtahanı mətndən və ya PDF-dən yaradın</h2>
+                <p className="mt-2 max-w-xl text-sm leading-6 text-indigo-100">
+                  Çətinlik və mövzu anlayışı imtahan statistikasında açılır. API açarı gələndə bu forma eyni qalacaq.
+                </p>
+              </div>
+            </div>
+            <TeacherAiPanel />
+          </div>
+        ) : (
+          <Locked />
+        )}
       </div>
     </AppShell>
   );

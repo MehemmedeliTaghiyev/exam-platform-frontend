@@ -731,6 +731,38 @@ function isPdfBuffer(buf) {
   return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
 }
 
+export async function tryGenerateAiQuestions(payload) {
+  const body = {
+    title: payload.title,
+    topic: payload.topic,
+    subjectName: payload.subjectName,
+    brief: payload.brief,
+    questionCount: payload.questionCount,
+    easy: payload.easy,
+    medium: payload.medium,
+    hard: payload.hard,
+    source: payload.source,
+  };
+  try {
+    const res = await API.post('/Ai/questions', body, { timeout: 90000 });
+    const data = unwrapItem(res.data) || res.data || {};
+    const list = unwrapList(data.questions || data);
+    if (!list.length) return null;
+    return list.map((q) => ({
+      text: q.text || q.questionText || q.stem,
+      options: (q.options || []).map((o, idx) => ({
+        letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
+        text: o.text || o.optionText,
+        isCorrect: Boolean(o.isCorrect),
+      })),
+      correctLetter: q.correctLetter || 'A',
+      difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export async function uploadExamPdfPack(examId, file, questionCount) {
   const form = new FormData();
   form.append('file', file, file.name || 'exam.pdf');

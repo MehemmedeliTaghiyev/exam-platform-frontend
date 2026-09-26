@@ -198,8 +198,13 @@ export default function TeacherAiPanel() {
             parsed = applyAiAnswers(parsed, grades);
             usedAiAnswers = true;
           }
-        } catch {
-          /* keep unmarked answers */
+        } catch (gradeErr) {
+          setPdfQuestions(parsed);
+          if (!title.trim()) setTitle(pdfFile.name.replace(/\.pdf$/i, '').trim());
+          await recordAiUsage(user?.id, 'pdfExtract');
+          setError(errorMessage(gradeErr, 'Cavab açarı yazılmadı. Açar Exam API saytındadır, ExamStation-da deyil.'));
+          setMessage(`${parsed.length} sual oxundu, amma cavab açarı yazılmadı.`);
+          return;
         }
       }
       setPdfQuestions(parsed);

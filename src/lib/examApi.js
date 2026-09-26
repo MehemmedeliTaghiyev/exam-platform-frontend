@@ -784,7 +784,8 @@ export async function tryGradeAiQuestions(questions, { soft = true } = {}) {
     }));
   } catch (err) {
     const status = err?.response?.status;
-    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503].includes(status))) return null;
+    if (!status || status === 404) return null;
+    if (soft && status === 405) return null;
     throw err;
   }
 }

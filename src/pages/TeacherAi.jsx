@@ -40,7 +40,7 @@ export default function TeacherAi() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">AI studio</p>
                 <h2 className="mt-1 text-2xl font-black">İmtahanı mətndən və ya PDF-dən yaradın</h2>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-indigo-100">
-                  Çətinlik və mövzu anlayışı imtahan statistikasında açılır. API açarı gələndə bu forma eyni qalacaq.
+                  Avtomatik imtahanda mövzunu yazın. PDF-də isə yalnız faylı yükləyin — suallar oxunur, istəsəniz dəyişirsiniz.
                 </p>
               </div>
             </div>

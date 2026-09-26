@@ -18,8 +18,24 @@ export async function extractPdfText(file) {
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const line = (content.items || []).map((it) => it.str).join(' ').replace(/\s+/g, ' ').trim();
-    if (line) parts.push(line);
+    let lastY = null;
+    const lines = [];
+    let current = '';
+    (content.items || []).forEach((it) => {
+      const y = it.transform?.[5];
+      const str = String(it.str || '');
+      if (!str) return;
+      if (lastY != null && typeof y === 'number' && Math.abs(y - lastY) > 5) {
+        if (current.trim()) lines.push(current.trim());
+        current = str;
+      } else {
+        current = current ? `${current} ${str}` : str;
+      }
+      if (typeof y === 'number') lastY = y;
+    });
+    if (current.trim()) lines.push(current.trim());
+    const pageText = lines.join('\n').replace(/\s+/g, (m) => (m.includes('\n') ? '\n' : ' ')).trim();
+    if (pageText) parts.push(pageText);
   }
   return parts.join('\n');
 }
@@ -32,11 +48,14 @@ function splitQuestionBlocks(raw) {
 
 function parseOptions(block) {
   const options = [];
-  const re = /(?:^|\n|\s)([A-Ea-e])[\.\)\-]\s*([^\n]+?)(?=(?:\s+[A-Ea-e][\.\)\-])|$)/g;
+  const re = /(?:^|\n|\s)([A-Ea-e])[\.\)\-]\s*([^\n]+)/g;
   let match = re.exec(block);
   while (match) {
     const letter = match[1].toUpperCase();
-    const text = match[2].replace(/\s+/g, ' ').trim();
+    const text = match[2]
+      .replace(/(?:düzgün\s*cavab|duzgun\s*cavab|doğru\s*cavab|dogru\s*cavab|cavab|correct|answer)\s*[:\-–]?\s*[A-Ea-e]\b.*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (LETTERS.includes(letter) && text) {
       options.push({ letter, text });
     }
@@ -50,11 +69,21 @@ function parseOptions(block) {
   return unique;
 }
 
+function detectCorrectLetter(block) {
+  const match = String(block || '').match(
+    /(?:düzgün\s*cavab|duzgun\s*cavab|doğru\s*cavab|dogru\s*cavab|cavab|correct|answer)\s*[:\-–]?\s*([A-Ea-e])\b/i,
+  );
+  return match ? match[1].toUpperCase() : null;
+}
+
 function stemFromBlock(block, optionCount) {
   let stem = block.replace(/^(?:sual\s*)?\d{1,3}\s*[\.\)\-–]\s*/i, '');
-  const firstOpt = stem.search(/(?:^|\s)[A-Ea-e][\.\)]\s/);
+  const firstOpt = stem.search(/(?:^|\s)[A-Ea-e][\.\)\-]\s/);
   if (firstOpt > 0) stem = stem.slice(0, firstOpt);
-  stem = stem.replace(/\s+/g, ' ').trim();
+  stem = stem
+    .replace(/(?:düzgün\s*cavab|duzgun\s*cavab|doğru\s*cavab|dogru\s*cavab|cavab|correct|answer)\s*[:\-–]?\s*[A-Ea-e]\b.*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!stem && optionCount) return 'Sual';
   return stem;
 }
@@ -66,22 +95,26 @@ export function parseQuestionsFromText(raw) {
     const options = parseOptions(block);
     const text = stemFromBlock(block, options.length);
     if (!text) return;
+    const marked = detectCorrectLetter(block);
     if (options.length < 2) {
+      const correctLetter = marked && LETTERS.includes(marked) ? marked : 'A';
       questions.push({
         text,
-        options: LETTERS.map((letter) => ({ letter, text: letter, isCorrect: letter === 'A' })),
-        correctLetter: 'A',
+        options: LETTERS.map((letter) => ({ letter, text: letter, isCorrect: letter === correctLetter })),
+        correctLetter,
         difficultyLevel: 'orta',
       });
       return;
     }
+    const fallback = options[0].letter;
+    const correctLetter = marked && LETTERS.includes(marked) ? marked : fallback;
     questions.push({
       text,
       options: LETTERS.map((letter) => {
         const found = options.find((o) => o.letter === letter);
-        return { letter, text: found?.text || letter, isCorrect: letter === options[0].letter };
+        return { letter, text: found?.text || letter, isCorrect: letter === correctLetter };
       }),
-      correctLetter: options[0].letter,
+      correctLetter,
       difficultyLevel: 'orta',
     });
   });

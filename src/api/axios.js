@@ -10,10 +10,16 @@ const API = axios.create({
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
+    const bearer = `Bearer ${token}`;
     if (config.headers && typeof config.headers.set === 'function') {
-      config.headers.set('Authorization', `Bearer ${token}`);
+      config.headers.set('Authorization', bearer);
+      config.headers.set('X-Access-Token', token);
     } else {
-      config.headers = { ...(config.headers || {}), Authorization: `Bearer ${token}` };
+      config.headers = {
+        ...(config.headers || {}),
+        Authorization: bearer,
+        'X-Access-Token': token,
+      };
     }
   }
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {

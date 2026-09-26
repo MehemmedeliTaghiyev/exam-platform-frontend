@@ -217,6 +217,9 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   if (err?.isDuplicateGroup && typeof err?.message === 'string') return err.message;
   const status = err?.response?.status;
   const api = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://127.0.0.1:5000/api');
+  if (status === 401) {
+    return 'Sessiya tanınmadı (401). Çıxıb yenidən daxil olun. Cavab açarı üçün token Exam API-yə (site1) getməlidir.';
+  }
   if (status === 405) {
     return 'Bu əməliyyat serverdə hələ açıq deyil. API-ni yeniləyib qrupu yenidən silin.';
   }

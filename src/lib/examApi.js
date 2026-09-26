@@ -755,6 +755,12 @@ function isPdfBuffer(buf) {
   return bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
 }
 
+function authHeaders() {
+  const token = localStorage.getItem('token');
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}`, 'X-Access-Token': token };
+}
+
 export async function tryGradeAiQuestions(questions, { soft = true } = {}) {
   const list = Array.isArray(questions) ? questions : [];
   if (!list.length) return null;
@@ -772,7 +778,10 @@ export async function tryGradeAiQuestions(questions, { soft = true } = {}) {
     })),
   };
   try {
-    const res = await API.post('/Ai/answers', body, { timeout: 120000 });
+    const res = await API.post('/Ai/answers', body, {
+      timeout: 120000,
+      headers: authHeaders(),
+    });
     const data = unwrapItem(res.data) || res.data || {};
     const answers = unwrapList(data.answers || data);
     if (!answers.length) return null;

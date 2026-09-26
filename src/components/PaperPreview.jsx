@@ -31,12 +31,13 @@ export default function PaperPreview({ exam, questions }) {
               <p className="mt-3 pl-6 text-sm">Açıq cavab: _______________________</p>
             ) : (
               <div className="mt-3 space-y-1.5 pl-6 text-sm">
-                {(q.options || []).filter(isLetterOption).map((opt) => (
-                  <p key={opt.id}>
-                    {optionLetter(opt)}) {opt.optionText || opt.text}
-                  </p>
-                ))}
-                <p>Açıq) _______________________</p>
+                {(q.options || []).filter((opt) => !isOpenChoiceOption(opt)).map((opt, oi) => {
+                  const letter = isLetterOption(opt) ? optionLetter(opt) : String.fromCharCode(65 + oi);
+                  const label = String(opt.optionText || opt.text || '').trim();
+                  const shown = /^[A-E]$/i.test(label) ? letter : `${letter}) ${label}`;
+                  return <p key={opt.id || oi}>{shown}</p>;
+                })}
+                <p>○ Açıq — ________________________________</p>
               </div>
             )}
           </li>

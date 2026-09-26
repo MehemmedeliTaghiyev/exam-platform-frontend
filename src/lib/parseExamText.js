@@ -143,6 +143,7 @@ export function questionsFromBrief({ topic, count, easy = 0, medium = 0, hard = 
       { letter: 'C', text: 'C variantı', isCorrect: false },
       { letter: 'D', text: 'D variantı', isCorrect: false },
       { letter: 'E', text: 'E variantı', isCorrect: false },
+      { letter: 'OPEN', text: 'Açıq', isCorrect: false },
     ],
     correctLetter: 'A',
     difficultyLevel: level,
@@ -150,10 +151,19 @@ export function questionsFromBrief({ topic, count, easy = 0, medium = 0, hard = 
 }
 
 export function toAddQuestionPayload(q) {
-  const options = (q.options || []).map((o) => ({
-    optionText: o.text || o.letter,
-    isCorrect: Boolean(o.isCorrect),
-  }));
+  const fromFlags = (q.options || []).find((o) => o.isCorrect)?.letter;
+  const correctLetter = String(q.correctLetter || fromFlags || 'A').toUpperCase();
+  const options = LETTERS.map((letter) => {
+    const found = (q.options || []).find((o) => String(o.letter || '').toUpperCase() === letter);
+    return {
+      optionText: String(found?.text || letter).trim() || letter,
+      isCorrect: correctLetter === letter,
+    };
+  });
+  options.push({
+    optionText: 'Açıq',
+    isCorrect: correctLetter === 'OPEN',
+  });
   return {
     text: q.text,
     points: 1,
@@ -161,6 +171,6 @@ export function toAddQuestionPayload(q) {
     inputKind: 'Choice',
     difficultyLevel: q.difficultyLevel || 'orta',
     options,
-    correctText: null,
+    correctText: correctLetter === 'OPEN' ? String(q.correctText || '').trim() || null : null,
   };
 }

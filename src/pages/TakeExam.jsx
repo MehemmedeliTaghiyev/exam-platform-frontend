@@ -4,8 +4,10 @@ import AppShell from '../components/AppShell';
 import { Button, Card, Skeleton } from '../components/ui';
 import { fetchExam, fetchQuestions, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
-import { examPdfUrl, formatDateTime, isExamEnded, isExamScheduled, isLetterOption, isOpenChoiceOption, parseExamDate } from '../lib/utils';
+import { examPdfUrl, formatDateTime, isExamEnded, isExamScheduled, isLetterOption, isOpenChoiceOption, optionLetter, parseExamDate } from '../lib/utils';
 import PdfViewer from '../components/PdfViewer';
+
+const OPEN_SENTINEL = 'open';
 
 function isOpenQuestion(q) {
   const type = String(q?.type || '');
@@ -13,12 +15,21 @@ function isOpenQuestion(q) {
   return type === 'OpenEnded' || ['Text', 'Integer', 'Decimal', 'Number'].includes(kind);
 }
 
+function choiceDisplayText(opt, index) {
+  const t = String(opt?.optionText || opt?.text || '').trim();
+  if (isOpenChoiceOption(opt)) return 'Açıq';
+  if (/^[A-E]$/i.test(t)) return t.toUpperCase();
+  const letter = isLetterOption(opt) ? optionLetter(opt) : String.fromCharCode(65 + index);
+  if (/^[A-E][\.\)\:\-]/i.test(t)) return t;
+  return `${letter}) ${t}`;
+}
+
 function serializeAnswers(map) {
   return Object.entries(map).map(([qId, val]) => {
     if (val && typeof val === 'object') {
       return {
         questionId: parseInt(qId, 10),
-        selectedOptionId: val.optionId ? Number(val.optionId) : 0,
+        selectedOptionId: val.optionId && val.optionId !== OPEN_SENTINEL ? Number(val.optionId) : 0,
         textAnswer: val.text || '',
       };
     }
@@ -190,14 +201,20 @@ export default function TakeExam() {
               const open = isOpenQuestion(q);
               const letterOpts = (q.options || []).filter(isLetterOption).sort((a, b) => String(a.optionText || a.text).localeCompare(String(b.optionText || b.text)));
               const openOpt = (q.options || []).find(isOpenChoiceOption);
-              const selectedOpen = openOpt && String(current.optionId) === String(openOpt.id);
               const displayOpts = letterOpts.length ? letterOpts : (q.options || []).filter((opt) => !isOpenChoiceOption(opt));
+              const hasFullText = displayOpts.some((opt) => !isLetterOption(opt));
+              const snapLayout = hasFullText || !examPdfUrl(exam);
+              const openId = openOpt?.id ?? OPEN_SENTINEL;
+              const selectedOpen = String(current.optionId) === String(openId);
+              const stem = String(q.text || '').trim();
               return (
             <Card key={q.id}>
-              <h4 className="font-semibold">
-                Sual {index + 1}
-                {q.text && q.text !== `Sual ${index + 1}` ? `: ${q.text}` : ''}
-              </h4>
+              <h4 className="text-sm font-semibold text-gray-500">Sual {index + 1}</h4>
+              {stem && stem !== `Sual ${index + 1}` ? (
+                <div className="mt-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium dark:border-slate-700 dark:bg-slate-900">
+                  {stem}
+                </div>
+              ) : null}
               {open ? (
                 <input
                   className="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
@@ -214,8 +231,8 @@ export default function TakeExam() {
                 />
               ) : (
                 <>
-              <div className={`mt-4 ${examPdfUrl(exam) ? 'grid grid-cols-3 gap-2 sm:grid-cols-6' : 'space-y-2'}`}>
-                {displayOpts.map((opt) => (
+              <div className={`mt-4 ${snapLayout ? 'space-y-2' : 'grid grid-cols-3 gap-2 sm:grid-cols-6'}`}>
+                {displayOpts.map((opt, oi) => (
                   <label
                     key={opt.id}
                     className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all duration-200 ${
@@ -226,13 +243,13 @@ export default function TakeExam() {
                         : submitting
                           ? 'border-gray-200 dark:border-slate-700'
                           : 'border-gray-200 hover:border-gray-300 dark:border-slate-700'
-                    } ${examPdfUrl(exam) ? 'justify-center font-semibold' : ''}`}
+                    } ${snapLayout ? '' : 'justify-center font-semibold'}`}
                   >
                     <input
                       type="radio"
                       name={`question-${q.id}`}
                       disabled={submitting}
-                      className={examPdfUrl(exam) ? 'sr-only' : ''}
+                      className={snapLayout ? 'h-4 w-4 accent-brand-600' : 'sr-only'}
                       checked={String(current.optionId) === String(opt.id)}
                       onChange={() => {
                         if (submittedRef.current || submitting) return;
@@ -242,48 +259,47 @@ export default function TakeExam() {
                         }));
                       }}
                     />
-                    {opt.optionText || opt.text}
+                    {snapLayout ? choiceDisplayText(opt, oi) : (opt.optionText || opt.text)}
                   </label>
                 ))}
-                {openOpt && (
-                  <label
-                    className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
-                      submitting ? 'cursor-not-allowed' : 'cursor-pointer'
-                    } ${
-                      selectedOpen
-                        ? 'border-brand-500 bg-brand-50 dark:bg-brand-600/10'
-                        : 'border-gray-200 hover:border-gray-300 dark:border-slate-700'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={`question-${q.id}`}
-                      disabled={submitting}
-                      className="sr-only"
-                      checked={Boolean(selectedOpen)}
-                      onChange={() => {
-                        if (submittedRef.current || submitting) return;
-                        setAnswers((p) => ({
-                          ...p,
-                          [q.id]: { optionId: openOpt.id, text: current.text || '' },
-                        }));
-                      }}
-                    />
-                    Açıq
-                  </label>
-                )}
+                <label
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-all duration-200 ${
+                    submitting ? 'cursor-not-allowed' : 'cursor-pointer'
+                  } ${
+                    selectedOpen
+                      ? 'border-brand-500 bg-brand-50 dark:bg-brand-600/10'
+                      : 'border-gray-200 hover:border-gray-300 dark:border-slate-700'
+                  } ${snapLayout ? '' : 'justify-center font-semibold'}`}
+                >
+                  <input
+                    type="radio"
+                    name={`question-${q.id}`}
+                    disabled={submitting}
+                    className={snapLayout ? 'h-4 w-4 accent-brand-600' : 'sr-only'}
+                    checked={Boolean(selectedOpen)}
+                    onChange={() => {
+                      if (submittedRef.current || submitting) return;
+                      setAnswers((p) => ({
+                        ...p,
+                        [q.id]: { optionId: openId, text: current.text || '' },
+                      }));
+                    }}
+                  />
+                  Açıq
+                </label>
               </div>
               {selectedOpen && (
-                <input
+                <textarea
                   className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-                  placeholder="Açıq cavab yazın (mətn və ya rəqəm)"
+                  rows={3}
+                  placeholder="Öz cavabınızı yazın"
                   disabled={submitting}
                   value={current.text || ''}
                   onChange={(e) => {
                     if (submittedRef.current || submitting) return;
                     setAnswers((p) => ({
                       ...p,
-                      [q.id]: { optionId: openOpt.id, text: e.target.value },
+                      [q.id]: { optionId: openId, text: e.target.value },
                     }));
                   }}
                 />

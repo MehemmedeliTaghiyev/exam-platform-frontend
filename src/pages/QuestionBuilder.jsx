@@ -404,21 +404,34 @@ export default function QuestionBuilder() {
                 />
                 {questionKind === 'choice' ? (
                   <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Input label="A" value={optionA} onChange={(e) => setOptionA(e.target.value)} required />
-                      <Input label="B" value={optionB} onChange={(e) => setOptionB(e.target.value)} required />
-                      <Input label="C" value={optionC} onChange={(e) => setOptionC(e.target.value)} required />
-                      <Input label="D" value={optionD} onChange={(e) => setOptionD(e.target.value)} required />
-                      <Input label="E" value={optionE} onChange={(e) => setOptionE(e.target.value)} />
+                    <p className="text-xs text-gray-500">
+                      Tək seçim: 5 variant + 6-cı Açıq. Şagird Açıq-ı basanda öz cavabını yazır.
+                    </p>
+                    <div className="space-y-2">
+                      {[
+                        ['A', optionA, setOptionA, true],
+                        ['B', optionB, setOptionB, true],
+                        ['C', optionC, setOptionC, true],
+                        ['D', optionD, setOptionD, true],
+                        ['E', optionE, setOptionE, false],
+                      ].map(([letter, value, setter, required]) => (
+                        <label key={letter} className="flex items-center gap-2">
+                          <input type="radio" name="correct-new" checked={correctAnswer === letter} onChange={() => setCorrectAnswer(letter)} />
+                          <span className="w-5 text-sm font-semibold">{letter}</span>
+                          <input
+                            required={required}
+                            value={value}
+                            onChange={(e) => setter(e.target.value)}
+                            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+                          />
+                        </label>
+                      ))}
+                      <label className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-2 py-2 dark:border-slate-600">
+                        <input type="radio" name="correct-new" checked={correctAnswer === 'OPEN'} onChange={() => setCorrectAnswer('OPEN')} />
+                        <span className="text-sm font-semibold">Açıq</span>
+                        <span className="text-xs text-gray-500">6-cı variant — şagird özü yazır</span>
+                      </label>
                     </div>
-                    <Select label="Düzgün cavab" value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)}>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
-                      <option value="D">D</option>
-                      <option value="E">E</option>
-                      <option value="OPEN">Açıq</option>
-                    </Select>
                     {correctAnswer === 'OPEN' && (
                       <Input
                         label="Açıq düzgün cavab"

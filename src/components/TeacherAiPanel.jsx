@@ -19,8 +19,9 @@ function toDatetimeLocalValue(date) {
 function emptyQuestion(index = 0) {
   return {
     text: `${index + 1}-ci sual`,
-    options: LETTERS.map((letter) => ({ letter, text: '', isCorrect: letter === 'A' })),
+            options: LETTERS.map((letter) => ({ letter, text: '', isCorrect: letter === 'A' })),
     correctLetter: 'A',
+    correctText: '',
     difficultyLevel: 'orta',
   };
 }
@@ -226,10 +227,12 @@ export default function TeacherAiPanel() {
     setError('');
     setMessage('');
     try {
-      const cleaned = pdfQuestions
+            const cleaned = pdfQuestions
         .map((q) => ({
           ...q,
           text: String(q.text || '').trim(),
+          correctLetter: q.correctLetter || 'A',
+          correctText: q.correctLetter === 'OPEN' ? String(q.correctText || '').trim() : '',
           options: LETTERS.map((letter) => {
             const found = (q.options || []).find((o) => o.letter === letter);
             return { letter, text: String(found?.text || letter).trim() || letter, isCorrect: letter === q.correctLetter };
@@ -318,7 +321,7 @@ export default function TeacherAiPanel() {
       ) : (
         <div className="space-y-5">
           <p className="text-sm leading-6 text-indigo-100">
-            Burada mövzu və say yazmağa ehtiyac yoxdur. PDF-i yükləyin — suallar aşağıdakı formatda olmalıdır. Oxunduqdan sonra hər sualı dəyişə, silə və ya yeni sual əlavə edə bilərsiniz.
+            Burada mövzu və say yazmağa ehtiyac yoxdur. PDF-i yükləyin — suallar aşağıdakı formatda olmalıdır. Oxunduqdan sonra hər sualı dəyişə bilərsiniz. Şagird imtahanda 5 variant + 6-cı <span className="font-semibold text-amber-200">Açıq</span> görür; Açıq-ı basanda öz cavabını yazır.
           </p>
           <pre className="overflow-x-auto rounded-2xl bg-black/25 p-4 text-xs leading-6 text-amber-100 ring-1 ring-white/10">{`1. Sualın mətni
 A) variant
@@ -400,11 +403,11 @@ Cavab: A`}</pre>
                       value={q.text}
                       onChange={(e) => updatePdfQuestion(index, { text: e.target.value })}
                     />
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="mt-3 space-y-2">
                       {LETTERS.map((letter) => {
                         const opt = (q.options || []).find((o) => o.letter === letter);
                         return (
-                          <label key={letter} className="flex items-center gap-2 rounded-xl bg-white/5 px-2 py-1.5">
+                          <label key={letter} className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
                             <input
                               type="radio"
                               name={`correct-${index}`}
@@ -420,8 +423,27 @@ Cavab: A`}</pre>
                           </label>
                         );
                       })}
+                      <label className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
+                        <input
+                          type="radio"
+                          name={`correct-${index}`}
+                          checked={q.correctLetter === 'OPEN'}
+                          onChange={() => setPdfCorrect(index, 'OPEN')}
+                        />
+                        <span className="w-12 text-xs font-bold text-amber-200">Açıq</span>
+                        <span className="text-xs text-indigo-200">6-cı variant — şagird öz cavabını yazacaq</span>
+                      </label>
+                      {q.correctLetter === 'OPEN' && (
+                        <Input
+                          label="Açıq düzgün cavab (istəyə bağlı)"
+                          value={q.correctText || ''}
+                          onChange={(e) => updatePdfQuestion(index, { correctText: e.target.value })}
+                        />
+                      )}
                     </div>
-                    <p className="mt-2 text-xs text-indigo-200">Düzgün cavab: {q.correctLetter} (soldakı dairəni dəyişin)</p>
+                    <p className="mt-2 text-xs text-indigo-200">
+                      Düzgün cavab: {q.correctLetter === 'OPEN' ? 'Açıq' : q.correctLetter} (soldakı dairəni dəyişin)
+                    </p>
                   </div>
                 ))}
               </div>

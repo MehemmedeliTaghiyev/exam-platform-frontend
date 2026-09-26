@@ -1,7 +1,8 @@
 import { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
-import { normalizeRole } from '../lib/utils';
+import { isAiEnabled, normalizeRole } from '../lib/utils';
+import { localDb } from '../lib/localDb';
 import { Button } from '../components/ui';
 
 export const AuthContext = createContext();
@@ -9,16 +10,24 @@ export const AuthContext = createContext();
 function normalizeUser(raw) {
   if (!raw) return null;
   const user = raw.user || raw;
+  const id = user.id || user.userId;
+  const rawAi = user.aiEnabled ?? user.AiEnabled;
+  const aiEnabled = rawAi != null ? isAiEnabled(user) : Boolean(id && localDb.getTeacherAi(id));
   return {
     ...user,
-    id: user.id || user.userId,
+    id,
     fullName: user.fullName || user.name,
     role: normalizeRole(user.role || user.roles?.[0]),
     email: user.email,
     userName: user.userName || user.username,
-    teacherId: user.teacherId ?? user.TeacherId ?? (normalizeRole(user.role || user.roles?.[0]) === 'Teacher' ? (user.id || user.userId) : null),
+    teacherId: user.teacherId ?? user.TeacherId ?? (normalizeRole(user.role || user.roles?.[0]) === 'Teacher' ? id : null),
     groupName: user.groupName || user.GroupName || '',
     groupId: user.groupId ?? user.GroupId ?? null,
+    aiEnabled,
+    billingPlan: user.billingPlan || user.BillingPlan || '',
+    trialEndsAt: user.trialEndsAt || user.TrialEndsAt || null,
+    trialStartsAt: user.trialStartsAt || user.TrialStartsAt || null,
+    trialDays: user.trialDays ?? user.TrialDays ?? null,
   };
 }
 

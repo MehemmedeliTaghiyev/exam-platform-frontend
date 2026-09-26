@@ -298,26 +298,97 @@ export async function createTeacherAccount(payload) {
     trialEndsAt: payload.trialEndsAt,
     trialStartsAt: payload.trialStartsAt,
     billingPlan: payload.billingPlan,
+    trialDays: payload.trialDays,
     trialMessage: payload.trialMessage,
+    aiEnabled: payload.aiEnabled === true,
+    AiEnabled: payload.aiEnabled === true,
+  };
+  const compact = {
+    firstName: body.firstName,
+    lastName: body.lastName,
+    fullName: body.fullName,
+    email: body.email,
+    phone: body.phone,
+    userName: body.userName,
+    password: body.password,
+    trialEndsAt: body.trialEndsAt,
+    trialStartsAt: body.trialStartsAt,
+    billingPlan: body.billingPlan,
+    trialMessage: body.trialMessage,
   };
   const paths = ['/Users/teachers', '/Users/create-teacher'];
   let lastError;
   for (const path of paths) {
-    try {
-      const res = await API.post(path, body);
-      return unwrapItem(res.data) || res.data;
-    } catch (err) {
-      lastError = err;
-      const status = err?.response?.status;
-      if (status !== 404 && status !== 405) throw err;
+    for (const data of [body, compact]) {
+      try {
+        const res = await API.post(path, data);
+        return unwrapItem(res.data) || res.data;
+      } catch (err) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status === 400) continue;
+        if (status !== 404 && status !== 405) throw err;
+        break;
+      }
     }
   }
   throw lastError;
 }
 
 export async function updateTeacherTrial(id, payload) {
-  const res = await API.patch(`/Users/${id}/trial`, payload);
-  return unwrapItem(res.data) || res.data;
+  const body = {
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    phone: payload.phone,
+    trialStartsAt: payload.trialStartsAt,
+    trialEndsAt: payload.trialEndsAt,
+    billingPlan: payload.billingPlan,
+    trialDays: payload.trialDays,
+    trialMessage: payload.trialMessage,
+    aiEnabled: payload.aiEnabled,
+    AiEnabled: payload.aiEnabled,
+  };
+  const compact = {
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    phone: payload.phone,
+    trialStartsAt: payload.trialStartsAt,
+    billingPlan: payload.billingPlan,
+    trialMessage: payload.trialMessage,
+  };
+  let lastError;
+  for (const data of [body, compact]) {
+    try {
+      const res = await API.patch(`/Users/${id}/trial`, data);
+      const updated = unwrapItem(res.data) || res.data;
+      if (payload.aiEnabled != null) localDb.setTeacherAi(id, payload.aiEnabled === true);
+      return updated;
+    } catch (err) {
+      lastError = err;
+      if (err?.response?.status !== 400) throw err;
+    }
+  }
+  throw lastError;
+}
+
+export async function setTeacherAiEnabled(id, enabled) {
+  localDb.setTeacherAi(id, enabled);
+  const body = { aiEnabled: enabled, AiEnabled: enabled };
+  try {
+    const res = await API.patch(`/Users/${id}/trial`, body);
+    return unwrapItem(res.data) || res.data || { id, aiEnabled: enabled };
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 404 || status === 405 || status === 400) {
+      try {
+        const res = await API.patch(`/Users/${id}`, body);
+        return unwrapItem(res.data) || res.data || { id, aiEnabled: enabled };
+      } catch {
+        return { id, aiEnabled: enabled };
+      }
+    }
+    throw err;
+  }
 }
 
 export async function deleteStudentAccount(id) {

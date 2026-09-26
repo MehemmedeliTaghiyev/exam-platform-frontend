@@ -82,4 +82,14 @@ export const localDb = {
     this.saveSubmissions(list);
     return item;
   },
+  getTeacherAi(id) {
+    const map = read('teacher_ai', {});
+    return Boolean(map[String(id)]);
+  },
+  setTeacherAi(id, enabled) {
+    const map = read('teacher_ai', {});
+    if (enabled) map[String(id)] = true;
+    else delete map[String(id)];
+    write('teacher_ai', map);
+  },
 };

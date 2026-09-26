@@ -69,6 +69,42 @@ export function daysUntil(value) {
   return Math.round((end.getTime() - start.getTime()) / 86400000);
 }
 
+export function teacherPlanOf(user) {
+  const plan = user?.billingPlan || user?.BillingPlan || '';
+  return plan === 'Monthly' ? 'Monthly' : 'FreeTrial';
+}
+
+export function teacherTrialDaysOf(user) {
+  if (teacherPlanOf(user) === 'Monthly') return 30;
+  const n = Number(user?.trialDays ?? user?.TrialDays);
+  if (Number.isFinite(n) && n > 0) return Math.round(n);
+  return 14;
+}
+
+export function computeAccessEnd(startValue, plan, trialDays) {
+  const d = parseExamDate(startValue) || (startValue ? new Date(startValue) : null);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+  const days = plan === 'Monthly' ? 30 : Math.max(1, Number(trialDays) || 14);
+  start.setDate(start.getDate() + days);
+  return start.toISOString();
+}
+
+export function remainingUsageLabel(endsAt) {
+  const n = daysUntil(endsAt);
+  if (n == null) return { text: '—', className: 'text-gray-400', days: null };
+  if (n > 0) return { text: `Bitməsinə ${n} gün qalıb`, className: 'font-semibold text-emerald-600', days: n };
+  if (n === 0) return { text: 'Müddət bu gün bitir', className: 'font-semibold text-amber-600', days: 0 };
+  return { text: `Müddət bitib (${Math.abs(n)} gün əvvəl)`, className: 'font-semibold text-red-600', days: n };
+}
+
+export function isAiEnabled(user) {
+  if (!user) return false;
+  const raw = user.aiEnabled ?? user.AiEnabled;
+  if (raw != null) return raw === true || raw === 'true' || raw === 1 || raw === '1';
+  return false;
+}
+
 export function toDateInput(value) {
   const d = parseExamDate(value) || (value ? new Date(value) : null);
   if (!d || Number.isNaN(d.getTime())) return '';

@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Users, Percent, TrendingUp, HelpCircle } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import ProgressChart from '../components/ProgressChart';
-import { Button, Card, Skeleton, StatCard } from '../components/ui';
+import { Button, Card, Skeleton, StatCard, Badge } from '../components/ui';
+import { AuthContext } from '../context/AuthContext';
 import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestions, deleteExam } from '../lib/examApi';
 import { buildExamStats } from '../lib/stats';
-import { errorMessage } from '../lib/utils';
+import { errorMessage, isAiEnabled } from '../lib/utils';
+import { localDb } from '../lib/localDb';
 import LeaderboardTable from '../components/LeaderboardTable';
 
 export default function ExamStats() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+  const aiOn = isAiEnabled(user) || localDb.getTeacherAi(user?.id);
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -116,7 +120,11 @@ export default function ExamStats() {
           <Card className="mt-6 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
               <h3 className="font-bold">Sual çətinliyi</h3>
-              <p className="mt-1 text-sm text-gray-500">Çətinlik = bu sualda səhv edən tələbə sayı</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {aiOn
+                  ? 'AI açıqdır: çətinlik hər sualda səhv payına görə avtomatik hesablanır.'
+                  : 'AI yoxdur: bütün suallarda çətinlik eyni göstərilir.'}
+              </p>
             </div>
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
@@ -130,13 +138,14 @@ export default function ExamStats() {
               </thead>
               <tbody>
                 {stats.difficulty.map((q) => {
-                  const share = q.asked ? Math.round((q.wrongCount / q.asked) * 100) : 0;
+                  const share = aiOn && q.asked ? Math.round((q.wrongCount / q.asked) * 100) : 50;
+                  const label = aiOn ? q.difficulty : 'Eyni';
                   return (
                   <tr key={q.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
                     <td className="px-5 py-3">{q.index}</td>
                     <td className="px-5 py-3">{q.text}</td>
                     <td className="px-5 py-3">{q.asked}</td>
-                    <td className="px-5 py-3">{q.wrongCount} nəfər</td>
+                    <td className="px-5 py-3">{aiOn ? `${q.wrongCount} nəfər` : '—'}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
@@ -145,7 +154,7 @@ export default function ExamStats() {
                             style={{ width: `${share}%` }}
                           />
                         </div>
-                        <span className="font-medium">{q.difficulty}</span>
+                        <span className="font-medium">{label}</span>
                       </div>
                     </td>
                   </tr>
@@ -154,6 +163,44 @@ export default function ExamStats() {
               </tbody>
             </table>
           </Card>
+
+          {aiOn && (
+            <Card className="mt-6 overflow-x-auto p-0">
+              <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
+                <h3 className="font-bold">Mövzu anlayışı</h3>
+                <p className="mt-1 text-sm text-gray-500">Hər şagirdin bu imtahanda mövzunu nə dərəcədə mənimsədiyi</p>
+              </div>
+              <table className="w-full min-w-[520px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
+                    <th className="px-5 py-3 font-medium">Tələbə</th>
+                    <th className="px-5 py-3 font-medium">Anlayış</th>
+                    <th className="px-5 py-3 font-medium">Səviyyə</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.scores.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-5 py-8 text-gray-400">Hələ nəticə yoxdur.</td>
+                    </tr>
+                  ) : (
+                    stats.scores.map((row) => {
+                      const pct = Math.round(Number(row.percent ?? row.score ?? 0));
+                      const tone = pct >= 80 ? 'success' : pct >= 50 ? 'warning' : 'danger';
+                      const level = pct >= 80 ? 'Yaxşı mənimsəyib' : pct >= 50 ? 'Orta' : 'Zəif';
+                      return (
+                        <tr key={row.id || row.studentExamId || row.studentId} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
+                          <td className="px-5 py-3 font-medium">{row.studentName || `Tələbə #${row.studentId}`}</td>
+                          <td className="px-5 py-3 font-bold tabular-nums">{pct}%</td>
+                          <td className="px-5 py-3"><Badge tone={tone}>{level}</Badge></td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </Card>
+          )}
         </>
       )}
     </AppShell>

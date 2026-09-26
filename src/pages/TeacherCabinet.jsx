@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
+import TeacherAiPanel from '../components/TeacherAiPanel';
 import { AuthContext } from '../context/AuthContext';
 import { Badge, Button, Card, EmptyState, Input, Modal, Textarea } from '../components/ui';
 import {
@@ -12,7 +13,8 @@ import {
   groupsShareName,
   DUPLICATE_GROUP_MESSAGE,
 } from '../lib/examApi';
-import { errorMessage } from '../lib/utils';
+import { localDb } from '../lib/localDb';
+import { errorMessage, isAiEnabled } from '../lib/utils';
 
 function inGroup(student, group) {
   if (!student || !group) return false;
@@ -122,6 +124,8 @@ export default function TeacherCabinet() {
           <Plus size={16} /> Qrup yarat
         </Button>
       </div>
+
+      {(isAiEnabled(user) || localDb.getTeacherAi(user?.id)) && <TeacherAiPanel />}
 
       {error && !open && <p className="mb-4 text-sm text-red-600">{error}</p>}
 

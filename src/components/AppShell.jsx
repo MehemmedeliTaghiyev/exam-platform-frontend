@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { normalizeRole } from '../lib/utils';
+import { normalizeRole, classNames } from '../lib/utils';
 
 const navByRole = {
   Teacher: [
@@ -38,7 +38,7 @@ const navByRole = {
   ],
 };
 
-export default function AppShell({ title, children }) {
+export default function AppShell({ title, children, mainClassName = '' }) {
   const { user, logout } = useContext(AuthContext);
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
@@ -130,7 +130,7 @@ export default function AppShell({ title, children }) {
             </button>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">{children}</main>
+        <main className={classNames('mx-auto max-w-6xl px-4 py-8 sm:px-8', mainClassName)}>{children}</main>
       </div>
     </div>
   );

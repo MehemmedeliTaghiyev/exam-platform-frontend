@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Ban, CheckCircle2, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Link2, Pencil, Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
@@ -46,7 +46,6 @@ export default function GroupDetail() {
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
-  const [copied, setCopied] = useState(false);
 
   const groupLabel = group?.number || group?.name || '';
 
@@ -230,30 +229,9 @@ export default function GroupDetail() {
             <ArrowLeft size={16} /> Kabinet
           </Button>
           <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule}</p>
-          {group.inviteCode && (
-            <div className="mt-4 max-w-xl rounded-2xl border border-gray-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-              <p className="font-medium">Qeydiyyat linki</p>
-              <p className="mt-1 break-all text-gray-500">{groupInviteUrl(group.inviteCode)}</p>
-              <Button
-                variant="secondary"
-                className="mt-3"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(groupInviteUrl(group.inviteCode));
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  } catch {
-                    setError('Link kopyalanmadı.');
-                  }
-                }}
-              >
-                <Copy size={14} /> {copied ? 'Kopyalandı' : 'Linki kopyala'}
-              </Button>
-            </div>
-          )}
           {error && !open && !editing && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
           <Button
             variant="ghost"
             className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
@@ -264,6 +242,19 @@ export default function GroupDetail() {
           </Button>
           <Button onClick={() => { setError(''); setOpen(true); }}>
             <Plus size={16} /> Tələbə əlavə et
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const url = groupInviteUrl(group.inviteCode);
+              if (!url) {
+                setError('Qrup linki hələ hazır deyil. Səhifəni yeniləyin.');
+                return;
+              }
+              window.open(url, '_blank', 'noopener,noreferrer');
+            }}
+          >
+            <Link2 size={16} /> Qrup linki yarat
           </Button>
         </div>
       </div>

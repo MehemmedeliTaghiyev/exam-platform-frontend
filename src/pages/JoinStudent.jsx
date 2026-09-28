@@ -20,11 +20,9 @@ export default function JoinStudent() {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
-    fatherName: '',
-    birthDate: '',
+    phone: '',
     email: '',
     password: '',
-    confirm: '',
   });
 
   useEffect(() => {
@@ -60,20 +58,15 @@ export default function JoinStudent() {
       setError(`E-poçt ${EMAIL_HINT} formatında olmalıdır.`);
       return;
     }
-    if (form.password !== form.confirm) {
-      setError('Şifrələr eyni deyil.');
-      return;
-    }
     setSaving(true);
     try {
       const result = await registerStudentInvite({
         inviteCode: code,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        fatherName: form.fatherName.trim(),
+        phone: form.phone.trim(),
         email,
         password: form.password,
-        birthDate: form.birthDate || null,
       });
       setDone(result);
     } catch (err) {
@@ -124,16 +117,17 @@ export default function JoinStudent() {
           ) : (
             <>
               <h1 className="text-2xl font-bold">Şagird qeydiyyatı</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Qrup: <span className="font-medium text-ink dark:text-white">{preview.groupName}</span>
-                {preview.teacherName ? ` · Müəllim: ${preview.teacherName}` : ''}
-              </p>
+              <p className="mt-1 text-sm text-gray-500">Qrup adı dəyişdirilə bilməz. Müəllim icazə verdikdən sonra daxil olacaqsınız.</p>
               {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
               <form onSubmit={submit} className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Input label="Qrup" value={preview.groupName} readOnly disabled />
+                </div>
                 <Input label="Ad" name="firstName" required value={form.firstName} onChange={onChange} />
                 <Input label="Soyad" name="lastName" required value={form.lastName} onChange={onChange} />
-                <Input label="Ata adı" name="fatherName" required value={form.fatherName} onChange={onChange} />
-                <Input label="Doğum tarixi" type="date" name="birthDate" value={form.birthDate} onChange={onChange} />
+                <div className="sm:col-span-2">
+                  <Input label="Əlaqə nömrəsi" name="phone" required value={form.phone} onChange={onChange} />
+                </div>
                 <div className="sm:col-span-2">
                   <Input
                     label={`E-poçt (${EMAIL_HINT})`}
@@ -145,10 +139,19 @@ export default function JoinStudent() {
                     placeholder={EMAIL_HINT}
                   />
                 </div>
-                <Input label="Şifrə" type="password" name="password" required minLength={4} value={form.password} onChange={onChange} />
-                <Input label="Şifrəni təkrarlayın" type="password" name="confirm" required minLength={4} value={form.confirm} onChange={onChange} />
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Şifrə"
+                    type="password"
+                    name="password"
+                    required
+                    minLength={4}
+                    value={form.password}
+                    onChange={onChange}
+                  />
+                </div>
                 <p className="sm:col-span-2 text-xs text-gray-500">
-                  Şifrəni özünüz seçin və yadda saxlayın. Müəllim icazə verdikdən sonra bu e-poçt və şifrə ilə daxil olacaqsınız.
+                  Şifrə hərf və rəqəm qarışığı ola bilər. Yadda saxlayın. Göndərdikdən sonra müəllimin «Yeni şagirdlər» siyahısına düşəcəksiniz.
                 </p>
                 <div className="sm:col-span-2">
                   <Button type="submit" className="w-full" disabled={saving}>

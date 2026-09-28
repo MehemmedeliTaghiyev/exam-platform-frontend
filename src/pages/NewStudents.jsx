@@ -92,6 +92,7 @@ export default function NewStudents() {
                     <div>
                       <p className="font-bold">{fullNameOf(s)}</p>
                       <p className="text-sm text-gray-500">{s.email}</p>
+                      {s.phone ? <p className="text-sm text-gray-500">{s.phone}</p> : null}
                       <p className="mt-2 text-xs text-gray-500">{s.groupName || section.title}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">

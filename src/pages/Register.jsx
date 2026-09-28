@@ -6,11 +6,13 @@ import { useTheme } from '../context/ThemeContext';
 import { Button, Input } from '../components/ui';
 import { errorMessage } from '../lib/utils';
 
+const EMAIL_HINT = 'ad_soyad@gmail.com';
+const EMAIL_RE = /^[a-z0-9əöüğçşı]+_[a-z0-9əöüğçşı]+@gmail\.com$/i;
+
 export default function Register() {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    fatherName: '',
     position: '',
     phone: '',
     email: '',
@@ -31,11 +33,17 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    const email = formData.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      setError(`E-poçt ${EMAIL_HINT} formatında olmalıdır.`);
+      return;
+    }
     setLoading(true);
     try {
       await register({
         ...formData,
-        fullName: [formData.firstName, formData.lastName, formData.fatherName].filter(Boolean).join(' ').trim(),
+        email,
+        fullName: [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim(),
       });
       setDone(true);
     } catch (err) {
@@ -69,7 +77,7 @@ export default function Register() {
             <>
               <h1 className="text-2xl font-bold text-ink dark:text-white">Müraciət göndərildi</h1>
               <p className="mt-3 text-sm text-gray-500">
-                Admin sizi qəbul edəndən sonra e-poçt və şifrə ilə daxil ola bilərsiniz. Konum məlumatını kabinetdə də yeniləyə biləcəksiniz.
+                Admin sizi qəbul edəndən sonra e-poçt və şifrə ilə daxil ola bilərsiniz. Konumu kabinetdə də yeniləyə biləcəksiniz.
               </p>
               <Button className="mt-6 w-full" onClick={() => navigate('/login')}>
                 Giriş səhifəsinə keç
@@ -78,16 +86,32 @@ export default function Register() {
           ) : (
             <>
               <h1 className="text-2xl font-bold text-ink dark:text-white">Müəllim qeydiyyatı</h1>
-              <p className="mt-1 text-sm text-gray-500">Şəxsi məlumatlar və vəzifə (konum) mütləqdir. Admin təsdiqindən sonra giriş açılacaq.</p>
+              <p className="mt-1 text-sm text-gray-500">Konum (yer) mütləqdir. Admin təsdiqindən sonra giriş açılacaq.</p>
               {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 <Input label="Ad" name="firstName" value={formData.firstName} onChange={handleChange} required />
                 <Input label="Soyad" name="lastName" value={formData.lastName} onChange={handleChange} required />
-                <Input label="Ata adı" name="fatherName" value={formData.fatherName} onChange={handleChange} />
-                <Input label="Vəzifə (konum)" name="position" value={formData.position} onChange={handleChange} required placeholder="məs. Riyaziyyat müəllimi" />
+                <Input label="Konum" name="position" value={formData.position} onChange={handleChange} required placeholder="məs. Bakı, Nəsimi" />
                 <Input label="Əlaqə nömrəsi" name="phone" value={formData.phone} onChange={handleChange} />
-                <Input label="E-poçt" type="email" name="email" value={formData.email} onChange={handleChange} required />
-                <Input label="Şifrə" type="password" name="password" value={formData.password} onChange={handleChange} required />
+                <Input
+                  label={`E-poçt (${EMAIL_HINT})`}
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  placeholder={EMAIL_HINT}
+                />
+                <Input
+                  label="Şifrə"
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  minLength={4}
+                />
+                <p className="text-xs text-gray-500">Şifrə hərf və rəqəm qarışığı ola bilər. Yadda saxlayın.</p>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan keç'}
                 </Button>

@@ -168,12 +168,11 @@ export default function TeacherCabinet() {
 
       <Card className="mb-8">
         <h2 className="text-lg font-bold">Şəxsi məlumatlar</h2>
-        <p className="mt-1 text-sm text-gray-500">Vəzifə (konum) hesabınızda qeyd olunmalıdır.</p>
+        <p className="mt-1 text-sm text-gray-500">Konum (yer) hesabınızda qeyd olunmalıdır.</p>
         <form onSubmit={saveProfile} className="mt-4 grid gap-4 sm:grid-cols-2">
           <Input label="Ad" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} required />
           <Input label="Soyad" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} required />
-          <Input label="Ata adı" value={profile.fatherName} onChange={(e) => setProfile({ ...profile, fatherName: e.target.value })} />
-          <Input label="Vəzifə (konum)" value={profile.position} onChange={(e) => setProfile({ ...profile, position: e.target.value })} required />
+          <Input label="Konum" value={profile.position} onChange={(e) => setProfile({ ...profile, position: e.target.value })} required placeholder="məs. Bakı, Nəsimi" />
           <Input label="Əlaqə nömrəsi" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
           <div className="flex items-end gap-3">
             <Button type="submit" disabled={profileSaving}>{profileSaving ? 'Saxlanılır...' : 'Məlumatı saxla'}</Button>

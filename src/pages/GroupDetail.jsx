@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Ban, CheckCircle2, Link2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Copy, Link2, Pencil, Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
@@ -46,6 +46,8 @@ export default function GroupDetail() {
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
+  const [shareUrl, setShareUrl] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const groupLabel = group?.number || group?.name || '';
 
@@ -252,11 +254,34 @@ export default function GroupDetail() {
                 setError('Qrup hələ serverdə yoxdur. Kabinetdən qrupu yenidən açın.');
                 return;
               }
-              window.open(url, '_blank', 'noopener,noreferrer');
+              setError('');
+              setShareUrl(url);
+              setCopied(false);
             }}
           >
             <Link2 size={16} /> Qrup linki yarat
           </Button>
+          {shareUrl && (
+            <div className="mt-1 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-3 text-left dark:border-slate-700 dark:bg-slate-900">
+              <p className="text-xs font-medium text-gray-500">Qrup linki</p>
+              <p className="mt-1 break-all text-xs text-gray-700 dark:text-gray-300">{shareUrl}</p>
+              <Button
+                variant="secondary"
+                className="mt-2 w-full py-1.5 text-xs"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {
+                    setError('Link kopyalanmadı. Mətni özünüz seçib kopyalayın.');
+                  }
+                }}
+              >
+                <Copy size={14} /> {copied ? 'Kopyalandı' : 'Linki kopyala'}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

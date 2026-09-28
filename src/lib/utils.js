@@ -227,7 +227,7 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
     return err.response.data.message;
   }
   if (status === 502 || status === 503 || status === 504 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
-    return `API-yə qoşulmaq olmadı (${api}). SmarterASP saytında password protection söndürün və backend-in işlədiyini yoxlayın.`;
+    return `API-yə qoşulmaq olmadı (${api}). Exam API (site1) işlək olmalıdır; bir az sonra yenidən yoxlayın.`;
   }
   const data = err?.response?.data;
   if (typeof data === 'string' && data.trim()) return data;

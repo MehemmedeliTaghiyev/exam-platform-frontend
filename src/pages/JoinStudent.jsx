@@ -32,22 +32,33 @@ export default function JoinStudent() {
     (async () => {
       setLoading(true);
       setError('');
+      const localPreview = namedGroup || /^g\d+$/i.test(String(code || ''))
+        ? {
+            inviteCode: code,
+            groupName: namedGroup || 'Qrup',
+            teacherName: '',
+          }
+        : null;
+      if (localPreview) {
+        setPreview(localPreview);
+        setLoading(false);
+        try {
+          const data = await fetchGroupInvite(code);
+          if (!cancelled && data?.groupName) {
+            setPreview({ ...data, groupName: data.groupName || namedGroup });
+          }
+        } catch {
+          /* qrup adı linkdə var; API cavab verməsə də forma açıq qalır */
+        }
+        return;
+      }
       try {
         const data = await fetchGroupInvite(code);
         if (!cancelled) setPreview({ ...data, groupName: data.groupName || namedGroup });
       } catch (err) {
         if (!cancelled) {
-          if (namedGroup || /^g\d+$/i.test(String(code || ''))) {
-            setPreview({
-              inviteCode: code,
-              groupName: namedGroup || 'Qrup',
-              teacherName: '',
-            });
-            setError('');
-          } else {
-            setPreview(null);
-            setError(errorMessage(err, 'Qeydiyyat linki etibarsızdır.'));
-          }
+          setPreview(null);
+          setError(errorMessage(err, 'Qeydiyyat linki etibarsızdır.'));
         }
       } finally {
         if (!cancelled) setLoading(false);

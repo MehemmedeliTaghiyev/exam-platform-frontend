@@ -4,7 +4,7 @@ import { ArrowLeft, Ban, CheckCircle2, Link2, Pencil, Plus, Trash2 } from 'lucid
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
-import { createStudentAccount, deleteGroup, deleteStudentAccount, fetchGroup, fetchStudents, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
+import { createStudentAccount, deleteGroup, deleteStudentAccount, fetchGroup, fetchStudents, groupInviteSlug, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
 
 const emptyForm = {
@@ -246,9 +246,10 @@ export default function GroupDetail() {
           <Button
             variant="secondary"
             onClick={() => {
-              const url = groupInviteUrl(group.inviteCode);
+              const slug = groupInviteSlug(group);
+              const url = groupInviteUrl(slug, group.name || group.number || groupLabel);
               if (!url) {
-                setError('Qrup linki hələ hazır deyil. Səhifəni yeniləyin.');
+                setError('Qrup hələ serverdə yoxdur. Kabinetdən qrupu yenidən açın.');
                 return;
               }
               window.open(url, '_blank', 'noopener,noreferrer');

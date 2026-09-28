@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { Button, Input } from '../components/ui';
@@ -11,6 +11,8 @@ const EMAIL_RE = /^[a-z0-9əöüğçşı]+\.[a-z0-9əöüğçşı]+_[a-z0-9əö�
 
 export default function JoinStudent() {
   const { code } = useParams();
+  const [params] = useSearchParams();
+  const namedGroup = String(params.get('group') || '').trim();
   const { dark, toggle } = useTheme();
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,11 +34,20 @@ export default function JoinStudent() {
       setError('');
       try {
         const data = await fetchGroupInvite(code);
-        if (!cancelled) setPreview(data);
+        if (!cancelled) setPreview({ ...data, groupName: data.groupName || namedGroup });
       } catch (err) {
         if (!cancelled) {
-          setPreview(null);
-          setError(errorMessage(err, 'Qeydiyyat linki etibarsızdır.'));
+          if (namedGroup || /^g\d+$/i.test(String(code || ''))) {
+            setPreview({
+              inviteCode: code,
+              groupName: namedGroup || 'Qrup',
+              teacherName: '',
+            });
+            setError('');
+          } else {
+            setPreview(null);
+            setError(errorMessage(err, 'Qeydiyyat linki etibarsızdır.'));
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -45,7 +56,7 @@ export default function JoinStudent() {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, namedGroup]);
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 

@@ -151,10 +151,20 @@ export function isPendingApproval(u) {
   return false;
 }
 
-export function groupInviteUrl(inviteCode) {
+export function groupInviteSlug(group) {
+  const code = String(group?.inviteCode || '').trim();
+  if (code) return code;
+  const id = Number(group?.id);
+  if (Number.isFinite(id) && id > 0) return `g${id}`;
+  return '';
+}
+
+export function groupInviteUrl(inviteCode, groupName = '') {
   const code = String(inviteCode || '').trim();
   if (!code) return '';
-  return `${window.location.origin}/join/${code}`;
+  const url = `${window.location.origin}/join/${encodeURIComponent(code)}`;
+  const name = String(groupName || '').trim();
+  return name ? `${url}?group=${encodeURIComponent(name)}` : url;
 }
 
 export async function fetchGroupInvite(code) {

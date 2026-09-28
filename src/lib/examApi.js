@@ -245,17 +245,9 @@ export async function createGroup(payload) {
     number: String(payload.number || payload.name || '').trim(),
     schedule: payload.schedule || '',
   };
-  if (findDuplicateGroup(localDb.getGroups(teacherId), incoming)) {
+  if (findDuplicateGroup(localDb.getGroups(teacherId).filter((g) => Number(g.id) > 0), incoming)) {
     throw duplicateGroupError();
   }
-  const fallback = {
-    id: uid('grp'),
-    name: incoming.name,
-    number: incoming.number,
-    schedule: incoming.schedule,
-    studentCount: 0,
-    createdAt: new Date().toISOString(),
-  };
   try {
     const res = await API.post('/Groups', {
       name: incoming.name,
@@ -263,31 +255,31 @@ export async function createGroup(payload) {
       schedule: incoming.schedule,
     }, FAST);
     const group = mapGroup(unwrapItem(res.data) || res.data);
-    if (group?.id) {
+    if (Number(group?.id) > 0) {
       localDb.unhideGroup(teacherId, group.id);
       const current = localDb.getGroups(teacherId);
-      const next = [group, ...current.filter((g) => String(g.id) !== String(group.id))];
+      const next = [group, ...current.filter((g) => String(g.id) !== String(group.id) && Number(g.id) > 0)];
       localDb.saveGroups(teacherId, next);
       return group;
     }
+    throw new Error('Qrup serverə yazıldı, amma ID qayıtmadı.');
   } catch (err) {
     if (err?.isDuplicateGroup) throw err;
     const status = err?.response?.status;
-    if (status === 401 || status === 403) throw err;
     if (status === 409) throw duplicateGroupError();
-    if (status === 400) {
-      const data = err?.response?.data;
-      const text = typeof data === 'string' ? data : `${data?.message || ''} ${data?.title || ''}`;
-      if (/duplicate|exists|unique|artıq|eyni/i.test(text)) throw duplicateGroupError();
-      throw err;
-    }
+    throw err;
   }
-  if (findDuplicateGroup(localDb.getGroups(teacherId), fallback)) {
-    throw duplicateGroupError();
+}
+
+export async function ensureGroupOnServer(group) {
+  if (Number(group?.id) > 0) {
+    return { ...group, inviteCode: group.inviteCode || `g${group.id}` };
   }
-  const next = [fallback, ...localDb.getGroups(teacherId)];
-  localDb.saveGroups(teacherId, next);
-  return fallback;
+  return createGroup({
+    name: group?.name || group?.number,
+    number: group?.number || group?.name,
+    schedule: group?.schedule || '',
+  });
 }
 
 export async function deleteGroup(id) {

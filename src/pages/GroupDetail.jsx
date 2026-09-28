@@ -4,7 +4,7 @@ import { ArrowLeft, Ban, CheckCircle2, Copy, Link2, Pencil, Plus, Trash2 } from 
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
-import { createStudentAccount, deleteGroup, deleteStudentAccount, fetchGroup, fetchStudents, groupInviteSlug, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
+import { createStudentAccount, deleteGroup, deleteStudentAccount, ensureGroupOnServer, fetchGroup, fetchStudents, groupInviteSlug, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
 
 const emptyForm = {
@@ -48,6 +48,7 @@ export default function GroupDetail() {
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
   const [shareUrl, setShareUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
 
   const groupLabel = group?.number || group?.name || '';
 
@@ -247,19 +248,32 @@ export default function GroupDetail() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => {
-              const slug = groupInviteSlug(group);
-              const url = groupInviteUrl(slug, group.name || group.number || groupLabel);
-              if (!url) {
-                setError('Qrup hələ serverdə yoxdur. Kabinetdən qrupu yenidən açın.');
-                return;
-              }
+            disabled={linkBusy}
+            onClick={async () => {
+              setLinkBusy(true);
               setError('');
-              setShareUrl(url);
-              setCopied(false);
+              try {
+                const saved = await ensureGroupOnServer(group);
+                if (String(saved.id) !== String(group.id)) {
+                  setGroup(saved);
+                  navigate(`/teacher/groups/${saved.id}`, { replace: true });
+                }
+                const slug = groupInviteSlug(saved);
+                const url = groupInviteUrl(slug, saved.name || saved.number || groupLabel);
+                if (!url) {
+                  setError('Qrup serverə yazılmadı. Bir az sonra yenidən yoxlayın.');
+                  return;
+                }
+                setShareUrl(url);
+                setCopied(false);
+              } catch (err) {
+                setError(errorMessage(err, 'Qrup linki yaradılmadı. Qrupu yenidən saxlayın.'));
+              } finally {
+                setLinkBusy(false);
+              }
             }}
           >
-            <Link2 size={16} /> Qrup linki yarat
+            <Link2 size={16} /> {linkBusy ? 'Link hazırlanır...' : 'Qrup linki yarat'}
           </Button>
           {shareUrl && (
             <div className="mt-1 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-3 text-left dark:border-slate-700 dark:bg-slate-900">

@@ -28,6 +28,11 @@ function normalizeUser(raw) {
     trialEndsAt: user.trialEndsAt || user.TrialEndsAt || null,
     trialStartsAt: user.trialStartsAt || user.TrialStartsAt || null,
     trialDays: user.trialDays ?? user.TrialDays ?? null,
+    position: user.position || user.Position || '',
+    phone: user.phone || user.Phone || '',
+    firstName: user.firstName || user.FirstName || '',
+    lastName: user.lastName || user.LastName || '',
+    fatherName: user.fatherName || user.FatherName || '',
   };
 }
 

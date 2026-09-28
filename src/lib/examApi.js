@@ -87,6 +87,7 @@ function mapGroup(g) {
     schedule: g.schedule || g.Schedule || '',
     studentCount: g.studentCount ?? g.StudentCount ?? 0,
     createdAt: g.createdAt || g.CreatedAt,
+    inviteCode: g.inviteCode || g.InviteCode || '',
   };
 }
 
@@ -133,7 +134,52 @@ export function mapStudent(u) {
     contractPhoto: u.contractPhoto || u.ContractPhoto,
     isAccessEnabled: (u.isAccessEnabled ?? u.IsAccessEnabled) !== false,
     createdAt: u.createdAt || u.CreatedAt,
+    position: u.position || u.Position || '',
+    phone: u.phone || u.Phone || '',
+    trialMessage: u.trialMessage || u.TrialMessage || '',
   };
+}
+
+export function isPendingApproval(u) {
+  if (!u || u.isDeleted || u.IsDeleted) return false;
+  const enabled = (u.isAccessEnabled ?? u.IsAccessEnabled) !== false;
+  if (enabled) return false;
+  const role = String(u.role || u.Role || '');
+  const msg = String(u.trialMessage || u.TrialMessage || '');
+  if (msg.includes('təsdiqini gözləyir') || msg.includes('tesdiqini gozleyir')) return true;
+  if (/teacher/i.test(role) && !(u.trialStartsAt || u.TrialStartsAt)) return true;
+  return false;
+}
+
+export function groupInviteUrl(inviteCode) {
+  const code = String(inviteCode || '').trim();
+  if (!code) return '';
+  return `${window.location.origin}/join/${code}`;
+}
+
+export async function fetchGroupInvite(code) {
+  const res = await API.get(`/Groups/invite/${encodeURIComponent(code)}`, FAST);
+  const data = unwrapItem(res.data) || res.data;
+  return {
+    inviteCode: data.inviteCode || data.InviteCode || code,
+    groupName: data.groupName || data.GroupName || '',
+    teacherName: data.teacherName || data.TeacherName || '',
+  };
+}
+
+export async function registerStudentInvite(payload) {
+  const res = await API.post('/Auth/register-student', payload);
+  return unwrapItem(res.data) || res.data;
+}
+
+export async function fetchOwnProfile() {
+  const res = await API.get('/Users/me', FAST);
+  return unwrapItem(res.data) || res.data;
+}
+
+export async function updateOwnProfile(payload) {
+  const res = await API.patch('/Users/me', payload);
+  return unwrapItem(res.data) || res.data;
 }
 
 function currentTeacherId() {

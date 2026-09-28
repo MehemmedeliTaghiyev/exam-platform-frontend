@@ -1,10 +1,10 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Ban, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, CheckCircle2, Copy, Pencil, Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
-import { createStudentAccount, deleteGroup, deleteStudentAccount, fetchGroup, fetchStudents, setStudentAccess, updateStudentProfile } from '../lib/examApi';
+import { createStudentAccount, deleteGroup, deleteStudentAccount, fetchGroup, fetchStudents, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
 
 const emptyForm = {
@@ -46,6 +46,7 @@ export default function GroupDetail() {
   const [deletingGroup, setDeletingGroup] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', fatherName: '' });
+  const [copied, setCopied] = useState(false);
 
   const groupLabel = group?.number || group?.name || '';
 
@@ -55,7 +56,7 @@ export default function GroupDetail() {
       const [g, list] = await Promise.all([fetchGroup(id), fetchStudents()]);
       setGroup(g);
       setAll(list);
-      setStudents(list.filter((s) => belongsToGroup(s, g)));
+      setStudents(list.filter((s) => belongsToGroup(s, g) && s.isAccessEnabled !== false));
     } catch (err) {
       setGroup(null);
       setError(errorMessage(err, 'Qrup yüklənmədi.'));
@@ -229,6 +230,27 @@ export default function GroupDetail() {
             <ArrowLeft size={16} /> Kabinet
           </Button>
           <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule}</p>
+          {group.inviteCode && (
+            <div className="mt-4 max-w-xl rounded-2xl border border-gray-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
+              <p className="font-medium">Qeydiyyat linki</p>
+              <p className="mt-1 break-all text-gray-500">{groupInviteUrl(group.inviteCode)}</p>
+              <Button
+                variant="secondary"
+                className="mt-3"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(groupInviteUrl(group.inviteCode));
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {
+                    setError('Link kopyalanmadı.');
+                  }
+                }}
+              >
+                <Copy size={14} /> {copied ? 'Kopyalandı' : 'Linki kopyala'}
+              </Button>
+            </div>
+          )}
           {error && !open && !editing && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </div>
         <div className="flex flex-wrap gap-2">

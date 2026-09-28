@@ -3,17 +3,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Button, Input, Select } from '../components/ui';
+import { Button, Input } from '../components/ui';
 import { errorMessage } from '../lib/utils';
 
 export default function Register() {
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
+    fatherName: '',
+    position: '',
+    phone: '',
     email: '',
     password: '',
     role: 'Teacher',
   });
   const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
   const { dark, toggle } = useTheme();
@@ -28,8 +33,11 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      await register(formData);
-      navigate('/login');
+      await register({
+        ...formData,
+        fullName: [formData.firstName, formData.lastName, formData.fatherName].filter(Boolean).join(' ').trim(),
+      });
+      setDone(true);
     } catch (err) {
       setError(errorMessage(err, 'Qeydiyyat zamanı xəta baş verdi.'));
     } finally {
@@ -38,7 +46,7 @@ export default function Register() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4 dark:bg-[#0b1220]">
+    <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10 dark:bg-[#0b1220]">
       <div className="w-full max-w-md">
         <div className="mb-4 flex justify-end">
           <button
@@ -57,26 +65,41 @@ export default function Register() {
           <span className="text-lg font-bold text-ink dark:text-white">ExamPulse</span>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
-          <h1 className="text-2xl font-bold text-ink dark:text-white">Müəllim qeydiyyatı</h1>
-          <p className="mt-1 text-sm text-gray-500">Tələbəni müəllim öz kabinetindən qeydiyyata salır.</p>
-          {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <Input label="Ad və soyad" name="fullName" value={formData.fullName} onChange={handleChange} required />
-            <Input label="E-poçt" type="email" name="email" value={formData.email} onChange={handleChange} required />
-            <Input label="Şifrə" type="password" name="password" value={formData.password} onChange={handleChange} required />
-            <Select label="Rol" name="role" value={formData.role} onChange={handleChange}>
-              <option value="Teacher">Müəllim</option>
-            </Select>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan keç'}
-            </Button>
-          </form>
-          <p className="mt-6 text-center text-sm text-gray-500">
-            Hesabınız var?{' '}
-            <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
-              Daxil olun
-            </Link>
-          </p>
+          {done ? (
+            <>
+              <h1 className="text-2xl font-bold text-ink dark:text-white">Müraciət göndərildi</h1>
+              <p className="mt-3 text-sm text-gray-500">
+                Admin sizi qəbul edəndən sonra e-poçt və şifrə ilə daxil ola bilərsiniz. Konum məlumatını kabinetdə də yeniləyə biləcəksiniz.
+              </p>
+              <Button className="mt-6 w-full" onClick={() => navigate('/login')}>
+                Giriş səhifəsinə keç
+              </Button>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-ink dark:text-white">Müəllim qeydiyyatı</h1>
+              <p className="mt-1 text-sm text-gray-500">Şəxsi məlumatlar və vəzifə (konum) mütləqdir. Admin təsdiqindən sonra giriş açılacaq.</p>
+              {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <Input label="Ad" name="firstName" value={formData.firstName} onChange={handleChange} required />
+                <Input label="Soyad" name="lastName" value={formData.lastName} onChange={handleChange} required />
+                <Input label="Ata adı" name="fatherName" value={formData.fatherName} onChange={handleChange} />
+                <Input label="Vəzifə (konum)" name="position" value={formData.position} onChange={handleChange} required placeholder="məs. Riyaziyyat müəllimi" />
+                <Input label="Əlaqə nömrəsi" name="phone" value={formData.phone} onChange={handleChange} />
+                <Input label="E-poçt" type="email" name="email" value={formData.email} onChange={handleChange} required />
+                <Input label="Şifrə" type="password" name="password" value={formData.password} onChange={handleChange} required />
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan keç'}
+                </Button>
+              </form>
+              <p className="mt-6 text-center text-sm text-gray-500">
+                Hesabınız var?{' '}
+                <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
+                  Daxil olun
+                </Link>
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

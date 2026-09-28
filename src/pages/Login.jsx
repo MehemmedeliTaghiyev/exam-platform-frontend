@@ -56,7 +56,7 @@ export default function Login() {
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
           <h1 className="text-2xl font-bold text-ink dark:text-white">Daxil ol</h1>
-          <p className="mt-1 text-sm text-gray-500">Müəllimin verdiyi e-poçt və ya istifadəçi adı ilə daxil olun</p>
+          <p className="mt-1 text-sm text-gray-500">Müəllimin verdiyi e-poçt və ya istifadəçi adı ilə daxil olun. Qeydiyyat linkindən gələn şagirdlər müəllim icazəsindən sonra daxil ola bilər.</p>
           {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40">{error}</p>}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <Input label="E-poçt və ya istifadəçi adı" type="text" value={email} onChange={(e) => setEmail(e.target.value)} required />

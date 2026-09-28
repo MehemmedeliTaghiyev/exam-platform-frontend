@@ -8,8 +8,10 @@ import {
   createGroup,
   deleteGroup,
   fetchGroups,
+  fetchOwnProfile,
   fetchStudents,
   groupsShareName,
+  updateOwnProfile,
   DUPLICATE_GROUP_MESSAGE,
 } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
@@ -36,16 +38,35 @@ export default function TeacherCabinet() {
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
   const [schedule, setSchedule] = useState('');
+  const [profile, setProfile] = useState({
+    firstName: '',
+    lastName: '',
+    fatherName: '',
+    position: '',
+    phone: '',
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
 
   const load = async () => {
     setLoading(true);
     try {
-      const [groupList, studentList] = await Promise.all([
+      const [groupList, studentList, me] = await Promise.all([
         fetchGroups(),
         fetchStudents().catch(() => []),
+        fetchOwnProfile().catch(() => null),
       ]);
       setGroups(groupList);
-      setStudents(studentList);
+      setStudents(studentList.filter((s) => s.isAccessEnabled !== false));
+      if (me) {
+        setProfile({
+          firstName: me.firstName || me.FirstName || '',
+          lastName: me.lastName || me.LastName || '',
+          fatherName: me.fatherName || me.FatherName || '',
+          position: me.position || me.Position || '',
+          phone: me.phone || me.Phone || '',
+        });
+      }
     } catch (err) {
       setError(errorMessage(err, 'Qruplar yüklənmədi.'));
     } finally {
@@ -111,6 +132,28 @@ export default function TeacherCabinet() {
     setError('');
   };
 
+  const saveProfile = async (e) => {
+    e.preventDefault();
+    if (profileSaving) return;
+    setProfileSaving(true);
+    setProfileMsg('');
+    setError('');
+    try {
+      await updateOwnProfile({
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        fatherName: profile.fatherName.trim(),
+        position: profile.position.trim(),
+        phone: profile.phone.trim(),
+      });
+      setProfileMsg('Məlumat saxlanıldı.');
+    } catch (err) {
+      setError(errorMessage(err, 'Məlumat saxlanılmadı. Konum mütləqdir.'));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   return (
     <AppShell title="Müəllim kabineti">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -122,6 +165,22 @@ export default function TeacherCabinet() {
           <Plus size={16} /> Qrup yarat
         </Button>
       </div>
+
+      <Card className="mb-8">
+        <h2 className="text-lg font-bold">Şəxsi məlumatlar</h2>
+        <p className="mt-1 text-sm text-gray-500">Vəzifə (konum) hesabınızda qeyd olunmalıdır.</p>
+        <form onSubmit={saveProfile} className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Input label="Ad" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} required />
+          <Input label="Soyad" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} required />
+          <Input label="Ata adı" value={profile.fatherName} onChange={(e) => setProfile({ ...profile, fatherName: e.target.value })} />
+          <Input label="Vəzifə (konum)" value={profile.position} onChange={(e) => setProfile({ ...profile, position: e.target.value })} required />
+          <Input label="Əlaqə nömrəsi" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+          <div className="flex items-end gap-3">
+            <Button type="submit" disabled={profileSaving}>{profileSaving ? 'Saxlanılır...' : 'Məlumatı saxla'}</Button>
+            {profileMsg && <p className="pb-2 text-sm text-emerald-600">{profileMsg}</p>}
+          </div>
+        </form>
+      </Card>
 
       {error && !open && <p className="mb-4 text-sm text-red-600">{error}</p>}
 

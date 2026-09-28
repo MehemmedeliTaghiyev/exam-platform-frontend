@@ -17,12 +17,16 @@ import AdminUsers from './pages/AdminUsers';
 import AdminTeachers from './pages/AdminTeachers';
 import AdminExamDetail from './pages/AdminExamDetail';
 import TeacherUsers from './pages/TeacherUsers';
+import JoinStudent from './pages/JoinStudent';
+import NewStudents from './pages/NewStudents';
+import NewTeachers from './pages/NewTeachers';
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/join/:code" element={<JoinStudent />} />
 
       <Route
         path="/admin"
@@ -37,6 +41,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Admin']}>
             <AdminTeachers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/new-teachers"
+        element={
+          <ProtectedRoute allowedRoles={['Admin']}>
+            <NewTeachers />
           </ProtectedRoute>
         }
       />
@@ -62,6 +74,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
             <TeacherUsers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/new-students"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <NewStudents />
           </ProtectedRoute>
         }
       />

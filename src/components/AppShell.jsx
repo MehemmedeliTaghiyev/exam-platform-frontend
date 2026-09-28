@@ -13,6 +13,7 @@ import {
   KeyRound,
   Mail,
   Sparkles,
+  UserPlus,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -21,6 +22,7 @@ import { normalizeRole, classNames } from '../lib/utils';
 const navByRole = {
   Teacher: [
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen, end: true },
+    { to: '/teacher/new-students', label: 'Yeni şagirdlər', icon: UserPlus },
     { to: '/teacher/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
     { to: '/teacher/ai', label: 'AI özəlliyi', icon: Sparkles },
@@ -30,9 +32,11 @@ const navByRole = {
   ],
   Admin: [
     { to: '/admin', label: 'İdarə paneli', icon: Shield, end: true },
+    { to: '/admin/new-teachers', label: 'Yeni müəllimlər', icon: UserPlus },
     { to: '/admin/teachers', label: 'Müəllim qeydiyyatı', icon: Mail },
     { to: '/admin/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen },
+    { to: '/teacher/new-students', label: 'Yeni şagirdlər', icon: UserPlus },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
     { to: '/teacher/ai', label: 'AI özəlliyi', icon: Sparkles },
   ],

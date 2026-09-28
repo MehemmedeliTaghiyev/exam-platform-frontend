@@ -8,7 +8,9 @@ const API = axios.create({
 });
 
 API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const url = String(config.url || '');
+  const publicCall = /\/Groups\/invite\//i.test(url) || /\/Auth\/register/i.test(url);
+  const token = publicCall ? null : localStorage.getItem('token');
   if (token) {
     const bearer = `Bearer ${token}`;
     if (config.headers && typeof config.headers.set === 'function') {

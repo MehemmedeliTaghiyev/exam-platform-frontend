@@ -335,11 +335,25 @@ export default function TeacherAiPanel() {
             <div className="sm:col-span-2">
               <Textarea
                 label="Xüsusiyyətlər (sinif, mövzu, çətinlik) və ya hazır sual mətni"
-                rows={5}
+                rows={6}
                 value={brief}
                 onChange={(e) => setBrief(e.target.value)}
-                placeholder={'11-ci sinif, kvadrat tənliklər, 25 sual, A–E'}
+                placeholder={'11-ci sinif, riyaziyyat, faiz və nisbət, buraxılış səviyyəsi. 25 sual: 10 asan, 10 orta, 5 çətin. Hər sual A–E, yalnız biri düzgün.'}
               />
+              <p className="mt-2 text-xs leading-5 text-indigo-200">İki cür yaza bilərsiniz:</p>
+              <pre className="mt-2 overflow-x-auto rounded-2xl bg-black/25 p-4 text-xs leading-6 text-amber-100 ring-1 ring-white/10">{`1) Xüsusiyyət:
+11-ci sinif, riyaziyyat, faiz və nisbət.
+Buraxılış sınağı səviyyəsi. A–E variantlı test.
+Hesablama olsun, tələ savad yox.
+
+2) Hazır sual mətni:
+1. a : b = 2 : 5 və a + b = 35 olarsa, b − a fərqini tapın.
+A) 10
+B) 15
+C) 20
+D) 22
+E) 25
+Cavab: B`}</pre>
             </div>
             {error && <p className="sm:col-span-2 text-sm text-red-200">{error}</p>}
             {message && <p className="sm:col-span-2 text-sm text-emerald-200">{message}</p>}

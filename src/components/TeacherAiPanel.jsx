@@ -113,6 +113,7 @@ export default function TeacherAiPanel() {
     setError('');
     setMessage('');
     try {
+      if (!user?.id) throw new Error('Sessiya tapılmadı. Çıxıb yenidən daxil olun.');
       const subject = subjects.find((s) => String(s.id) === String(subjectId));
       let parsed = await tryGenerateAiQuestions({
         title: title.trim(),

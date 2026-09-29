@@ -26,6 +26,11 @@ export function unwrapList(data) {
   return [];
 }
 
+export function unwrapOptions(raw) {
+  if (Array.isArray(raw)) return raw;
+  return unwrapList(raw);
+}
+
 export function unwrapItem(data) {
   if (!data) return null;
   if (data.data && typeof data.data === 'object' && !Array.isArray(data.data) && !data.data.$values) {
@@ -231,10 +236,19 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   }
   const data = err?.response?.data;
   if (typeof data === 'string' && data.trim()) return data;
+  if (data?.errors && typeof data.errors === 'object') {
+    const parts = Object.values(data.errors).flatMap((v) => (Array.isArray(v) ? v : [v]))
+      .map((x) => (typeof x === 'string' ? x : x == null ? '' : JSON.stringify(x)))
+      .filter(Boolean);
+    if (parts.length) return parts.join(' ');
+  }
   if (typeof data?.message === 'string') {
     return data.detail ? `${data.message} (${data.detail})` : data.message;
   }
   if (typeof data?.title === 'string') return data.title;
+  if (typeof err?.message === 'string' && /is not a function/i.test(err.message)) {
+    return 'AI cavabı gözlənilməz formatdadır. Səhifəni yeniləyin, yenidən daxil olun və bir daha cəhd edin.';
+  }
   if (typeof err?.message === 'string' && err.message !== 'Network Error') return err.message;
   return fallback;
 }

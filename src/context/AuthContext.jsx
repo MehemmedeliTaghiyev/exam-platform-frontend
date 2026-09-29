@@ -12,7 +12,7 @@ function normalizeUser(raw) {
   const user = raw.user || raw;
   const id = user.id || user.userId;
   const rawAi = user.aiEnabled ?? user.AiEnabled;
-  const aiEnabled = rawAi != null ? isAiEnabled(user) : Boolean(id && localDb.getTeacherAi(id));
+    const aiEnabled = isAiEnabled({ ...user, aiEnabled: rawAi }) || Boolean(id && localDb.getTeacherAi(id));
   return {
     ...user,
     id,

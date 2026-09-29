@@ -1,5 +1,6 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import { pointsForDifficulty } from './questionDifficulty';
+import { unwrapOptions } from './utils';
 
 try {
   GlobalWorkerOptions.workerSrc = new URL(
@@ -321,8 +322,8 @@ function optionBody(text, letter) {
 }
 
 export function normalizeGeneratedQuestions(list) {
-  return (Array.isArray(list) ? list : []).map((q) => {
-    const incoming = q.options || [];
+  return (Array.isArray(list) ? list : unwrapOptions(list)).map((q) => {
+    const incoming = unwrapOptions(q.options);
     const options = LETTERS.map((letter, idx) => {
       const found = incoming.find((o) => String(o.letter || '').toUpperCase() === letter) || incoming[idx];
       return {
@@ -353,7 +354,7 @@ export function hasRealChoiceOptions(questions) {
   if (!list.length) return false;
   const ok = list.filter((q) => {
     if (q.correctLetter === 'OPEN') return String(q.text || '').length > 8;
-    const real = (q.options || []).filter((o) => optionBody(o.text || o.optionText, o.letter)).length;
+    const real = unwrapOptions(q.options).filter((o) => optionBody(o.text || o.optionText, o.letter)).length;
     return real >= 4;
   }).length;
   return ok >= Math.max(1, Math.ceil(list.length * 0.8));

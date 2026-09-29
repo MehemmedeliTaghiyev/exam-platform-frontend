@@ -1,6 +1,6 @@
 import API from '../api/axios';
 import { localDb } from './localDb';
-import { unwrapList, unwrapItem, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
+import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { pointsForDifficulty } from './questionDifficulty';
 
 const FAST = { timeout: 20000 };
@@ -815,7 +815,7 @@ export async function tryGradeAiQuestions(questions, { soft = true } = {}) {
   const body = {
     questions: list.map((q) => ({
       text: q.text,
-      options: (q.options || []).map((o, idx) => ({
+      options: unwrapOptions(q.options).map((o, idx) => ({
         letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
         text: o.text || o.optionText,
         isCorrect: Boolean(o.isCorrect),
@@ -862,7 +862,7 @@ export function applyAiAnswers(questions, answers) {
       correctText: letter === 'OPEN' ? String(grade.correctText || q.correctText || '').trim() : '',
       difficultyLevel: grade.difficultyLevel || q.difficultyLevel || 'orta',
       options: letters.map((L) => {
-        const found = (q.options || []).find((o) => o.letter === L);
+        const found = unwrapOptions(q.options).find((o) => o.letter === L);
         return { letter: L, text: found?.text || L, isCorrect: L === letter };
       }),
     };
@@ -888,13 +888,13 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     if (!list.length) return null;
     return list.map((q) => ({
       text: q.text || q.questionText || q.stem,
-      options: (q.options || []).map((o, idx) => ({
+      options: unwrapOptions(q.options).map((o, idx) => ({
         letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
         text: o.text || o.optionText,
         isCorrect: Boolean(o.isCorrect),
       })),
       correctLetter: q.correctLetter
-        || (q.options || []).find((o) => o.isCorrect)?.letter
+        || unwrapOptions(q.options).find((o) => o.isCorrect)?.letter
         || 'A',
       difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
     }));

@@ -984,7 +984,7 @@ export async function extractExamPdfOnServer(examId, file, { fileName, title, su
     } catch (err) {
       lastError = err;
       const status = err?.response?.status;
-      if (status && ![404, 405].includes(status)) throw err;
+      if (status && ![404, 405, 415, 501, 502, 503, 504].includes(status)) throw err;
     }
   }
   throw lastError || new Error('PDF serverdə oxunmadı.');

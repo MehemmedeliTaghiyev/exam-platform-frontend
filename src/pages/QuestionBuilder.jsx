@@ -214,39 +214,51 @@ export default function QuestionBuilder() {
       const wanted = parseInt(pdfCount, 10) || 0;
       const title = exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, '');
 
-      if (!phone && pdfBytes) {
-        const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
-        const count = await ingestExamText(text, { title, fromPdf: true });
-        stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-        setShowPdfPreview(false);
-        await load();
-        setMessage(`${count} sual kart kimi hazırdır. Soldakı PDF önizləmə lazım deyil — kartları yoxlayıb dərc edin.`);
-        return;
-      }
-
-      const data = await extractExamPdfOnServer(id, blob, {
-        fileName: pdfName || 'exam.pdf',
-        title,
-        subjectName: exam?.subjectName,
-        questionCount: wanted,
-      });
-      const parsed = questionsFromAiData(data);
-      if (data?.saved) {
+      const finish = async (count, note) => {
         if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
         setShowPdfPreview(false);
         await load();
-        const n = parsed.length || Number(data.storedCount) || 0;
-        setMessage(`${n} sual kart kimi hazırdır. Şagird PDF görmür.`);
+        setMessage(`${count} sual kart kimi hazırdır. ${note}`);
+      };
+
+      if (!phone && pdfBytes) {
+        const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
+        const count = await ingestExamText(text, { title, fromPdf: true });
+        await finish(count, 'Yoxlayıb dərc edin. Şagird PDF görmür.');
         return;
       }
-      if (!parsed.length) {
-        throw new Error('Server PDF-i oxudu, amma kart qayıtmadı. Exam API-ni yeniləyin.');
+
+      let serverErr = '';
+      try {
+        const data = await extractExamPdfOnServer(id, blob, {
+          fileName: pdfName || 'exam.pdf',
+          title,
+          subjectName: exam?.subjectName,
+          questionCount: wanted,
+        });
+        const parsed = questionsFromAiData(data);
+        if (data?.saved && (parsed.length || Number(data.storedCount) > 0)) {
+          await finish(parsed.length || Number(data.storedCount) || 0, 'Şagird PDF görmür.');
+          return;
+        }
+        if (parsed.length) {
+          const count = await saveParsedCards(parsed);
+          await finish(count, 'Yoxlayıb dərc edin. Şagird PDF görmür.');
+          return;
+        }
+        serverErr = 'Server kart qaytarmadı.';
+      } catch (err) {
+        serverErr = errorMessage(err, 'Server AI işləmədi.');
       }
-      const count = await saveParsedCards(parsed);
-      if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-      setShowPdfPreview(false);
-      await load();
-      setMessage(`${count} sual kart kimi hazırdır. Yoxlayıb dərc edin — şagird yalnız kartları görür.`);
+
+      if (!pdfBytes) {
+        throw new Error(serverErr || 'Telefonda AI işləmədi.');
+      }
+      const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
+      const count = await ingestExamText(text, { title, fromPdf: true });
+      await finish(count, serverErr
+        ? `Server AI alınmadı (${serverErr.slice(0, 80)}), kartlar telefonda çıxarıldı.`
+        : 'Yoxlayıb dərc edin. Şagird PDF görmür.');
     } catch (err) {
       setMessage(errorMessage(err, 'PDF oxunmadı.'));
     } finally {

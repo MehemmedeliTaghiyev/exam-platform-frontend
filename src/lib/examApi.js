@@ -1,6 +1,7 @@
 import API from '../api/axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
+import { coerceAiJson, mapAiQuestion, pickAiQuestionList } from './parseAiJson';
 import { pointsForDifficulty } from './questionDifficulty';
 
 const FAST = { timeout: 20000 };
@@ -927,25 +928,18 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     source: payload.source,
   };
   try {
-    const res = await API.post('/Ai/questions', body, { timeout: 90000 });
-    const data = unwrapItem(res.data) || res.data || {};
-    const list = unwrapList(data.questions || data);
+    const res = await API.post('/Ai/questions', body, {
+      timeout: 90000,
+      transformResponse: [(raw) => {
+        if (typeof raw !== 'string') return raw;
+        const parsed = coerceAiJson(raw);
+        return parsed === raw ? raw : parsed;
+      }],
+    });
+    const data = coerceAiJson(unwrapItem(res.data) || res.data || {});
+    const list = pickAiQuestionList(data);
     if (!list.length) return null;
-    return list.map((q) => {
-      const opts = unwrapOptions(q?.options);
-      return {
-        text: q.text || q.questionText || q.stem,
-        options: opts.map((o, idx) => ({
-          letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
-          text: o.text || o.optionText,
-          isCorrect: Boolean(o.isCorrect),
-        })),
-        correctLetter: q.correctLetter
-          || opts.find((o) => o.isCorrect)?.letter
-          || 'A',
-        difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
-      };
-    }).filter((q) => q.text);
+    return list.map(mapAiQuestion).filter((q) => q?.text);
   } catch (err) {
     const status = err?.response?.status;
     if (!status || status === 404 || (soft && [401, 403, 405, 502, 503, 504].includes(status))) return null;

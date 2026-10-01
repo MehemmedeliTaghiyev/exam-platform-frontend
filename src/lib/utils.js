@@ -4,14 +4,22 @@ export function unwrapList(data) {
 
   const candidates = [
     data.items,
+    data.Items,
     data.data,
+    data.Data,
     data.result,
+    data.Result,
     data.exams,
+    data.Exams,
     data.questions,
+    data.Questions,
     data.submissions,
+    data.Submissions,
     data.users,
+    data.Users,
     data.$values,
     data.value,
+    data.Value,
   ];
 
   for (const candidate of candidates) {

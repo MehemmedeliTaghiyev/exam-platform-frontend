@@ -97,7 +97,7 @@ export default function QuestionBuilder() {
     if (cached?.bytes) {
       setPdfBytes(cached.bytes);
       setPdfName(cached.name || '');
-      setShowPdfPreview(true);
+      setShowPdfPreview(typeof window !== 'undefined' && window.innerWidth >= 768);
     }
   }, [id]);
 
@@ -147,6 +147,40 @@ export default function QuestionBuilder() {
     }
   };
 
+  const ingestExamText = async (rawText, { title, fromPdf = false } = {}) => {
+    const text = String(rawText || '').trim();
+    if (text.length < 40) {
+      throw new Error(fromPdf
+        ? 'PDF-dən mətn oxunmadı. Mətnli (skan olmayan) PDF seçin.'
+        : 'Mətn çox qısadır.');
+    }
+    let parsed = parseQuestionsFromText(text);
+    const wanted = parseInt(pdfCount, 10);
+    const aiParsed = await tryGenerateAiQuestions({
+      title: title || exam?.title || 'İmtahan',
+      topic: fromPdf ? 'PDF' : 'mətn',
+      subjectName: exam?.subjectName,
+      brief: text,
+      questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+      source: fromPdf ? 'pdf' : 'text',
+    }, { soft: true });
+    if (aiParsed?.length) parsed = aiParsed;
+    parsed = normalizeGeneratedQuestions(parsed);
+    if (!parsed.length) {
+      throw new Error('AI sualları JSON kimi qaytarmadı. Yenidən cəhd edin.');
+    }
+    try {
+      const grades = await tryGradeAiQuestions(parsed, { soft: true });
+      if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
+    } catch {
+      /* teacher can fix answers */
+    }
+    for (const q of parsed) {
+      await addQuestion(id, toAddQuestionPayload(q));
+    }
+    return parsed.length;
+  };
+
   const handlePdfUpload = async (e) => {
     e.preventDefault();
     if (!pdfBytes) {
@@ -161,41 +195,21 @@ export default function QuestionBuilder() {
         throw new Error('Şəkil yox, mətnli PDF seçin.');
       }
       const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
-      if (text.length < 40) {
-        throw new Error('PDF-dən mətn oxunmadı. Telefondan WhatsApp/kameranın şəkil-PDF-i yox, kompüterdəki mətnli PDF-i Files-dən seçin.');
-      }
-      let parsed = parseQuestionsFromText(text);
-      const wanted = parseInt(pdfCount, 10);
-      const aiParsed = await tryGenerateAiQuestions({
+      const count = await ingestExamText(text, {
         title: exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, ''),
-        topic: 'PDF',
-        subjectName: exam?.subjectName,
-        brief: text,
-        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-        source: 'pdf',
-      }, { soft: true });
-      if (aiParsed?.length) parsed = aiParsed;
-      parsed = normalizeGeneratedQuestions(parsed);
-      if (!parsed.length) {
-        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
-      }
-      try {
-        const grades = await tryGradeAiQuestions(parsed, { soft: true });
-        if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
-      } catch {
-        /* teacher can fix answers */
-      }
-      for (const q of parsed) {
-        await addQuestion(id, toAddQuestionPayload(q));
-      }
+        fromPdf: true,
+      });
       stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-      setShowPdfPreview(true);
+      const phone = typeof window !== 'undefined' && window.innerWidth < 768;
+      setShowPdfPreview(!phone);
       await load();
-      setMessage(`${parsed.length} sual oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
+      setMessage(phone
+        ? `${count} sual kart kimi hazırdır. Android-də PDF önizləmə açılmır ki, telefon yavaşlamasın.`
+        : `${count} sual oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
     } catch (err) {
       const raw = String(err?.message || '');
       if (/is not a function/i.test(raw)) {
-        setMessage('Telefonda PDF oxunmadı. Files tətbiqindən mətnli PDF seçin (şəkil və ya skan yox).');
+        setMessage('Telefonda PDF oxunuşu pozuldu. Files-dən mətnli PDF seçin.');
       } else {
         setMessage(errorMessage(err, 'PDF oxunmadı.'));
       }
@@ -356,7 +370,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">PDF-dən clickable suallar</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF yükləyin — AI sualları çıxarır. Eyni səhifədə PDF qalır ki, səhv oxunuşu düzəldəsiniz. Dərcdən sonra PDF bağlanır, şagird yalnız kartları görür.
+              PDF yükləyin. AI cavabı kod/JSON olsa da kartlara çevrilir. Telefonda suallar kart kimi görünür; Android-də PDF önizləmə avtomatik açılmır.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -393,6 +407,15 @@ export default function QuestionBuilder() {
                 <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən sualları çıxar'}
               </Button>
             </form>
+            {pdfBytes ? (
+              <button
+                type="button"
+                className="mt-3 text-sm font-medium text-brand-600 md:hidden"
+                onClick={() => setShowPdfPreview((v) => !v)}
+              >
+                {showPdfPreview ? 'PDF önizləməni bağla' : 'PDF-ə bax (telefon yavaşlaya bilər)'}
+              </button>
+            ) : null}
           </Card>
 
           {loading ? (

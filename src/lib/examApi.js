@@ -958,54 +958,36 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   }
 }
 
-export async function tryGenerateAiFromPdf(payload, { soft = true } = {}) {
-  const name = payload.fileName || payload.file?.name || 'exam.pdf';
-  const formPaths = [
+export async function extractExamPdfOnServer(examId, file, { fileName, title, subjectName, questionCount } = {}) {
+  const name = fileName || file?.name || 'exam.pdf';
+  const paths = [
+    `/Exams/${examId}/ai-from-pdf`,
+    `/Exams/${examId}/extract-questions`,
     '/Ai/pdf',
     '/Ai/from-pdf',
-    '/Ai/questions-from-pdf',
-    payload.examId ? `/Exams/${payload.examId}/ai-from-pdf` : null,
-    payload.examId ? `/Exams/${payload.examId}/extract-questions` : null,
-  ].filter(Boolean);
-
-  for (const path of formPaths) {
+  ];
+  let lastError;
+  for (const path of paths) {
     const form = new FormData();
-    form.append('file', payload.file, name);
-    form.append('title', payload.title || '');
-    form.append('topic', payload.topic || 'PDF');
-    form.append('subjectName', payload.subjectName || '');
-    form.append('questionCount', String(payload.questionCount || 0));
-    form.append('examId', String(payload.examId || ''));
+    form.append('file', file, name);
+    form.append('questionCount', String(questionCount || 0));
+    form.append('title', title || '');
+    form.append('subjectName', subjectName || '');
     form.append('source', 'pdf');
+    form.append('examId', String(examId || ''));
     try {
       const res = await API.post(path, form, {
         timeout: 120000,
         transformResponse: AI_JSON_TRANSFORM,
       });
-      const list = parseAiQuestionList(res.data);
-      if (list.length) return list;
+      return unwrapItem(res.data) || res.data || {};
     } catch (err) {
+      lastError = err;
       const status = err?.response?.status;
-      if (!soft && status && ![404, 405, 415].includes(status)) throw err;
+      if (status && ![404, 405].includes(status)) throw err;
     }
   }
-
-  try {
-    const listed = await tryGenerateAiQuestions({
-      title: payload.title,
-      topic: payload.topic || 'PDF',
-      subjectName: payload.subjectName,
-      questionCount: payload.questionCount,
-      source: 'pdf',
-      examId: payload.examId,
-      brief: '',
-    }, { soft: true });
-    if (listed?.length) return listed;
-  } catch {
-    /* text extract fallback */
-  }
-
-  return null;
+  throw lastError || new Error('PDF serverdə oxunmadı.');
 }
 
 export async function uploadExamPdfPack(examId, file, questionCount, fileName) {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { openPdfDocument } from '../lib/pdfEngine';
 
-export default function PdfViewer({ bytes, title = 'Orijinal PDF' }) {
+export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = false }) {
   const wrapRef = useRef(null);
   const hostRef = useRef(null);
   const pdfRef = useRef(null);
@@ -23,7 +23,7 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF' }) {
       const width = Math.max(240, wrap.clientWidth - 24);
       host.replaceChildren();
       const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
-      const maxPage = (typeof window !== 'undefined' && window.innerWidth < 768)
+      const maxPage = (!allPages && typeof window !== 'undefined' && window.innerWidth < 768)
         ? Math.min(pdf.numPages, 3)
         : pdf.numPages;
       for (let pageNum = 1; pageNum <= maxPage; pageNum += 1) {

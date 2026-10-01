@@ -915,6 +915,21 @@ export function applyAiAnswers(questions, answers) {
   });
 }
 
+function parseAiQuestionList(data) {
+  const root = coerceAiJson(unwrapItem(data) || data);
+  return pickAiQuestionList(root).map(mapAiQuestion).filter((q) => q?.text);
+}
+
+export function questionsFromAiData(data) {
+  return parseAiQuestionList(data);
+}
+
+const AI_JSON_TRANSFORM = [(raw) => {
+  if (typeof raw !== 'string') return raw;
+  const parsed = coerceAiJson(raw);
+  return parsed === raw ? raw : parsed;
+}];
+
 export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   const body = {
     title: payload.title,
@@ -926,20 +941,16 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     medium: payload.medium,
     hard: payload.hard,
     source: payload.source,
+    examId: payload.examId,
+    ExamId: payload.examId,
   };
   try {
     const res = await API.post('/Ai/questions', body, {
       timeout: 90000,
-      transformResponse: [(raw) => {
-        if (typeof raw !== 'string') return raw;
-        const parsed = coerceAiJson(raw);
-        return parsed === raw ? raw : parsed;
-      }],
+      transformResponse: AI_JSON_TRANSFORM,
     });
-    const data = coerceAiJson(unwrapItem(res.data) || res.data || {});
-    const list = pickAiQuestionList(data);
-    if (!list.length) return null;
-    return list.map(mapAiQuestion).filter((q) => q?.text);
+    const list = parseAiQuestionList(res.data);
+    return list.length ? list : null;
   } catch (err) {
     const status = err?.response?.status;
     if (!status || status === 404 || (soft && [401, 403, 405, 502, 503, 504].includes(status))) return null;
@@ -947,10 +958,61 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   }
 }
 
-export async function uploadExamPdfPack(examId, file, questionCount) {
+export async function tryGenerateAiFromPdf(payload, { soft = true } = {}) {
+  const name = payload.fileName || payload.file?.name || 'exam.pdf';
+  const formPaths = [
+    '/Ai/pdf',
+    '/Ai/from-pdf',
+    '/Ai/questions-from-pdf',
+    payload.examId ? `/Exams/${payload.examId}/ai-from-pdf` : null,
+    payload.examId ? `/Exams/${payload.examId}/extract-questions` : null,
+  ].filter(Boolean);
+
+  for (const path of formPaths) {
+    const form = new FormData();
+    form.append('file', payload.file, name);
+    form.append('title', payload.title || '');
+    form.append('topic', payload.topic || 'PDF');
+    form.append('subjectName', payload.subjectName || '');
+    form.append('questionCount', String(payload.questionCount || 0));
+    form.append('examId', String(payload.examId || ''));
+    form.append('source', 'pdf');
+    try {
+      const res = await API.post(path, form, {
+        timeout: 120000,
+        transformResponse: AI_JSON_TRANSFORM,
+      });
+      const list = parseAiQuestionList(res.data);
+      if (list.length) return list;
+    } catch (err) {
+      const status = err?.response?.status;
+      if (!soft && status && ![404, 405, 415].includes(status)) throw err;
+    }
+  }
+
+  try {
+    const listed = await tryGenerateAiQuestions({
+      title: payload.title,
+      topic: payload.topic || 'PDF',
+      subjectName: payload.subjectName,
+      questionCount: payload.questionCount,
+      source: 'pdf',
+      examId: payload.examId,
+      brief: '',
+    }, { soft: true });
+    if (listed?.length) return listed;
+  } catch {
+    /* text extract fallback */
+  }
+
+  return null;
+}
+
+export async function uploadExamPdfPack(examId, file, questionCount, fileName) {
   const form = new FormData();
-  form.append('file', file, file.name || 'exam.pdf');
-  form.append('questionCount', String(questionCount));
+  const name = fileName || file?.name || 'exam.pdf';
+  form.append('file', file, name);
+  form.append('questionCount', String(questionCount || 0));
   const paths = [`/Exams/${examId}/pdf-pack`, `/Exams/${examId}/upload-pdf`];
   let lastError;
   for (const path of paths) {
@@ -958,7 +1020,7 @@ export async function uploadExamPdfPack(examId, file, questionCount) {
       const res = await API.post(path, form, {
         timeout: 120000,
       });
-      return unwrapItem(res.data) || res.data;
+      return unwrapItem(res.data) || res.data || { ok: true };
     } catch (err) {
       lastError = err;
     }

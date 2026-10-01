@@ -6,7 +6,7 @@ import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, questionsFromAiData, saveAnswerKey, tryGenerateAiFromPdf, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion, uploadExamPdfPack } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { extractPdfTextFromBytes, readBlobBytes, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
@@ -58,6 +58,7 @@ export default function QuestionBuilder() {
   const [pdfCount, setPdfCount] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfBytes, setPdfBytes] = useState(null);
+  const [pdfBlob, setPdfBlob] = useState(null);
   const [pdfName, setPdfName] = useState('');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [answerKey, setAnswerKey] = useState({});
@@ -147,27 +148,10 @@ export default function QuestionBuilder() {
     }
   };
 
-  const ingestExamText = async (rawText, { title, fromPdf = false } = {}) => {
-    const text = String(rawText || '').trim();
-    if (text.length < 40) {
-      throw new Error(fromPdf
-        ? 'PDF-dən mətn oxunmadı. Mətnli (skan olmayan) PDF seçin.'
-        : 'Mətn çox qısadır.');
-    }
-    let parsed = parseQuestionsFromText(text);
-    const wanted = parseInt(pdfCount, 10);
-    const aiParsed = await tryGenerateAiQuestions({
-      title: title || exam?.title || 'İmtahan',
-      topic: fromPdf ? 'PDF' : 'mətn',
-      subjectName: exam?.subjectName,
-      brief: text,
-      questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-      source: fromPdf ? 'pdf' : 'text',
-    }, { soft: true });
-    if (aiParsed?.length) parsed = aiParsed;
-    parsed = normalizeGeneratedQuestions(parsed);
+  const saveParsedCards = async (list) => {
+    let parsed = normalizeGeneratedQuestions(list);
     if (!parsed.length) {
-      throw new Error('AI sualları JSON kimi qaytarmadı. Yenidən cəhd edin.');
+      throw new Error('[4 AI] Cavab gəldi, amma sual kartı çıxmadı.');
     }
     try {
       const grades = await tryGradeAiQuestions(parsed, { soft: true });
@@ -175,15 +159,46 @@ export default function QuestionBuilder() {
     } catch {
       /* teacher can fix answers */
     }
-    for (const q of parsed) {
-      await addQuestion(id, toAddQuestionPayload(q));
+    try {
+      for (const q of parsed) {
+        await addQuestion(id, toAddQuestionPayload(q));
+      }
+    } catch (err) {
+      throw new Error(`[5 yaz] ${parsed.length} sual oxundu, saxlama: ${err?.message || err}`);
     }
     return parsed.length;
   };
 
+  const ingestExamText = async (rawText, { title, fromPdf = false } = {}) => {
+    const text = String(rawText || '').trim();
+    if (text.length < 40) {
+      throw new Error(fromPdf
+        ? `[3 mətn] PDF açıldı, amma ${text.length} simvol çıxdı (skan/şəkil PDF).`
+        : `[3 mətn] Mətn çox qısadır (${text.length} simvol).`);
+    }
+    let parsed = parseQuestionsFromText(text);
+    const wanted = parseInt(pdfCount, 10);
+    let aiParsed = null;
+    try {
+      aiParsed = await tryGenerateAiQuestions({
+        title: title || exam?.title || 'İmtahan',
+        topic: fromPdf ? 'PDF' : 'mətn',
+        subjectName: exam?.subjectName,
+        brief: text,
+        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+        source: fromPdf ? 'pdf' : 'text',
+        examId: id,
+      }, { soft: true });
+    } catch (err) {
+      throw new Error(`[4 AI] ${err?.message || err}`);
+    }
+    if (aiParsed?.length) parsed = aiParsed;
+    return saveParsedCards(parsed);
+  };
+
   const handlePdfUpload = async (e) => {
     e.preventDefault();
-    if (!pdfBytes) {
+    if (!pdfBytes && !pdfBlob) {
       setMessage('PDF seçin.');
       return;
     }
@@ -194,25 +209,53 @@ export default function QuestionBuilder() {
       if (/\.(jpg|jpeg|png|heic|webp)$/i.test(typeHint)) {
         throw new Error('Şəkil yox, mətnli PDF seçin.');
       }
-      const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
-      const count = await ingestExamText(text, {
-        title: exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, ''),
-        fromPdf: true,
-      });
-      stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-      const phone = typeof window !== 'undefined' && window.innerWidth < 768;
+      const blob = pdfBlob || new Blob([pdfBytes], { type: 'application/pdf' });
+      const phone = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+      const wanted = parseInt(pdfCount, 10) || 0;
+      const title = exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, '');
+
+      let packed = null;
+      try {
+        packed = await uploadExamPdfPack(id, blob, wanted, pdfName || 'exam.pdf');
+      } catch {
+        /* AI faylı birbaşa da qəbul edə bilər */
+      }
+
+      let parsed = questionsFromAiData(packed);
+      if (!parsed.length) {
+        parsed = await tryGenerateAiFromPdf({
+          examId: id,
+          file: blob,
+          fileName: pdfName || 'exam.pdf',
+          title,
+          topic: 'PDF',
+          subjectName: exam?.subjectName,
+          questionCount: wanted,
+        }) || [];
+      }
+
+      if (!parsed.length && pdfBytes) {
+        const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
+        const count = await ingestExamText(text, { title, fromPdf: true });
+        if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
+        setShowPdfPreview(!phone);
+        await load();
+        setMessage(`${count} sual kart kimi hazırdır. Şagird PDF görmür.`);
+        return;
+      }
+
+      if (!parsed.length) {
+        throw new Error('[4 AI] PDF göndərildi, amma sual kartı qayıtmadı. Exam API PDF-i AI-yə ötürəndə kartlar çıxacaq.');
+      }
+
+      const count = await saveParsedCards(parsed);
+      if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
       setShowPdfPreview(!phone);
       await load();
-      setMessage(phone
-        ? `${count} sual kart kimi hazırdır. Android-də PDF önizləmə açılmır ki, telefon yavaşlamasın.`
-        : `${count} sual oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
+      setMessage(`${count} sual kart kimi hazırdır. Yoxlayıb dərc edin — şagird yalnız kartları görür.`);
     } catch (err) {
-      const raw = String(err?.message || '');
-      if (/is not a function/i.test(raw)) {
-        setMessage('Telefonda PDF oxunuşu pozuldu. Files-dən mətnli PDF seçin.');
-      } else {
-        setMessage(errorMessage(err, 'PDF oxunmadı.'));
-      }
+      const raw = String(err?.message || errorMessage(err, 'PDF oxunmadı.'));
+      setMessage(raw);
     } finally {
       setPdfBusy(false);
     }
@@ -294,9 +337,10 @@ export default function QuestionBuilder() {
       });
       dropTeacherPdf(id);
       setPdfBytes(null);
+      setPdfBlob(null);
       setPdfName('');
       setShowPdfPreview(false);
-      setMessage('İmtahan dərc olundu. PDF artıq heç yerdə açılmır.');
+      setMessage('İmtahan dərc olundu. Şagird yalnız sual kartlarını görür, PDF yüklənmir.');
       await load();
     } catch (err) {
       setMessage(errorMessage(err, 'İmtahan dərc olunmadı.'));
@@ -368,9 +412,9 @@ export default function QuestionBuilder() {
       ) : (
         <div className="space-y-8">
           <Card>
-            <h3 className="mb-2 text-base font-bold">PDF-dən clickable suallar</h3>
+            <h3 className="mb-2 text-base font-bold">PDF → AI → kartlar</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF yükləyin. AI cavabı kod/JSON olsa da kartlara çevrilir. Telefonda suallar kart kimi görünür; Android-də PDF önizləmə avtomatik açılmır.
+              PDF yükləyin. Fayl AI-yə gedir, cavab kart olur, ekranda görünür. Dərcdən sonra şagird yalnız kartları görür — PDF yüklənmir.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -380,17 +424,20 @@ export default function QuestionBuilder() {
                   const raw = e.target.files?.[0] || null;
                   if (!raw) {
                     setPdfBytes(null);
+                    setPdfBlob(null);
                     setPdfName('');
                     return;
                   }
                   try {
                     const buf = await readBlobBytes(raw);
+                    setPdfBlob(raw);
                     setPdfBytes(buf);
                     setPdfName(raw.name || 'exam.pdf');
                     setShowPdfPreview(false);
                   } catch {
                     setMessage('Fayl oxunmadı. Files-dən PDF seçin.');
                     setPdfBytes(null);
+                    setPdfBlob(null);
                   }
                 }}
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-white"
@@ -404,7 +451,7 @@ export default function QuestionBuilder() {
                 onChange={(e) => setPdfCount(e.target.value)}
               />
               <Button type="submit" disabled={pdfBusy}>
-                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən sualları çıxar'}
+                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən kartları çıxar'}
               </Button>
             </form>
             {pdfBytes ? (
@@ -430,7 +477,7 @@ export default function QuestionBuilder() {
               ) : null}
               <div className="space-y-4">
           {questions.length === 0 ? (
-            <Card className="text-sm text-gray-500">PDF yükləyin — suallar kart kimi burada çıxacaq.</Card>
+            <Card className="text-sm text-gray-500">PDF yükləyin — AI kartları burada çıxacaq. Şagird dərcdən sonra yalnız bunları görür.</Card>
           ) : (
             questions.map((q, idx) => (
                 isOpenQuestion(q) ? (

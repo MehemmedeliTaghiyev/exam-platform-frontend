@@ -247,7 +247,7 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   }
   if (typeof data?.title === 'string') return data.title;
   if (typeof err?.message === 'string' && /is not a function/i.test(err.message)) {
-    return 'AI cavabı gözlənilməz formatdadır. Səhifəni yeniləyin, yenidən daxil olun və bir daha cəhd edin.';
+    return 'Telefonda PDF oxunuşu pozuldu. Files-dən mətnli PDF seçin, şəkil və ya skan göndərməyin.';
   }
   if (typeof err?.message === 'string' && err.message !== 'Network Error') return err.message;
   return fallback;

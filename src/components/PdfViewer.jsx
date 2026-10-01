@@ -1,21 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import { getDocument } from 'pdfjs-dist';
 
-try {
-  GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-  ).toString();
-} catch {
-  /* worker optional */
-}
-
-export default function PdfViewer({ file, title = 'Orijinal PDF' }) {
+export default function PdfViewer({ bytes, title = 'Orijinal PDF' }) {
   const wrapRef = useRef(null);
   const hostRef = useRef(null);
   const pdfRef = useRef(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(Boolean(file));
+  const [loading, setLoading] = useState(Boolean(bytes));
   const [pages, setPages] = useState(0);
 
   useEffect(() => {
@@ -59,21 +50,15 @@ export default function PdfViewer({ file, title = 'Orijinal PDF' }) {
     };
 
     const load = async () => {
-      if (!file) {
+      if (!bytes) {
         setLoading(false);
         return;
       }
       setLoading(true);
       setError('');
       try {
-        const buf = await file.arrayBuffer();
-        const copy = () => new Uint8Array(buf.slice(0));
-        let pdf;
-        try {
-          pdf = await getDocument({ data: copy() }).promise;
-        } catch {
-          pdf = await getDocument({ data: copy(), disableWorker: true }).promise;
-        }
+        const data = new Uint8Array(bytes.slice ? bytes.slice(0) : bytes);
+        const pdf = await getDocument({ data, disableWorker: true }).promise;
         if (cancelled) return;
         pdfRef.current = pdf;
         setPages(pdf.numPages);
@@ -102,9 +87,9 @@ export default function PdfViewer({ file, title = 'Orijinal PDF' }) {
       pdfRef.current = null;
       if (hostRef.current) hostRef.current.replaceChildren();
     };
-  }, [file]);
+  }, [bytes]);
 
-  if (!file) return null;
+  if (!bytes) return null;
 
   return (
     <div
@@ -123,7 +108,7 @@ export default function PdfViewer({ file, title = 'Orijinal PDF' }) {
         ref={hostRef}
         className="w-full overflow-y-auto overflow-x-hidden bg-gray-200 p-2 sm:p-3 dark:bg-slate-950"
         style={{
-          height: 'min(75dvh, 880px)',
+          height: 'min(70dvh, 640px)',
           WebkitOverflowScrolling: 'touch',
         }}
       />

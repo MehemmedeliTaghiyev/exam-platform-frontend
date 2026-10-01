@@ -173,28 +173,37 @@ function extractColumnText(items) {
     .filter((line) => !/^[\d\s]+$/.test(line));
 }
 
-export async function asReusablePdfFile(file) {
-  if (!file) return null;
-  const buf = await file.arrayBuffer();
-  return new File([buf], file.name || 'exam.pdf', { type: file.type || 'application/pdf' });
+export function readBlobBytes(blob) {
+  if (!blob) return Promise.resolve(null);
+  return readWithFileReader(blob);
 }
 
-export async function extractPdfText(file) {
-  const buf = await file.arrayBuffer();
-  const pdf = await getDocument({ data: new Uint8Array(buf), disableWorker: true }).promise;
+function readWithFileReader(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Fayl oxunmadı.'));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+export async function extractPdfTextFromBytes(buf) {
+  const data = new Uint8Array(buf.slice ? buf.slice(0) : buf);
+  const pdf = await getDocument({ data, disableWorker: true }).promise;
   const pages = [];
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
-    const raw = unwrapOptions(content.items).filter((it) => {
+    const raw = unwrapOptions(content?.items).filter((it) => it && typeof it === 'object');
+    const clipped = raw.filter((it) => {
       const y = itemY(it);
       return y > 88 && y < viewport.height - 36;
     });
-    const splitX = detectSplitX(raw);
+    const splitX = detectSplitX(clipped);
     const columns = splitX
-      ? [raw.filter((it) => itemX(it) < splitX), raw.filter((it) => itemX(it) >= splitX)]
-      : [raw];
+      ? [clipped.filter((it) => itemX(it) < splitX), clipped.filter((it) => itemX(it) >= splitX)]
+      : [clipped];
     const pageLines = [];
     columns.forEach((col) => {
       if (!col.length) return;
@@ -203,6 +212,11 @@ export async function extractPdfText(file) {
     if (pageLines.length) pages.push(pageLines.join('\n'));
   }
   return pages.join('\n');
+}
+
+export async function extractPdfText(file) {
+  const buf = await readBlobBytes(file);
+  return extractPdfTextFromBytes(buf);
 }
 
 function glueWrappedLines(text) {

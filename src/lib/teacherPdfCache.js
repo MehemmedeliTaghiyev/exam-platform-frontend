@@ -1,8 +1,8 @@
 const files = new Map();
 
-export function stashTeacherPdf(examId, file) {
-  if (!examId || !file) return;
-  files.set(String(examId), file);
+export function stashTeacherPdf(examId, payload) {
+  if (!examId || !payload?.bytes) return;
+  files.set(String(examId), payload);
 }
 
 export function peekTeacherPdf(examId) {

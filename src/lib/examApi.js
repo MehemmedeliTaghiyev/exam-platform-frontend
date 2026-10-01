@@ -948,7 +948,7 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     }).filter((q) => q.text);
   } catch (err) {
     const status = err?.response?.status;
-    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503].includes(status))) return null;
+    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503, 504].includes(status))) return null;
     throw err;
   }
 }

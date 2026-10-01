@@ -8,7 +8,7 @@ import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
-import { extractPdfText, asReusablePdfFile, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { extractPdfTextFromBytes, readBlobBytes, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
@@ -55,9 +55,10 @@ export default function QuestionBuilder() {
   const [openAnswer, setOpenAnswer] = useState('');
   const [correctAnswer, setCorrectAnswer] = useState('A');
   const [submitting, setSubmitting] = useState(false);
-  const [pdfFile, setPdfFile] = useState(null);
   const [pdfCount, setPdfCount] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfBytes, setPdfBytes] = useState(null);
+  const [pdfName, setPdfName] = useState('');
   const [answerKey, setAnswerKey] = useState({});
   const [openKeys, setOpenKeys] = useState({});
   const [kinds, setKinds] = useState({});
@@ -92,7 +93,10 @@ export default function QuestionBuilder() {
 
   useEffect(() => {
     const cached = peekTeacherPdf(id);
-    if (cached) setPdfFile(cached);
+    if (cached?.bytes) {
+      setPdfBytes(cached.bytes);
+      setPdfName(cached.name || '');
+    }
   }, [id]);
 
   const handleAddQuestion = async (e) => {
@@ -143,21 +147,25 @@ export default function QuestionBuilder() {
 
   const handlePdfUpload = async (e) => {
     e.preventDefault();
-    if (!pdfFile) {
+    if (!pdfBytes) {
       setMessage('PDF seçin.');
       return;
     }
     setPdfBusy(true);
     setMessage('');
     try {
-      const text = String(await extractPdfText(pdfFile) || '').trim();
+      const typeHint = String(pdfName || '').toLowerCase();
+      if (/\.(jpg|jpeg|png|heic|webp)$/i.test(typeHint)) {
+        throw new Error('Şəkil yox, mətnli PDF seçin.');
+      }
+      const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
       if (text.length < 40) {
-        throw new Error('PDF-dən mətn oxunmadı. Telefondan şəkil/skan yox, mətnli PDF göndərin (kompüterdəki eyni fayl).');
+        throw new Error('PDF-dən mətn oxunmadı. Telefondan WhatsApp/kameranın şəkil-PDF-i yox, kompüterdəki mətnli PDF-i Files-dən seçin.');
       }
       let parsed = parseQuestionsFromText(text);
       const wanted = parseInt(pdfCount, 10);
       const aiParsed = await tryGenerateAiQuestions({
-        title: exam?.title || pdfFile.name.replace(/\.pdf$/i, ''),
+        title: exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, ''),
         topic: 'PDF',
         subjectName: exam?.subjectName,
         brief: text,
@@ -178,11 +186,16 @@ export default function QuestionBuilder() {
       for (const q of parsed) {
         await addQuestion(id, toAddQuestionPayload(q));
       }
-      stashTeacherPdf(id, pdfFile);
+      stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
       await load();
-      setMessage(`${parsed.length} sual AI ilə oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
+      setMessage(`${parsed.length} sual oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
     } catch (err) {
-      setMessage(errorMessage(err, 'PDF oxunmadı.'));
+      const raw = String(err?.message || '');
+      if (/is not a function/i.test(raw)) {
+        setMessage('Telefonda PDF oxunmadı. Files tətbiqindən mətnli PDF seçin (şəkil və ya skan yox).');
+      } else {
+        setMessage(errorMessage(err, 'PDF oxunmadı.'));
+      }
     } finally {
       setPdfBusy(false);
     }
@@ -263,7 +276,8 @@ export default function QuestionBuilder() {
         isDraft: false,
       });
       dropTeacherPdf(id);
-      setPdfFile(null);
+      setPdfBytes(null);
+      setPdfName('');
       setMessage('İmtahan dərc olundu. PDF artıq heç yerdə açılmır.');
       await load();
     } catch (err) {
@@ -347,13 +361,17 @@ export default function QuestionBuilder() {
                 onChange={async (e) => {
                   const raw = e.target.files?.[0] || null;
                   if (!raw) {
-                    setPdfFile(null);
+                    setPdfBytes(null);
+                    setPdfName('');
                     return;
                   }
                   try {
-                    setPdfFile(await asReusablePdfFile(raw));
+                    const buf = await readBlobBytes(raw);
+                    setPdfBytes(buf);
+                    setPdfName(raw.name || 'exam.pdf');
                   } catch {
-                    setPdfFile(raw);
+                    setMessage('Fayl oxunmadı. Files-dən PDF seçin.');
+                    setPdfBytes(null);
                   }
                 }}
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-white"
@@ -378,9 +396,9 @@ export default function QuestionBuilder() {
               <Skeleton className="h-40" />
             </>
           ) : (
-            <div className={pdfFile ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
-              {pdfFile ? (
-                <PdfViewer file={pdfFile} title="Orijinal PDF — yalnız müəllim" />
+            <div className={pdfBytes ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
+              {pdfBytes ? (
+                <PdfViewer bytes={pdfBytes} title="Orijinal PDF — yalnız müəllim" />
               ) : null}
               <div className="space-y-4">
           {questions.length === 0 ? (

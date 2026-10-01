@@ -105,7 +105,11 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = fa
       {loading && (
         <div className="flex h-40 items-center justify-center text-sm text-gray-500">PDF açılır...</div>
       )}
-      {error && !loading && <div className="px-4 py-8 text-center text-sm text-red-600">{error}</div>}
+      {error && !loading && (
+        <div className="px-4 py-8 text-center text-sm text-gray-500">
+          PDF önizləmə bu brauzerdə açılmadı. Sağdakı kartlar imtahandır — onları yoxlayın.
+        </div>
+      )}
       <div
         ref={hostRef}
         className="w-full overflow-y-auto overflow-x-hidden bg-gray-200 p-2 sm:p-3 dark:bg-slate-950"

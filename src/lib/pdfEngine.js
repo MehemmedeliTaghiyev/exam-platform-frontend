@@ -1,4 +1,5 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
 if (typeof Promise !== 'undefined' && typeof Promise.withResolvers !== 'function') {
   Promise.withResolvers = function withResolvers() {
@@ -13,7 +14,11 @@ if (typeof Promise !== 'undefined' && typeof Promise.withResolvers !== 'function
 }
 
 if (typeof window !== 'undefined') {
-  GlobalWorkerOptions.workerSrc = '';
+  GlobalWorkerOptions.workerSrc = workerUrl;
+}
+
+function isPhone() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
 }
 
 export function isPdfMagic(buf) {
@@ -26,7 +31,7 @@ export async function openPdfDocument(buf) {
   try {
     return await getDocument({
       data,
-      disableWorker: true,
+      disableWorker: isPhone(),
       isEvalSupported: false,
       useSystemFonts: true,
       disableFontFace: true,

@@ -6,9 +6,9 @@ import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, extractExamPdfOnServer, fetchExam, fetchQuestions, questionsFromAiData, saveAnswerKey, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, extractExamPdfOnServer, fetchExam, fetchQuestions, questionsFromAiData, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
-import { readBlobBytes, normalizeGeneratedQuestions, toAddQuestionPayload } from '../lib/parseExamText';
+import { extractPdfTextFromBytes, readBlobBytes, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
@@ -98,7 +98,7 @@ export default function QuestionBuilder() {
     if (cached?.bytes) {
       setPdfBytes(cached.bytes);
       setPdfName(cached.name || '');
-      setShowPdfPreview(typeof window !== 'undefined' && window.innerWidth >= 768);
+      setShowPdfPreview(false);
     }
   }, [id]);
 
@@ -169,6 +169,33 @@ export default function QuestionBuilder() {
     return parsed.length;
   };
 
+  const ingestExamText = async (rawText, { title, fromPdf = false } = {}) => {
+    const text = String(rawText || '').trim();
+    if (text.length < 40) {
+      throw new Error(fromPdf
+        ? 'PDF-dən mətn oxunmadı. Mətnli (skan olmayan) PDF seçin.'
+        : 'Mətn çox qısadır.');
+    }
+    let parsed = parseQuestionsFromText(text);
+    const wanted = parseInt(pdfCount, 10);
+    let aiParsed = null;
+    try {
+      aiParsed = await tryGenerateAiQuestions({
+        title: title || exam?.title || 'İmtahan',
+        topic: fromPdf ? 'PDF' : 'mətn',
+        subjectName: exam?.subjectName,
+        brief: text,
+        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+        source: fromPdf ? 'pdf' : 'text',
+        examId: id,
+      }, { soft: true });
+    } catch (err) {
+      throw new Error(`[4 AI] ${err?.message || err}`);
+    }
+    if (aiParsed?.length) parsed = aiParsed;
+    return saveParsedCards(parsed);
+  };
+
   const handlePdfUpload = async (e) => {
     e.preventDefault();
     if (!pdfBytes && !pdfBlob) {
@@ -187,6 +214,16 @@ export default function QuestionBuilder() {
       const wanted = parseInt(pdfCount, 10) || 0;
       const title = exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, '');
 
+      if (!phone && pdfBytes) {
+        const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
+        const count = await ingestExamText(text, { title, fromPdf: true });
+        stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
+        setShowPdfPreview(false);
+        await load();
+        setMessage(`${count} sual kart kimi hazırdır. Soldakı PDF önizləmə lazım deyil — kartları yoxlayıb dərc edin.`);
+        return;
+      }
+
       const data = await extractExamPdfOnServer(id, blob, {
         fileName: pdfName || 'exam.pdf',
         title,
@@ -196,10 +233,10 @@ export default function QuestionBuilder() {
       const parsed = questionsFromAiData(data);
       if (data?.saved) {
         if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-        setShowPdfPreview(!phone);
+        setShowPdfPreview(false);
         await load();
         const n = parsed.length || Number(data.storedCount) || 0;
-        setMessage(`${n} sual serverdə PDF-dən çıxarıldı və kart oldu. Şagird PDF görmür.`);
+        setMessage(`${n} sual kart kimi hazırdır. Şagird PDF görmür.`);
         return;
       }
       if (!parsed.length) {
@@ -207,12 +244,11 @@ export default function QuestionBuilder() {
       }
       const count = await saveParsedCards(parsed);
       if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-      setShowPdfPreview(!phone);
+      setShowPdfPreview(false);
       await load();
       setMessage(`${count} sual kart kimi hazırdır. Yoxlayıb dərc edin — şagird yalnız kartları görür.`);
     } catch (err) {
-      const raw = String(err?.message || errorMessage(err, 'PDF oxunmadı.'));
-      setMessage(raw);
+      setMessage(errorMessage(err, 'PDF oxunmadı.'));
     } finally {
       setPdfBusy(false);
     }

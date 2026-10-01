@@ -1,15 +1,6 @@
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import { pointsForDifficulty } from './questionDifficulty';
 import { unwrapOptions } from './utils';
-
-try {
-  GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-  ).toString();
-} catch {
-  /* worker optional */
-}
+import { isPdfMagic, openPdfDocument } from './pdfEngine';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 const HEADER_RE = /buraxılış|sınağı|əlaqə|elaqe|mustafayev|uğuruna|sinif\s*$|^\s*faiz\s*$/i;
@@ -188,22 +179,25 @@ function readWithFileReader(blob) {
 }
 
 export async function extractPdfTextFromBytes(buf) {
-  const data = new Uint8Array(buf.slice ? buf.slice(0) : buf);
-  const pdf = await getDocument({ data, disableWorker: true }).promise;
+  if (!isPdfMagic(buf)) {
+    throw new Error('Bu fayl PDF deyil. Telefondan şəkil yox, .pdf faylını Files-dən seçin.');
+  }
+  const pdf = await openPdfDocument(buf);
   const pages = [];
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
     const raw = unwrapOptions(content?.items).filter((it) => it && typeof it === 'object');
+    const viewport = page.getViewport({ scale: 1 });
     const clipped = raw.filter((it) => {
       const y = itemY(it);
-      return y > 88 && y < viewport.height - 36;
+      return y > 40 && y < viewport.height - 20;
     });
-    const splitX = detectSplitX(clipped);
+    const source = clipped.length >= 8 ? clipped : raw;
+    const splitX = detectSplitX(source);
     const columns = splitX
-      ? [clipped.filter((it) => itemX(it) < splitX), clipped.filter((it) => itemX(it) >= splitX)]
-      : [clipped];
+      ? [source.filter((it) => itemX(it) < splitX), source.filter((it) => itemX(it) >= splitX)]
+      : [source];
     const pageLines = [];
     columns.forEach((col) => {
       if (!col.length) return;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getDocument } from 'pdfjs-dist';
+import { openPdfDocument } from '../lib/pdfEngine';
 
 export default function PdfViewer({ bytes, title = 'Orijinal PDF' }) {
   const wrapRef = useRef(null);
@@ -23,7 +23,10 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF' }) {
       const width = Math.max(240, wrap.clientWidth - 24);
       host.replaceChildren();
       const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
+      const maxPage = (typeof window !== 'undefined' && window.innerWidth < 768)
+        ? Math.min(pdf.numPages, 3)
+        : pdf.numPages;
+      for (let pageNum = 1; pageNum <= maxPage; pageNum += 1) {
         if (cancelled) return;
         const page = await pdf.getPage(pageNum);
         const base = page.getViewport({ scale: 1 });
@@ -57,8 +60,7 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF' }) {
       setLoading(true);
       setError('');
       try {
-        const data = new Uint8Array(bytes.slice ? bytes.slice(0) : bytes);
-        const pdf = await getDocument({ data, disableWorker: true }).promise;
+        const pdf = await openPdfDocument(bytes);
         if (cancelled) return;
         pdfRef.current = pdf;
         setPages(pdf.numPages);

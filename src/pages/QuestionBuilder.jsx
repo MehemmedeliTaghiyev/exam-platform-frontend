@@ -59,6 +59,7 @@ export default function QuestionBuilder() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfBytes, setPdfBytes] = useState(null);
   const [pdfName, setPdfName] = useState('');
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [answerKey, setAnswerKey] = useState({});
   const [openKeys, setOpenKeys] = useState({});
   const [kinds, setKinds] = useState({});
@@ -96,6 +97,7 @@ export default function QuestionBuilder() {
     if (cached?.bytes) {
       setPdfBytes(cached.bytes);
       setPdfName(cached.name || '');
+      setShowPdfPreview(true);
     }
   }, [id]);
 
@@ -187,6 +189,7 @@ export default function QuestionBuilder() {
         await addQuestion(id, toAddQuestionPayload(q));
       }
       stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
+      setShowPdfPreview(true);
       await load();
       setMessage(`${parsed.length} sual oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
     } catch (err) {
@@ -278,6 +281,7 @@ export default function QuestionBuilder() {
       dropTeacherPdf(id);
       setPdfBytes(null);
       setPdfName('');
+      setShowPdfPreview(false);
       setMessage('İmtahan dərc olundu. PDF artıq heç yerdə açılmır.');
       await load();
     } catch (err) {
@@ -369,6 +373,7 @@ export default function QuestionBuilder() {
                     const buf = await readBlobBytes(raw);
                     setPdfBytes(buf);
                     setPdfName(raw.name || 'exam.pdf');
+                    setShowPdfPreview(false);
                   } catch {
                     setMessage('Fayl oxunmadı. Files-dən PDF seçin.');
                     setPdfBytes(null);
@@ -396,8 +401,8 @@ export default function QuestionBuilder() {
               <Skeleton className="h-40" />
             </>
           ) : (
-            <div className={pdfBytes ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
-              {pdfBytes ? (
+            <div className={showPdfPreview && pdfBytes ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
+              {showPdfPreview && pdfBytes ? (
                 <PdfViewer bytes={pdfBytes} title="Orijinal PDF — yalnız müəllim" />
               ) : null}
               <div className="space-y-4">

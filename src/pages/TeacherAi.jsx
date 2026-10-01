@@ -15,7 +15,7 @@ function Locked() {
       <h2 className="mt-6 text-2xl font-black">AI bölməsi kilidlidir</h2>
       <p className="mt-3 text-sm leading-7 text-indigo-100">
         Bura daxil olmaq üçün <span className="font-semibold text-amber-300">Premium paket</span> tövsiyə olunur.
-        Premium ilə avtomatik imtahan, PDF-dən sual çıxarma və şagirdin mövzu anlayışını izləmək bir yerdə olacaq.
+        Premium ilə avtomatik imtahan və şagirdin mövzu anlayışını izləmək bir yerdə olacaq.
       </p>
       <p className="mt-4 text-xs text-indigo-300">Paketi aktivləşdirmək üçün ExamPulse admininə müraciət edin.</p>
     </div>
@@ -38,9 +38,9 @@ export default function TeacherAi() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">AI studio</p>
-                <h2 className="mt-1 text-2xl font-black">İmtahanı mətndən və ya PDF-dən yaradın</h2>
+                <h2 className="mt-1 text-2xl font-black">Mövzudan avtomatik imtahan</h2>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-indigo-100">
-                  Avtomatik imtahanda mövzunu yazın. PDF-də isə yalnız faylı yükləyin — suallar oxunur, istəsəniz dəyişirsiniz.
+                  Mövzunu yazın, AI sualları hazırlasın. PDF-dən sual çıxarma imtahan vərəqindədir — orada orijinal PDF-i də görürsünüz.
                 </p>
               </div>
             </div>

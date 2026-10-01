@@ -271,7 +271,7 @@ export default function AdminTeachers() {
     <AppShell title="Müəllim qeydiyyatı">
       <p className="mb-6 text-sm text-gray-500">
         Hər sətirdə əvvəl pəncərə, sonra istifadə müddəti (free-trial günü siz yazırsınız; aylıq həmişə 30 gündür),
-        yanında AI düyməsi. AI açıq olan müəllim kabinetində avtomatik imtahan və PDF-dən sual çıxara bilir.
+        yanında AI düyməsi. AI açıq olan müəllim kabinetində avtomatik imtahan yarada bilir.
       </p>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">

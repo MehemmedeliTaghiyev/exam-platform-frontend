@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import { fetchExamPdfBytes } from '../lib/examApi';
 
 try {
   GlobalWorkerOptions.workerSrc = new URL(
@@ -11,13 +10,12 @@ try {
   /* worker optional */
 }
 
-export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
-  const examId = exam?.id ?? exam?.Id;
+export default function PdfViewer({ file, title = 'Orijinal PDF' }) {
   const wrapRef = useRef(null);
   const hostRef = useRef(null);
   const pdfRef = useRef(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(file));
   const [pages, setPages] = useState(0);
 
   useEffect(() => {
@@ -38,8 +36,7 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
         if (cancelled) return;
         const page = await pdf.getPage(pageNum);
         const base = page.getViewport({ scale: 1 });
-        const scale = width / base.width;
-        const viewport = page.getViewport({ scale });
+        const viewport = page.getViewport({ scale: width / base.width });
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
@@ -62,16 +59,15 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
     };
 
     const load = async () => {
-      if (!examId && !exam?.pdfFilePath && !exam?.pdfFileUrl) {
+      if (!file) {
         setLoading(false);
         return;
       }
       setLoading(true);
       setError('');
       try {
-        const bytes = await fetchExamPdfBytes(exam);
-        if (cancelled) return;
-        const copy = () => new Uint8Array(bytes.slice ? bytes.slice(0) : bytes);
+        const buf = await file.arrayBuffer();
+        const copy = () => new Uint8Array(buf.slice(0));
         let pdf;
         try {
           pdf = await getDocument({ data: copy() }).promise;
@@ -82,15 +78,8 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
         pdfRef.current = pdf;
         setPages(pdf.numPages);
         await paint();
-      } catch (err) {
-        if (!cancelled) {
-          const status = err?.response?.status;
-          setError(
-            status === 404
-              ? 'PDF tapılmadı. Müəllim imtahanın PDF-ini yenidən yükləməlidir.'
-              : 'PDF açılmadı. Səhifəni yeniləyin və ya PDF-i yenidən yükləyin.',
-          );
-        }
+      } catch {
+        if (!cancelled) setError('PDF açılmadı. Faylı yenidən seçin.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -113,11 +102,9 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
       pdfRef.current = null;
       if (hostRef.current) hostRef.current.replaceChildren();
     };
-  }, [examId, exam?.pdfFilePath, exam?.pdfFileUrl]);
+  }, [file]);
 
-  if (!examId && !exam?.pdfFilePath && !exam?.pdfFileUrl) {
-    return null;
-  }
+  if (!file) return null;
 
   return (
     <div
@@ -126,10 +113,10 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
     >
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2 text-sm font-medium dark:border-slate-800">
         <span>{title}</span>
-        {pages > 0 && <span className="text-xs font-normal text-gray-500">{pages} səhifə · aşağı sürüşdürün</span>}
+        {pages > 0 && <span className="text-xs font-normal text-gray-500">{pages} səhifə · AI səhv oxuyarsa buradan düzəldin</span>}
       </div>
       {loading && (
-        <div className="flex h-40 items-center justify-center text-sm text-gray-500">PDF yüklənir...</div>
+        <div className="flex h-40 items-center justify-center text-sm text-gray-500">PDF açılır...</div>
       )}
       {error && !loading && <div className="px-4 py-8 text-center text-sm text-red-600">{error}</div>}
       <div

@@ -3,11 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileDown, BarChart3, Upload } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import PaperPreview from '../components/PaperPreview';
+import PdfViewer from '../components/PdfViewer';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
 const LETTERS = [
@@ -86,6 +88,11 @@ export default function QuestionBuilder() {
 
   useEffect(() => {
     load();
+  }, [id]);
+
+  useEffect(() => {
+    const cached = peekTeacherPdf(id);
+    if (cached) setPdfFile(cached);
   }, [id]);
 
   const handleAddQuestion = async (e) => {
@@ -168,9 +175,9 @@ export default function QuestionBuilder() {
       for (const q of parsed) {
         await addQuestion(id, toAddQuestionPayload(q));
       }
+      stashTeacherPdf(id, pdfFile);
       await load();
-      setPdfFile(null);
-      setMessage(`${parsed.length} sual AI ilə oxundu. Mətni və variantları aşağıda düzəldə bilərsiniz. Şagird PDF görməyəcək.`);
+      setMessage(`${parsed.length} sual AI ilə oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
     } catch (err) {
       setMessage(errorMessage(err, 'PDF oxunmadı.'));
     } finally {
@@ -252,7 +259,9 @@ export default function QuestionBuilder() {
         status,
         isDraft: false,
       });
-      setMessage('İmtahan dərc olundu.');
+      dropTeacherPdf(id);
+      setPdfFile(null);
+      setMessage('İmtahan dərc olundu. PDF artıq heç yerdə açılmır.');
       await load();
     } catch (err) {
       setMessage(errorMessage(err, 'İmtahan dərc olunmadı.'));
@@ -326,7 +335,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">PDF-dən clickable suallar</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF yalnız sizə kömək üçündür. AI sual + A–E mətnlərini çıxarır. Şagird PDF görmür, yalnız variantları basır. Sual sayını boş buraxa bilərsiniz.
+              PDF yükləyin — AI sualları çıxarır. Eyni səhifədə PDF qalır ki, səhv oxunuşu düzəldəsiniz. Dərcdən sonra PDF bağlanır, şagird yalnız kartları görür.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -354,11 +363,16 @@ export default function QuestionBuilder() {
               <Skeleton className="h-40" />
               <Skeleton className="h-40" />
             </>
-          ) : questions.length === 0 ? (
-            <Card className="text-sm text-gray-500">PDF yükləyin — suallar kart kimi burada çıxacaq. Şagird PDF görməyəcək.</Card>
           ) : (
-            <div className="space-y-4">
-              {questions.map((q, idx) => (
+            <div className={pdfFile ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
+              {pdfFile ? (
+                <PdfViewer file={pdfFile} title="Orijinal PDF — yalnız müəllim" />
+              ) : null}
+              <div className="space-y-4">
+          {questions.length === 0 ? (
+            <Card className="text-sm text-gray-500">PDF yükləyin — suallar kart kimi burada çıxacaq.</Card>
+          ) : (
+            questions.map((q, idx) => (
                 isOpenQuestion(q) ? (
                   <Card key={q.id || idx}>
                     <p className="text-sm font-semibold text-gray-500">Sual {idx + 1}</p>
@@ -375,7 +389,9 @@ export default function QuestionBuilder() {
                     onSaveEdit={(payload) => handleSaveCard(q, payload)}
                   />
                 )
-              ))}
+            ))
+          )}
+              </div>
             </div>
           )}
 

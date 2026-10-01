@@ -3,10 +3,11 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileDown, BarChart3, Upload } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import PaperPreview from '../components/PaperPreview';
-import PdfViewer from '../components/PdfViewer';
+import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, fetchExam, fetchQuestions, saveAnswerKey, updateExam, uploadExamPdfPack } from '../lib/examApi';
-import { errorMessage, examPdfUrl, isExamDraft, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
+import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { errorMessage, isExamDraft, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
+import { extractPdfText, isStrongExamParse, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { exportExamToDocx } from '../lib/exportDocx';
 
 const LETTERS = [
@@ -55,11 +56,11 @@ export default function QuestionBuilder() {
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfCount, setPdfCount] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [keyBusy, setKeyBusy] = useState(false);
   const [answerKey, setAnswerKey] = useState({});
   const [openKeys, setOpenKeys] = useState({});
   const [kinds, setKinds] = useState({});
   const [message, setMessage] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -135,62 +136,104 @@ export default function QuestionBuilder() {
 
   const handlePdfUpload = async (e) => {
     e.preventDefault();
-    const count = parseInt(pdfCount, 10);
     if (!pdfFile) {
       setMessage('PDF seçin.');
-      return;
-    }
-    if (!Number.isFinite(count) || count < 1 || count > 200) {
-      setMessage('PDF-dəki sual sayını 1–200 aralığında daxil edin.');
       return;
     }
     setPdfBusy(true);
     setMessage('');
     try {
-      const updated = await uploadExamPdfPack(id, pdfFile, count);
-      setExam(updated);
-      setPdfFile(null);
-      setPdfCount(String(count));
+      const text = await extractPdfText(pdfFile);
+      let parsed = parseQuestionsFromText(text);
+      const wanted = parseInt(pdfCount, 10);
+      if (!isStrongExamParse(parsed)) {
+        const aiParsed = await tryGenerateAiQuestions({
+          title: exam?.title || pdfFile.name.replace(/\.pdf$/i, ''),
+          topic: 'PDF',
+          subjectName: exam?.subjectName,
+          brief: text,
+          questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+          source: 'pdf',
+        }, { soft: true });
+        if (aiParsed?.length) parsed = aiParsed;
+      }
+      parsed = normalizeGeneratedQuestions(parsed);
+      if (!parsed.length) {
+        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
+      }
+      try {
+        const grades = await tryGradeAiQuestions(parsed, { soft: true });
+        if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
+      } catch {
+        /* teacher can fix answers */
+      }
+      for (const q of parsed) {
+        await addQuestion(id, toAddQuestionPayload(q));
+      }
       await load();
-      setMessage('PDF yükləndi. Variantlar A–E və ayrıca Açıq sahə, istəsəniz tam açıq sual da qura bilərsiniz.');
+      setPdfFile(null);
+      setMessage(`${parsed.length} sual AI ilə oxundu. Mətni və variantları aşağıda düzəldə bilərsiniz. Şagird PDF görməyəcək.`);
     } catch (err) {
-      setMessage(errorMessage(err, 'PDF yüklənmədi.'));
+      setMessage(errorMessage(err, 'PDF oxunmadı.'));
     } finally {
       setPdfBusy(false);
     }
   };
 
-  const handleSaveKey = async () => {
-    setKeyBusy(true);
-    setMessage('');
-    try {
-      const answers = questions.map((q) => {
-        const kind = kinds[q.id] || (isOpenQuestion(q) ? q.inputKind : 'Choice');
-        if (kind !== 'Choice') {
-          return {
-            questionId: q.id,
-            type: 'OpenEnded',
-            inputKind: kind,
-            correctText: openKeys[q.id] || '',
-            correctLetter: '',
-          };
-        }
-        const letter = answerKey[q.id] || 'A';
+  const persistKey = async (nextKey, nextOpen = openKeys) => {
+    const answers = questions.map((q) => {
+      const kind = kinds[q.id] || (isOpenQuestion(q) ? q.inputKind : 'Choice');
+      if (kind !== 'Choice') {
         return {
           questionId: q.id,
-          type: 'SingleChoice',
-          inputKind: 'Choice',
-          correctLetter: letter,
-          correctText: letter === 'OPEN' ? (openKeys[q.id] || '') : '',
+          type: 'OpenEnded',
+          inputKind: kind,
+          correctText: nextOpen[q.id] || '',
+          correctLetter: '',
         };
-      });
-      const list = await saveAnswerKey(id, answers);
-      setQuestions(list);
-      setMessage('Cavab açarı saxlanıldı.');
+      }
+      const letter = nextKey[q.id] || 'A';
+      return {
+        questionId: q.id,
+        type: 'SingleChoice',
+        inputKind: 'Choice',
+        correctLetter: letter,
+        correctText: letter === 'OPEN' ? (nextOpen[q.id] || '') : '',
+      };
+    });
+    const list = await saveAnswerKey(id, answers);
+    setQuestions(list);
+  };
+
+  const handleMarkCorrect = async (question, letter) => {
+    const nextKey = { ...answerKey, [question.id]: letter };
+    setAnswerKey(nextKey);
+    try {
+      await persistKey(nextKey);
     } catch (err) {
-      setMessage(errorMessage(err, 'Cavab açarı yazılmadı.'));
+      setMessage(errorMessage(err, 'Düzgün variant yazılmadı.'));
+    }
+  };
+
+  const handleSaveCard = async (question, payload) => {
+    setEditBusy(true);
+    setMessage('');
+    try {
+      await updateQuestion(id, question.id, toAddQuestionPayload({
+        text: payload.text,
+        correctLetter: payload.correctLetter,
+        difficultyLevel: payload.difficultyLevel,
+        options: payload.options,
+      }));
+      const nextKey = { ...answerKey, [question.id]: payload.correctLetter };
+      setAnswerKey(nextKey);
+      await persistKey(nextKey);
+      await load();
+      setMessage('Sual yeniləndi.');
+    } catch (err) {
+      setMessage(errorMessage(err, 'Sual yenilənmədi.'));
     } finally {
-      setKeyBusy(false);
+      setEditBusy(false);
     }
   };
 
@@ -282,9 +325,9 @@ export default function QuestionBuilder() {
       ) : (
         <div className="space-y-8">
           <Card>
-            <h3 className="mb-2 text-base font-bold">PDF ilə sual yüklə</h3>
+            <h3 className="mb-2 text-base font-bold">PDF-dən clickable suallar</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF-i yükləyin, altda sual sayını yazın. Hər sual üçün A–E hərf variantları və ayrıca Açıq yazı sahəsi var.
+              PDF yalnız sizə kömək üçündür. AI sual + A–E mətnlərini çıxarır. Şagird PDF görmür, yalnız variantları basır. Sual sayını boş buraxa bilərsiniz.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
@@ -294,99 +337,50 @@ export default function QuestionBuilder() {
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-white"
               />
               <Input
-                label="PDF-dəki sual sayı"
+                label="Sual sayı (istəyə bağlı)"
                 type="number"
                 min="1"
                 max="200"
                 value={pdfCount}
                 onChange={(e) => setPdfCount(e.target.value)}
-                required
               />
               <Button type="submit" disabled={pdfBusy}>
-                <Upload size={16} /> {pdfBusy ? 'Yüklənir...' : 'PDF yüklə və yerləri aç'}
+                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən sualları çıxar'}
               </Button>
             </form>
           </Card>
 
-          {exam?.id || id ? <PdfViewer exam={exam || { id }} title="Yüklənən PDF" /> : null}
-
-          {questions.length > 0 && (
-            <Card>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-base font-bold">Cavab açarı</h3>
-                <Button onClick={handleSaveKey} disabled={keyBusy}>
-                  {keyBusy ? 'Saxlanılır...' : 'Cavabları saxla'}
-                </Button>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {questions.map((q, idx) => {
-                  const kind = kinds[q.id] || 'Choice';
-                  return (
-                    <div key={q.id} className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
-                      <p className="mb-2 text-sm font-medium">{idx + 1}. {q.text}</p>
-                      <Select
-                        label="Cavab növü"
-                        value={kind}
-                        onChange={(e) => setKinds((p) => ({ ...p, [q.id]: e.target.value }))}
-                      >
-                        <option value="Choice">A–E + Açıq</option>
-                        <option value="Text">Açıq mətn</option>
-                        <option value="Integer">Tam ədəd</option>
-                        <option value="Decimal">Onluq ədəd</option>
-                      </Select>
-                      {kind === 'Choice' ? (
-                        <>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {LETTERS.map((letter) => (
-                            <label
-                              key={letter.value}
-                              className={`flex flex-1 min-w-[3.5rem] cursor-pointer items-center justify-center rounded-lg border py-2 text-sm ${
-                                answerKey[q.id] === letter.value
-                                  ? 'border-brand-500 bg-brand-50 font-semibold dark:bg-brand-600/20'
-                                  : 'border-gray-200 dark:border-slate-700'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                className="sr-only"
-                                name={`key-${q.id}`}
-                                checked={answerKey[q.id] === letter.value}
-                                onChange={() => setAnswerKey((p) => ({ ...p, [q.id]: letter.value }))}
-                              />
-                              {letter.label}
-                            </label>
-                          ))}
-                        </div>
-                        {answerKey[q.id] === 'OPEN' && (
-                          <div className="mt-2">
-                            <Input
-                              label="Açıq düzgün cavab"
-                              value={openKeys[q.id] || ''}
-                              onChange={(e) => setOpenKeys((p) => ({ ...p, [q.id]: e.target.value }))}
-                            />
-                          </div>
-                        )}
-                        </>
-                      ) : (
-                        <div className="mt-2">
-                          <Input
-                            label="Düzgün cavab"
-                            type={kind === 'Text' ? 'text' : 'number'}
-                            step={kind === 'Decimal' ? 'any' : kind === 'Integer' ? '1' : undefined}
-                            value={openKeys[q.id] || ''}
-                            onChange={(e) => setOpenKeys((p) => ({ ...p, [q.id]: e.target.value }))}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
+          {loading ? (
+            <>
+              <Skeleton className="h-40" />
+              <Skeleton className="h-40" />
+            </>
+          ) : questions.length === 0 ? (
+            <Card className="text-sm text-gray-500">PDF yükləyin — suallar kart kimi burada çıxacaq. Şagird PDF görməyəcək.</Card>
+          ) : (
+            <div className="space-y-4">
+              {questions.map((q, idx) => (
+                isOpenQuestion(q) ? (
+                  <Card key={q.id || idx}>
+                    <p className="text-sm font-semibold text-gray-500">Sual {idx + 1}</p>
+                    <p className="mt-2 font-medium">{q.text}</p>
+                    <p className="mt-2 text-sm text-emerald-600">Düzgün: {q.correctText || '—'}</p>
+                  </Card>
+                ) : (
+                  <QuestionCard
+                    key={q.id || idx}
+                    mode="teacher"
+                    index={idx}
+                    question={{ ...q, correctLetter: answerKey[q.id] || letterOf(q), difficultyLevel: q.difficultyLevel || 'orta' }}
+                    onMarkCorrect={(letter) => handleMarkCorrect(q, letter)}
+                    onSaveEdit={(payload) => handleSaveCard(q, payload)}
+                  />
+                )
+              ))}
+            </div>
           )}
 
-          <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
-            <Card>
+          <Card>
               <h3 className="mb-4 text-base font-bold">Əl ilə yeni sual</h3>
               <form onSubmit={handleAddQuestion} className="space-y-4">
                 <Select label="Sual tipi" value={questionKind} onChange={(e) => setQuestionKind(e.target.value)}>
@@ -456,45 +450,6 @@ export default function QuestionBuilder() {
                 </Button>
               </form>
             </Card>
-
-            <div className="space-y-4">
-              <h3 className="text-base font-bold">Mövcud suallar</h3>
-              {loading ? (
-                <>
-                  <Skeleton className="h-24" />
-                  <Skeleton className="h-24" />
-                </>
-              ) : questions.length === 0 ? (
-                <Card className="text-sm text-gray-500">Hələ sual yoxdur.</Card>
-              ) : (
-                questions.map((q, idx) => (
-                  <Card key={q.id || idx}>
-                    <p className="font-medium">
-                      {idx + 1}. {q.text}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {isOpenQuestion(q) ? `Açıq cavab (${q.inputKind || 'Text'})` : 'Variantlı'}
-                    </p>
-                    {isOpenQuestion(q) ? (
-                      <p className="mt-2 text-sm text-emerald-600">Düzgün: {q.correctText || '—'}</p>
-                    ) : (
-                      <ul className="mt-3 space-y-1 text-sm">
-                        {(q.options || []).map((opt, oi) => (
-                          <li
-                            key={opt.id || oi}
-                            className={opt.isCorrect ? 'font-medium text-emerald-600' : 'text-gray-600 dark:text-gray-300'}
-                          >
-                            {LETTERS[oi]?.label || String.fromCharCode(65 + oi)}) {opt.optionText || opt.text}{' '}
-                            {opt.isCorrect ? '✓' : ''}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </Card>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       )}
     </AppShell>

@@ -1,9 +1,10 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileUp, Pencil, ScanLine, Trash2, Wand2 } from 'lucide-react';
+import { FileUp, Pencil, ScanLine, Wand2 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Input, Select, Textarea } from './ui';
-import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, tryGradeAiQuestions, uploadExamPdfPack } from '../lib/examApi';
+import QuestionCard from './QuestionCard';
+import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, tryGradeAiQuestions } from '../lib/examApi';
 import { recordAiUsage } from '../lib/aiUsage';
 import { extractPdfText, hasRealChoiceOptions, isStrongExamParse, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
@@ -66,7 +67,7 @@ export default function TeacherAiPanel() {
     return subjects.find((s) => String(s.id) === String(subjectId));
   };
 
-  const buildExam = async (questions, file, extra = {}) => {
+  const buildExam = async (questions, extra = {}) => {
     const subject = await resolveSubject();
     const start = new Date(startLocal);
     if (Number.isNaN(start.getTime())) throw new Error('Başlama tarixini seçin.');
@@ -94,13 +95,6 @@ export default function TeacherAiPanel() {
         await addQuestion(exam.id, toAddQuestionPayload(q));
       } catch {
         /* keep going */
-      }
-    }
-    if (file) {
-      try {
-        await uploadExamPdfPack(exam.id, file, questions.length);
-      } catch {
-        /* optional */
       }
     }
     return exam;
@@ -222,20 +216,6 @@ export default function TeacherAiPanel() {
     setPdfQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, ...patch } : q)));
   };
 
-  const updatePdfOption = (qIndex, letter, text) => {
-    setPdfQuestions((prev) => prev.map((q, i) => {
-      if (i !== qIndex) return q;
-      return {
-        ...q,
-        options: LETTERS.map((L) => {
-          const found = (q.options || []).find((o) => o.letter === L);
-          const nextText = L === letter ? text : (found?.text || '');
-          return { letter: L, text: nextText, isCorrect: L === q.correctLetter };
-        }),
-      };
-    }));
-  };
-
   const setPdfCorrect = (qIndex, letter) => {
     setPdfQuestions((prev) => prev.map((q, i) => {
       if (i !== qIndex) return q;
@@ -274,7 +254,7 @@ export default function TeacherAiPanel() {
         }))
         .filter((q) => q.text);
       if (!cleaned.length) throw new Error('Ən azı bir sual mətni yazın.');
-      const exam = await buildExam(cleaned, pdfFile, {
+      const exam = await buildExam(cleaned, {
         title: title.trim() || pdfFile?.name?.replace(/\.pdf$/i, ''),
         description: 'PDF-dən oxunmuş imtahan',
         fallbackTitle: 'PDF',
@@ -369,7 +349,7 @@ Cavab: B`}</pre>
       ) : (
         <div className="space-y-5">
           <p className="text-sm leading-6 text-indigo-100">
-            Burada mövzu və say yazmağa ehtiyac yoxdur. PDF-i yükləyin — iki sütunlu buraxılış testləri (A–E eyni sətirdə) də oxunur. Cavab açarı PDF-də yoxdursa, düzgün variantı özünüz işarələyin. Şagird 5 variant + 6-cı <span className="font-semibold text-amber-200">Açıq</span> görür.
+            Burada mövzu və say yazmağa ehtiyac yoxdur. PDF-i yükləyin — iki sütunlu buraxılış testləri (A–E eyni sətirdə) də oxunur. Cavab açarı PDF-də yoxdursa, düzgün variantı özünüz işarələyin. Şagird PDF görmür: yalnız sual mətni və clickable A–E (+ Açıq).
           </p>
           <pre className="overflow-x-auto rounded-2xl bg-black/25 p-4 text-xs leading-6 text-amber-100 ring-1 ring-white/10">{`1. Sualın mətni
 A) variant
@@ -438,83 +418,29 @@ Cavab: A`}</pre>
               </div>
               <div className="space-y-4">
                 {pdfQuestions.map((q, index) => (
-                  <div key={`pdf-q-${index}`} className="rounded-2xl bg-black/20 p-4 ring-1 ring-white/10">
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-amber-200">Sual {index + 1}</p>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs text-red-200 hover:text-red-100"
-                        onClick={() => setPdfQuestions((prev) => prev.filter((_, i) => i !== index))}
-                      >
-                        <Trash2 size={14} /> Sil
-                      </button>
-                    </div>
-                    <Textarea
-                      label="Sual mətni"
-                      rows={3}
-                      value={q.text}
-                      onChange={(e) => updatePdfQuestion(index, { text: e.target.value })}
-                    />
-                    <div className="mt-3 space-y-2">
-                      {LETTERS.map((letter) => {
-                        const opt = (q.options || []).find((o) => o.letter === letter);
-                        return (
-                          <label key={letter} className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
-                            <input
-                              type="radio"
-                              name={`correct-${index}`}
-                              checked={q.correctLetter === letter}
-                              onChange={() => setPdfCorrect(index, letter)}
-                            />
-                            <span className="w-5 text-xs font-bold text-amber-200">{letter}</span>
-                            <input
-                              value={opt?.text || ''}
-                              onChange={(e) => updatePdfOption(index, letter, e.target.value)}
-                              className="min-w-0 flex-1 rounded-lg border border-white/15 bg-white px-2 py-1.5 text-sm text-ink"
-                            />
-                          </label>
-                        );
-                      })}
-                      <label className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
-                        <input
-                          type="radio"
-                          name={`correct-${index}`}
-                          checked={q.correctLetter === 'OPEN'}
-                          onChange={() => setPdfCorrect(index, 'OPEN')}
-                        />
-                        <span className="w-12 text-xs font-bold text-amber-200">Açıq</span>
-                        <span className="text-xs text-indigo-200">6-cı variant — şagird öz cavabını yazacaq</span>
-                      </label>
-                      {q.correctLetter === 'OPEN' && (
-                        <Input
-                          label="Açıq düzgün cavab (istəyə bağlı)"
-                          value={q.correctText || ''}
-                          onChange={(e) => updatePdfQuestion(index, { correctText: e.target.value })}
-                        />
-                      )}
-                    </div>
-                    <p className="mt-2 text-xs text-indigo-200">
-                      Düzgün cavab: {q.correctLetter === 'OPEN' ? 'Açıq' : q.correctLetter} (soldakı dairəni dəyişin)
-                    </p>
-                    <div className="mt-3">
-                      <Select
-                        label="Çətinlik (AI)"
-                        value={q.difficultyLevel || 'orta'}
-                        onChange={(e) => updatePdfQuestion(index, { difficultyLevel: e.target.value })}
-                      >
-                        <option value="asan">Asan · 1 bal</option>
-                        <option value="orta">Orta · 2 bal</option>
-                        <option value="çətin">Çətin · 3 bal</option>
-                      </Select>
-                    </div>
-                  </div>
+                  <QuestionCard
+                    key={`pdf-q-${index}`}
+                    theme="dark"
+                    mode="teacher"
+                    index={index}
+                    question={q}
+                    onMarkCorrect={(letter) => setPdfCorrect(index, letter)}
+                    onSaveEdit={(payload) => {
+                      updatePdfQuestion(index, {
+                        text: payload.text,
+                        correctLetter: payload.correctLetter,
+                        difficultyLevel: payload.difficultyLevel,
+                        options: payload.options,
+                      });
+                    }}
+                  />
                 ))}
               </div>
               {error && <p className="text-sm text-red-200">{error}</p>}
               {message && <p className="text-sm text-emerald-200">{message}</p>}
               <div className="flex justify-end">
                 <Button type="submit" disabled={busy} className="bg-amber-400 text-indigo-950 hover:bg-amber-300">
-                  {busy ? 'Saxlanılır...' : 'Qaralama kimi saxla'}
+                  {busy ? 'Saxlanılır...' : 'Qaralama saxla — sonra dərc edin'}
                 </Button>
               </div>
             </form>

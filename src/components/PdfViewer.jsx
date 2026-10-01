@@ -24,6 +24,8 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
     let cancelled = false;
     let debounce;
 
+    const yieldFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
     const paint = async () => {
       const pdf = pdfRef.current;
       const host = hostRef.current;
@@ -31,6 +33,7 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
       if (!pdf || !host || !wrap) return;
       const width = Math.max(240, wrap.clientWidth - 24);
       host.replaceChildren();
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
         if (cancelled) return;
         const page = await pdf.getPage(pageNum);
@@ -38,7 +41,6 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
         const scale = width / base.width;
         const viewport = page.getViewport({ scale });
         const canvas = document.createElement('canvas');
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
         canvas.style.width = '100%';
@@ -47,14 +49,15 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
         canvas.className = 'mb-3 rounded-md bg-white shadow-sm';
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) continue;
-        const task = page.render({
+        await page.render({
           canvasContext: ctx,
           canvas,
           viewport,
           transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-        });
-        await task.promise;
+        }).promise;
         host.appendChild(canvas);
+        if (pageNum === 1) setLoading(false);
+        await yieldFrame();
       }
     };
 
@@ -68,8 +71,13 @@ export default function PdfViewer({ exam, title = 'İmtahan PDF' }) {
       try {
         const bytes = await fetchExamPdfBytes(exam);
         if (cancelled) return;
-        const data = new Uint8Array(bytes.slice ? bytes.slice(0) : bytes);
-        const pdf = await getDocument({ data, disableWorker: true }).promise;
+        const copy = () => new Uint8Array(bytes.slice ? bytes.slice(0) : bytes);
+        let pdf;
+        try {
+          pdf = await getDocument({ data: copy() }).promise;
+        } catch {
+          pdf = await getDocument({ data: copy(), disableWorker: true }).promise;
+        }
         if (cancelled) return;
         pdfRef.current = pdf;
         setPages(pdf.numPages);

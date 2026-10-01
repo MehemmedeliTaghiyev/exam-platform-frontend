@@ -740,11 +740,50 @@ export async function addQuestion(examId, payload) {
   throw lastError || new Error('Sual serverə yazılmadı.');
 }
 
+export async function updateQuestion(examId, questionId, payload) {
+  const urls = [
+    `/Questions/${questionId}`,
+    `/Exams/${examId}/questions/${questionId}`,
+    `/Questions/exam/${examId}/${questionId}`,
+  ];
+  const bodies = [
+    payload,
+    {
+      Text: payload.text,
+      Points: payload.points ?? 1,
+      Type: payload.type ?? 'SingleChoice',
+      InputKind: payload.inputKind,
+      CorrectText: payload.correctText,
+      DifficultyLevel: payload.difficultyLevel,
+      Options: payload.options,
+    },
+  ];
+  let lastError;
+  for (const url of urls) {
+    for (const method of ['put', 'patch']) {
+      for (const body of bodies) {
+        try {
+          await API[method](url, body, { timeout: 15000 });
+          return (await fetchQuestions(examId)).find((q) => String(q.id) === String(questionId));
+        } catch (err) {
+          lastError = err;
+        }
+      }
+    }
+  }
+  throw lastError || new Error('Sual yenilənmədi.');
+}
+
+const pdfBytesCache = new Map();
+
 export async function fetchExamPdfBytes(exam) {
   const examId = exam?.id ?? exam?.Id;
+  const cacheKey = examId != null ? `id:${examId}` : `path:${examPdfUrl(exam)}`;
+  const cached = pdfBytesCache.get(cacheKey);
+  if (cached) return cached;
+
   const path = examPdfUrl(exam);
   const token = localStorage.getItem('token');
-  const buffers = [];
   let notFound = false;
 
   const asBuffer = async (res) => {
@@ -761,7 +800,11 @@ export async function fetchExamPdfBytes(exam) {
         timeout: 60000,
         headers: { Accept: 'application/pdf' },
       });
-      buffers.push(await asBuffer(res));
+      const buf = await asBuffer(res);
+      if (isPdfBuffer(buf)) {
+        pdfBytesCache.set(cacheKey, buf);
+        return buf;
+      }
     } catch (err) {
       if (err?.response?.status === 404) notFound = true;
     }
@@ -782,19 +825,19 @@ export async function fetchExamPdfBytes(exam) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) continue;
-      buffers.push(await res.arrayBuffer());
+      const buf = await res.arrayBuffer();
+      if (isPdfBuffer(buf)) {
+        pdfBytesCache.set(cacheKey, buf);
+        return buf;
+      }
     } catch {
       /* next */
     }
   }
 
-  const pdf = buffers.find(isPdfBuffer);
-  if (!pdf) {
-    const err = new Error('PDF tapılmadı');
-    err.response = { status: notFound ? 404 : 0 };
-    throw err;
-  }
-  return pdf;
+  const err = new Error('PDF tapılmadı');
+  err.response = { status: notFound ? 404 : 0 };
+  throw err;
 }
 
 function isPdfBuffer(buf) {

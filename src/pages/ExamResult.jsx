@@ -9,7 +9,6 @@ import { AuthContext } from '../context/AuthContext';
 import { Award, CheckCircle2, Percent, XCircle } from 'lucide-react';
 import { durationSecondsBetween, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
-import PdfViewer from '../components/PdfViewer';
 
 function toReviewQuestions(list = []) {
   return list.map((q, index) => {
@@ -150,17 +149,10 @@ export default function ExamResult() {
     : user?.role === 'Student'
       ? '/student'
       : `/teacher/exams/${result?.examId || examId}/stats`;
-  const pdfExam = {
-    ...(examMeta || {}),
-    id: examMeta?.id || examId || result?.examId,
-    pdfFilePath: examMeta?.pdfFilePath || examMeta?.PdfFilePath || review?.pdfFilePath,
-    pdfFileUrl: examMeta?.pdfFileUrl || examMeta?.PdfFileUrl || review?.pdfFileUrl,
-  };
-  const hasPdf = Boolean(pdfExam.id);
 
   return (
     <AppShell title="İmtahan nəticəsi">
-      <div className={`mx-auto space-y-8 ${hasPdf ? 'max-w-6xl' : 'max-w-3xl'}`}>
+      <div className="mx-auto max-w-3xl space-y-8">
         {isPersonal && examEnded && (
           <Card className="text-center">
             <p className="text-sm text-gray-500">{result.examTitle || `İmtahan #${result.examId}`}</p>
@@ -199,16 +191,13 @@ export default function ExamResult() {
 
         {examEnded ? (
           <>
-            <div className={hasPdf ? 'grid gap-6 lg:grid-cols-[1.2fr_0.8fr]' : ''}>
-              {hasPdf && <PdfViewer exam={pdfExam} title="İmtahan PDF" />}
-              <div>
+            <div>
                 <h3 className="mb-4 text-lg font-bold">İmtahan vərəqi</h3>
                 {questions.length ? (
                   <QuestionReviewList questions={questions} />
                 ) : (
                   <Card className="text-sm text-gray-500">Bu imtahana hələ sual əlavə edilməyib.</Card>
                 )}
-              </div>
             </div>
 
             {mistakes.length > 0 && (
@@ -227,9 +216,7 @@ export default function ExamResult() {
             </Card>
           </>
         ) : (
-          <div className={hasPdf ? 'grid gap-6 lg:grid-cols-[1.2fr_0.8fr]' : ''}>
-            {hasPdf && <PdfViewer exam={pdfExam} title="İmtahan PDF" />}
-            <div>
+          <div>
               <p className="mb-4 text-center text-sm text-gray-500">
                 İmtahan təhvil verilib. Cavablar dəyişdirilə bilməz. Düzgün/səhv yoxlama və sıralama imtahan bitəndən sonra açılacaq.
               </p>
@@ -238,7 +225,6 @@ export default function ExamResult() {
               ) : (
                 <Card className="text-sm text-gray-500">Cavablar tapılmadı.</Card>
               )}
-            </div>
           </div>
         )}
 

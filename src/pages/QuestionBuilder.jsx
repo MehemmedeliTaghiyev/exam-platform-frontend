@@ -8,7 +8,7 @@ import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
-import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { extractPdfText, asReusablePdfFile, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
@@ -150,7 +150,10 @@ export default function QuestionBuilder() {
     setPdfBusy(true);
     setMessage('');
     try {
-      const text = await extractPdfText(pdfFile);
+      const text = String(await extractPdfText(pdfFile) || '').trim();
+      if (text.length < 40) {
+        throw new Error('PDF-dən mətn oxunmadı. Telefondan şəkil/skan yox, mətnli PDF göndərin (kompüterdəki eyni fayl).');
+      }
       let parsed = parseQuestionsFromText(text);
       const wanted = parseInt(pdfCount, 10);
       const aiParsed = await tryGenerateAiQuestions({
@@ -341,7 +344,18 @@ export default function QuestionBuilder() {
               <input
                 type="file"
                 accept="application/pdf,.pdf"
-                onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                onChange={async (e) => {
+                  const raw = e.target.files?.[0] || null;
+                  if (!raw) {
+                    setPdfFile(null);
+                    return;
+                  }
+                  try {
+                    setPdfFile(await asReusablePdfFile(raw));
+                  } catch {
+                    setPdfFile(raw);
+                  }
+                }}
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-white"
               />
               <Input

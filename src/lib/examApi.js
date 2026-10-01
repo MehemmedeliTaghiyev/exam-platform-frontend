@@ -931,18 +931,21 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     const data = unwrapItem(res.data) || res.data || {};
     const list = unwrapList(data.questions || data);
     if (!list.length) return null;
-    return list.map((q) => ({
-      text: q.text || q.questionText || q.stem,
-      options: unwrapOptions(q.options).map((o, idx) => ({
-        letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
-        text: o.text || o.optionText,
-        isCorrect: Boolean(o.isCorrect),
-      })),
-      correctLetter: q.correctLetter
-        || unwrapOptions(q.options).find((o) => o.isCorrect)?.letter
-        || 'A',
-      difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
-    }));
+    return list.map((q) => {
+      const opts = unwrapOptions(q?.options);
+      return {
+        text: q.text || q.questionText || q.stem,
+        options: opts.map((o, idx) => ({
+          letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
+          text: o.text || o.optionText,
+          isCorrect: Boolean(o.isCorrect),
+        })),
+        correctLetter: q.correctLetter
+          || opts.find((o) => o.isCorrect)?.letter
+          || 'A',
+        difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
+      };
+    }).filter((q) => q.text);
   } catch (err) {
     const status = err?.response?.status;
     if (!status || status === 404 || (soft && [401, 403, 405, 502, 503].includes(status))) return null;

@@ -173,6 +173,12 @@ function extractColumnText(items) {
     .filter((line) => !/^[\d\s]+$/.test(line));
 }
 
+export async function asReusablePdfFile(file) {
+  if (!file) return null;
+  const buf = await file.arrayBuffer();
+  return new File([buf], file.name || 'exam.pdf', { type: file.type || 'application/pdf' });
+}
+
 export async function extractPdfText(file) {
   const buf = await file.arrayBuffer();
   const pdf = await getDocument({ data: new Uint8Array(buf), disableWorker: true }).promise;
@@ -181,7 +187,7 @@ export async function extractPdfText(file) {
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
-    const raw = (content.items || []).filter((it) => {
+    const raw = unwrapOptions(content.items).filter((it) => {
       const y = itemY(it);
       return y > 88 && y < viewport.height - 36;
     });
@@ -390,10 +396,11 @@ export function questionsFromBrief({ topic, count, easy = 0, medium = 0, hard = 
 }
 
 export function toAddQuestionPayload(q) {
-  const fromFlags = (q.options || []).find((o) => o.isCorrect)?.letter;
+  const opts = unwrapOptions(q.options);
+  const fromFlags = opts.find((o) => o.isCorrect)?.letter;
   const correctLetter = String(q.correctLetter || fromFlags || 'A').toUpperCase();
   const options = LETTERS.map((letter) => {
-    const found = (q.options || []).find((o) => String(o.letter || '').toUpperCase() === letter);
+    const found = opts.find((o) => String(o.letter || '').toUpperCase() === letter);
     return {
       optionText: String(found?.text || letter).trim() || letter,
       isCorrect: correctLetter === letter,

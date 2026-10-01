@@ -633,6 +633,8 @@ export async function updateExam(id, payload) {
     EndTime: payload.endTime,
     status: payload.status,
     Status: payload.status,
+    isDraft: payload.isDraft,
+    IsDraft: payload.isDraft,
   }, FAST);
 }
 

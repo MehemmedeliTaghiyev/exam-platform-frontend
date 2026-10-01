@@ -236,8 +236,8 @@ export default function TeacherDashboard() {
         subjectName: subject?.name,
         startTime: start.toISOString(),
         endTime: end.toISOString(),
-        isDraft: false,
-        status: start.getTime() > Date.now() ? 'Scheduled' : 'Live',
+        isDraft: true,
+        status: 'Draft',
       };
 
       let exam;

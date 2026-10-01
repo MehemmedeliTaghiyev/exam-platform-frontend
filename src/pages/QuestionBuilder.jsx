@@ -6,8 +6,8 @@ import PaperPreview from '../components/PaperPreview';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, applyAiAnswers, fetchExam, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
-import { errorMessage, isExamDraft, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
-import { extractPdfText, isStrongExamParse, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
+import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { exportExamToDocx } from '../lib/exportDocx';
 
 const LETTERS = [
@@ -146,17 +146,15 @@ export default function QuestionBuilder() {
       const text = await extractPdfText(pdfFile);
       let parsed = parseQuestionsFromText(text);
       const wanted = parseInt(pdfCount, 10);
-      if (!isStrongExamParse(parsed)) {
-        const aiParsed = await tryGenerateAiQuestions({
-          title: exam?.title || pdfFile.name.replace(/\.pdf$/i, ''),
-          topic: 'PDF',
-          subjectName: exam?.subjectName,
-          brief: text,
-          questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-          source: 'pdf',
-        }, { soft: true });
-        if (aiParsed?.length) parsed = aiParsed;
-      }
+      const aiParsed = await tryGenerateAiQuestions({
+        title: exam?.title || pdfFile.name.replace(/\.pdf$/i, ''),
+        topic: 'PDF',
+        subjectName: exam?.subjectName,
+        brief: text,
+        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+        source: 'pdf',
+      }, { soft: true });
+      if (aiParsed?.length) parsed = aiParsed;
       parsed = normalizeGeneratedQuestions(parsed);
       if (!parsed.length) {
         throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
@@ -252,6 +250,7 @@ export default function QuestionBuilder() {
         startTime: start,
         endTime: end,
         status,
+        isDraft: false,
       });
       setMessage('İmtahan dərc olundu.');
       await load();
@@ -273,9 +272,9 @@ export default function QuestionBuilder() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {isExamDraft(exam) && (
-            <Button onClick={publishDraft}>İmtahanı dərc et</Button>
-          )}
+          <Button onClick={publishDraft} disabled={!questions.length}>
+            İmtahanı dərc et
+          </Button>
           <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
             <BarChart3 size={16} /> Statistika
           </Button>

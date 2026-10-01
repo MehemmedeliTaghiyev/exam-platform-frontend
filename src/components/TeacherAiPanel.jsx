@@ -4,9 +4,9 @@ import { FileUp, Pencil, ScanLine, Wand2 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Input, Select, Textarea } from './ui';
 import QuestionCard from './QuestionCard';
-import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, tryGradeAiQuestions } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam } from '../lib/examApi';
 import { recordAiUsage } from '../lib/aiUsage';
-import { extractPdfText, hasRealChoiceOptions, isStrongExamParse, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { extractPdfText, hasRealChoiceOptions, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -30,7 +30,7 @@ function emptyQuestion(index = 0) {
 export default function TeacherAiPanel() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const [tab, setTab] = useState('auto');
+  const [tab, setTab] = useState('pdf');
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState('');
   const [newSubject, setNewSubject] = useState('');
@@ -157,23 +157,21 @@ export default function TeacherAiPanel() {
       const text = await extractPdfText(pdfFile);
       let parsed = parseQuestionsFromText(text);
       let usedAiAnswers = false;
-      if (!isStrongExamParse(parsed)) {
-        try {
-          const aiParsed = await tryGenerateAiQuestions({
-            title: title.trim() || pdfFile.name.replace(/\.pdf$/i, ''),
-            topic: 'PDF',
-            subjectName: subjects.find((s) => String(s.id) === String(subjectId))?.name || newSubject.trim(),
-            brief: text,
-            questionCount: Math.max(parsed.length, 25),
-            source: 'pdf',
-          }, { soft: true });
-          if (aiParsed?.length) {
-            parsed = aiParsed;
-            usedAiAnswers = true;
-          }
-        } catch {
-          /* keep local parse */
+      try {
+        const aiParsed = await tryGenerateAiQuestions({
+          title: title.trim() || pdfFile.name.replace(/\.pdf$/i, ''),
+          topic: 'PDF',
+          subjectName: subjects.find((s) => String(s.id) === String(subjectId))?.name || newSubject.trim(),
+          brief: text,
+          questionCount: Math.max(parsed.length, Number(questionCount) || 25),
+          source: 'pdf',
+        }, { soft: true });
+        if (aiParsed?.length) {
+          parsed = aiParsed;
+          usedAiAnswers = true;
         }
+      } catch {
+        /* keep local parse */
       }
       if (!parsed.length) {
         throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin — iki sütunlu buraxılış testləri də dəstəklənir.');
@@ -230,8 +228,7 @@ export default function TeacherAiPanel() {
     }));
   };
 
-  const handleSavePdfExam = async (e) => {
-    e.preventDefault();
+  const savePdfQuestions = async ({ publish }) => {
     if (busy) return;
     if (!pdfQuestions.length) {
       setError('Əvvəl PDF-dən sualları oxuyun.');
@@ -241,7 +238,7 @@ export default function TeacherAiPanel() {
     setError('');
     setMessage('');
     try {
-            const cleaned = pdfQuestions
+      const cleaned = pdfQuestions
         .map((q) => ({
           ...q,
           text: String(q.text || '').trim(),
@@ -259,13 +256,36 @@ export default function TeacherAiPanel() {
         description: 'PDF-dən oxunmuş imtahan',
         fallbackTitle: 'PDF',
       });
-      setMessage(`${cleaned.length} sual qaralama kimi saxlandı. İstəsəniz imtahan səhifəsində də dəyişə bilərsiniz.`);
+      if (publish) {
+        const start = new Date(startLocal);
+        const duration = Number(durationMinutes) || 45;
+        const end = new Date((Number.isNaN(start.getTime()) ? Date.now() : start.getTime()) + duration * 60 * 1000);
+        const status = !Number.isNaN(start.getTime()) && start.getTime() > Date.now() ? 'Scheduled' : 'Live';
+        await updateExam(exam.id, {
+          subjectId: exam.subjectId,
+          title: exam.title,
+          durationMinutes: duration,
+          totalQuestions: cleaned.length,
+          startTime: (Number.isNaN(start.getTime()) ? new Date() : start).toISOString(),
+          endTime: end.toISOString(),
+          status,
+          isDraft: false,
+        });
+        setMessage(`${cleaned.length} sual dərc olundu. Şagirdlər yalnız kartları görəcək.`);
+      } else {
+        setMessage(`${cleaned.length} sual qaralama kimi saxlandı. İmtahan səhifəsində dərc edin.`);
+      }
       navigate(`/teacher/exams/${exam.id}`, { state: { fromAi: true } });
     } catch (err) {
       setError(errorMessage(err, 'İmtahan saxlanılmadı.'));
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleSavePdfExam = async (e) => {
+    e.preventDefault();
+    await savePdfQuestions({ publish: false });
   };
 
   const fieldWrap = '[&_span]:text-indigo-100 [&_input]:bg-white [&_select]:bg-white [&_textarea]:bg-white';
@@ -438,9 +458,17 @@ Cavab: A`}</pre>
               </div>
               {error && <p className="text-sm text-red-200">{error}</p>}
               {message && <p className="text-sm text-emerald-200">{message}</p>}
-              <div className="flex justify-end">
-                <Button type="submit" disabled={busy} className="bg-amber-400 text-indigo-950 hover:bg-amber-300">
-                  {busy ? 'Saxlanılır...' : 'Qaralama saxla — sonra dərc edin'}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="submit" variant="secondary" disabled={busy} className="bg-white/15 text-white hover:bg-white/25">
+                  {busy ? 'Saxlanılır...' : 'Qaralama saxla'}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busy}
+                  className="bg-amber-400 text-indigo-950 hover:bg-amber-300"
+                  onClick={() => savePdfQuestions({ publish: true })}
+                >
+                  İmtahanı dərc et
                 </Button>
               </div>
             </form>

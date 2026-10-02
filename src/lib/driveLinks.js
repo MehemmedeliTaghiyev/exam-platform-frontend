@@ -28,7 +28,7 @@ export function driveFilePreviewUrl(idOrUrl) {
 
 export function driveFileViewUrl(idOrUrl) {
   const id = parseDriveFileId(idOrUrl);
-  return id ? `https://drive.google.com/file/d/${id}/view` : '';
+  return id ? `https://drive.google.com/file/d/${id}/view?usp=sharing` : '';
 }
 
 export function driveFolderOpenUrl(idOrUrl) {

@@ -93,6 +93,21 @@ export function examDriveFileId(exam) {
   return '';
 }
 
+export function isDriveMarkerQuestion(q) {
+  return /__DRIVE__|DRVFILE:/i.test(String(q?.text || ''));
+}
+
+export function driveIdFromQuestions(questions) {
+  for (const q of questions || []) {
+    const t = String(q.text || q.questionText || '');
+    const tagged = t.match(/DRVFILE:([a-zA-Z0-9_-]+)/i);
+    if (tagged) return tagged[1];
+    const file = parseDriveFileId(t);
+    if (file) return file;
+  }
+  return '';
+}
+
 export function examDrivePreviewUrl(exam) {
   return driveFilePreviewUrl(examDriveFileId(exam));
 }

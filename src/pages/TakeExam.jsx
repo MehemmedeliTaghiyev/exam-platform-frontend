@@ -3,11 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Skeleton } from '../components/ui';
-import { fetchExam, fetchQuestions, saveExamProgress, startExam, submitExam } from '../lib/examApi';
+import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
 import { formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate } from '../lib/utils';
 import DrivePreview from '../components/DrivePreview';
-import { displayExamDescription, examDrivePreviewUrl } from '../lib/driveLinks';
+import { displayExamDescription, driveFileViewUrl, driveIdFromQuestions, examDriveFileId, examDrivePreviewUrl } from '../lib/driveLinks';
 
 const OPEN_SENTINEL = 'open';
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -170,7 +170,7 @@ export default function TakeExam() {
         studentExamId: sessionId,
         examId: parseInt(id, 10),
         studentId: user?.id,
-        answers: serializeAnswers(answersRef.current, questions),
+        answers: serializeAnswers(answersRef.current, paperQuestionsOf(questions)),
       }).catch(() => {});
     }, 400);
     return () => clearTimeout(timer);
@@ -182,6 +182,19 @@ export default function TakeExam() {
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
+  const paperQuestions = paperQuestionsOf(questions);
+  const driveExam = exam
+    ? {
+        ...exam,
+        pdfFileUrl:
+          driveFileViewUrl(examDriveFileId(exam) || driveIdFromQuestions(questions))
+          || exam.pdfFileUrl,
+      }
+    : exam;
+  const hasDrive = Boolean(
+    examDrivePreviewUrl(driveExam) || driveFileViewUrl(examDriveFileId(driveExam)),
+  );
+
   const handleSubmit = async () => {
     if (submitting || submittedRef.current) return;
     submittedRef.current = true;
@@ -192,7 +205,7 @@ export default function TakeExam() {
         examId: parseInt(id, 10),
         studentId: user?.id,
         studentName: user?.fullName,
-        answers: serializeAnswers(answersRef.current, questions),
+        answers: serializeAnswers(answersRef.current, paperQuestionsOf(questions)),
       });
       navigate(`/student/exams/${parseInt(id, 10)}/review`, { replace: true });
     } catch {
@@ -236,12 +249,12 @@ export default function TakeExam() {
         </Card>
       ) : (
         <div className="mx-auto max-w-5xl space-y-4">
-          {examDrivePreviewUrl(exam) ? (
+          {hasDrive ? (
             <>
-              <DrivePreview exam={exam} title={exam?.title || 'İmtahan PDF'} />
+              <DrivePreview exam={driveExam} title={exam?.title || 'İmtahan PDF'} />
               <DriveAnswerSheet
-                count={questions.length || Number(exam?.totalQuestions) || 20}
-                questions={questions}
+                count={paperQuestions.length || Number(exam?.totalQuestions) || 20}
+                questions={paperQuestions}
                 answers={answers}
                 disabled={submitting}
                 onPick={(key, letter) => {
@@ -254,8 +267,8 @@ export default function TakeExam() {
                 }}
               />
             </>
-          ) : questions.length > 0 ? (
-            questions.map((q, index) => {
+          ) : paperQuestions.length > 0 ? (
+            paperQuestions.map((q, index) => {
               const current = answers[q.id] && typeof answers[q.id] === 'object' ? answers[q.id] : { optionId: answers[q.id], text: '' };
               const open = isOpenQuestion(q);
               const openOpt = (q.options || []).find(isOpenChoiceOption);

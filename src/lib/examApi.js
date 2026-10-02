@@ -1,7 +1,7 @@
 import API from '../api/axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
-import { driveFolderOpenUrl, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
+import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { pointsForDifficulty } from './questionDifficulty';
 
 const FAST = { timeout: 20000 };
@@ -727,6 +727,10 @@ export async function fetchExam(id) {
   };
 }
 
+export function paperQuestionsOf(list) {
+  return (list || []).filter((q) => !isDriveMarkerQuestion(q));
+}
+
 export async function fetchQuestions(examId) {
   const paths = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
   for (const path of paths) {
@@ -797,7 +801,8 @@ export async function addQuestion(examId, payload) {
 
 export async function ensurePaperQuestions(examId, count) {
   const existing = await fetchQuestions(examId);
-  if (existing.length) return existing;
+  const paper = paperQuestionsOf(existing);
+  if (paper.length) return existing;
   const n = Math.min(Math.max(Number(count) || 20, 1), 80);
   const urls = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
   for (let i = 1; i <= n; i += 1) {
@@ -840,6 +845,37 @@ export async function ensurePaperQuestions(examId, count) {
     }
   }
   return fetchQuestions(examId);
+}
+
+export async function saveDriveFileMarker(examId, fileId) {
+  const id = String(fileId || '').trim();
+  if (!examId || !id) return;
+  const text = `__DRIVE__ DRVFILE:${id}`;
+  const list = await fetchQuestions(examId);
+  const marker = list.find(isDriveMarkerQuestion);
+  if (marker?.id) {
+    try {
+      await updateQuestion(examId, marker.id, {
+        text,
+        points: 0,
+        type: 'OpenEnded',
+        inputKind: 'Text',
+        options: [],
+        correctText: '',
+      });
+      return;
+    } catch {
+      /* add a new marker */
+    }
+  }
+  await addQuestion(examId, {
+    text,
+    points: 0,
+    type: 'OpenEnded',
+    inputKind: 'Text',
+    options: [],
+    correctText: '',
+  });
 }
 
 export async function updateQuestion(examId, questionId, payload) {

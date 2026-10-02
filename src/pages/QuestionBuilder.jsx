@@ -6,7 +6,7 @@ import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, ensurePaperQuestions, fetchExam, fetchOwnProfile, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, ensurePaperQuestions, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
@@ -176,7 +176,8 @@ export default function QuestionBuilder() {
         description: exam?.description,
         pdfFileUrl,
       });
-      if (!questions.length) {
+      await saveDriveFileMarker(id, fileId);
+      if (!paperQuestionsOf(questions).length) {
         await ensurePaperQuestions(id, exam?.totalQuestions || 20);
       }
       setDriveLink(pdfFileUrl);
@@ -297,10 +298,12 @@ export default function QuestionBuilder() {
       const duration = exam.durationMinutes || 45;
       const end = exam.endTime || new Date(Date.now() + duration * 60 * 1000).toISOString();
       const status = new Date(start).getTime() > Date.now() ? 'Scheduled' : 'Live';
-      const paperCount = questions.length || Number(exam.totalQuestions) || 20;
-      if (!questions.length) {
+      const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
+      const paperCount = paperQuestionsOf(questions).length || Number(exam.totalQuestions) || 20;
+      if (!paperQuestionsOf(questions).length) {
         await ensurePaperQuestions(id, paperCount);
       }
+      if (fileId) await saveDriveFileMarker(id, fileId);
       await updateExam(id, {
         subjectId: exam.subjectId,
         title: exam.title,
@@ -465,7 +468,7 @@ export default function QuestionBuilder() {
           {questions.length === 0 ? (
             <Card className="text-sm text-gray-500">Drive faylını bağlayın və dərc edin. Əl ilə sual da əlavə edə bilərsiniz.</Card>
           ) : (
-            questions.map((q, idx) => (
+            questions.filter((q) => !String(q.text || '').includes('__DRIVE__')).map((q, idx) => (
                 isOpenQuestion(q) ? (
                   <Card key={q.id || idx}>
                     <p className="text-sm font-semibold text-gray-500">Sual {idx + 1}</p>

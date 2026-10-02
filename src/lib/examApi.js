@@ -1,7 +1,7 @@
 import API from '../api/axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
-import { coerceAiJson, mapAiQuestion, pickAiQuestionList } from './parseAiJson';
+import { driveFolderOpenUrl, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { pointsForDifficulty } from './questionDifficulty';
 
 const FAST = { timeout: 20000 };
@@ -138,6 +138,7 @@ export function mapStudent(u) {
     position: u.position || u.Position || '',
     phone: u.phone || u.Phone || '',
     trialMessage: u.trialMessage || u.TrialMessage || '',
+    driveFolderUrl: teacherDriveFolderUrl(u) || localDb.getTeacherDriveFolder(u.id ?? u.Id),
   };
 }
 
@@ -185,7 +186,11 @@ export async function registerStudentInvite(payload) {
 
 export async function fetchOwnProfile() {
   const res = await API.get('/Users/me', FAST);
-  return unwrapItem(res.data) || res.data;
+  const me = unwrapItem(res.data) || res.data || {};
+  const id = me.id ?? me.Id;
+  const folder = teacherDriveFolderUrl(me) || localDb.getTeacherDriveFolder(id);
+  if (folder && id) localDb.setTeacherDriveFolder(id, folder);
+  return { ...me, driveFolderUrl: folder };
 }
 
 export async function updateOwnProfile(payload) {
@@ -365,9 +370,11 @@ export async function createTeacherAccount(payload) {
     trialStartsAt: payload.trialStartsAt,
     billingPlan: payload.billingPlan,
     trialDays: payload.trialDays,
-    trialMessage: payload.trialMessage,
+    trialMessage: wrapTrialMessage(payload.trialMessage, payload.driveFolderUrl),
     aiEnabled: payload.aiEnabled === true,
     AiEnabled: payload.aiEnabled === true,
+    driveFolderUrl: driveFolderOpenUrl(payload.driveFolderUrl),
+    DriveFolderUrl: driveFolderOpenUrl(payload.driveFolderUrl),
   };
   const compact = {
     firstName: body.firstName,
@@ -381,6 +388,7 @@ export async function createTeacherAccount(payload) {
     trialStartsAt: body.trialStartsAt,
     billingPlan: body.billingPlan,
     trialMessage: body.trialMessage,
+    driveFolderUrl: body.driveFolderUrl,
   };
   const paths = ['/Users/teachers', '/Users/create-teacher'];
   let lastError;
@@ -388,7 +396,10 @@ export async function createTeacherAccount(payload) {
     for (const data of [body, compact]) {
       try {
         const res = await API.post(path, data);
-        return unwrapItem(res.data) || res.data;
+        const created = unwrapItem(res.data) || res.data;
+        const folder = driveFolderOpenUrl(payload.driveFolderUrl);
+        if (folder && created?.id) localDb.setTeacherDriveFolder(created.id, folder);
+        return created;
       } catch (err) {
         lastError = err;
         const status = err?.response?.status;
@@ -410,9 +421,11 @@ export async function updateTeacherTrial(id, payload) {
     trialEndsAt: payload.trialEndsAt,
     billingPlan: payload.billingPlan,
     trialDays: payload.trialDays,
-    trialMessage: payload.trialMessage,
+    trialMessage: wrapTrialMessage(payload.trialMessage, payload.driveFolderUrl),
     aiEnabled: payload.aiEnabled,
     AiEnabled: payload.aiEnabled,
+    driveFolderUrl: driveFolderOpenUrl(payload.driveFolderUrl),
+    DriveFolderUrl: driveFolderOpenUrl(payload.driveFolderUrl),
   };
   const compact = {
     firstName: payload.firstName,
@@ -420,7 +433,8 @@ export async function updateTeacherTrial(id, payload) {
     phone: payload.phone,
     trialStartsAt: payload.trialStartsAt,
     billingPlan: payload.billingPlan,
-    trialMessage: payload.trialMessage,
+    trialMessage: wrapTrialMessage(payload.trialMessage, payload.driveFolderUrl),
+    driveFolderUrl: driveFolderOpenUrl(payload.driveFolderUrl),
   };
   let lastError;
   for (const data of [body, compact]) {
@@ -428,6 +442,8 @@ export async function updateTeacherTrial(id, payload) {
       const res = await API.patch(`/Users/${id}/trial`, data);
       const updated = unwrapItem(res.data) || res.data;
       if (payload.aiEnabled != null) localDb.setTeacherAi(id, payload.aiEnabled === true);
+      const folder = driveFolderOpenUrl(payload.driveFolderUrl);
+      if (payload.driveFolderUrl != null) localDb.setTeacherDriveFolder(id, folder);
       return updated;
     } catch (err) {
       lastError = err;
@@ -551,6 +567,8 @@ function toLocalExam(payload, created = {}, source = 'remote') {
     endTime: created.endTime || created.EndTime || payload.endTime,
     submissionsCount: created.submissionsCount || 0,
     isAiGenerated: created.isAiGenerated === true || created.IsAiGenerated === true || payload.isAiGenerated === true,
+    pdfFileUrl: created.pdfFileUrl || created.PdfFileUrl || payload.pdfFileUrl || '',
+    pdfFilePath: created.pdfFilePath || created.PdfFilePath || payload.pdfFilePath || payload.pdfFileUrl || '',
     status: resolveExamStatus({
       ...created,
       startTime: created.startTime || created.StartTime || payload.startTime,
@@ -576,6 +594,9 @@ export async function createExam(payload) {
       isDraft: payload.isDraft === true,
       status: payload.status,
       isAiGenerated: payload.isAiGenerated === true,
+      pdfFileUrl: payload.pdfFileUrl,
+      pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+      description: wrapExamDescription(payload.description, payload.pdfFileUrl),
     },
     {
       Title: payload.title,
@@ -590,6 +611,9 @@ export async function createExam(payload) {
       IsDraft: payload.isDraft === true,
       Status: payload.status,
       IsAiGenerated: payload.isAiGenerated === true,
+      PdfFileUrl: payload.pdfFileUrl,
+      PdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+      Description: wrapExamDescription(payload.description, payload.pdfFileUrl),
     },
     {
       name: payload.title,
@@ -619,7 +643,8 @@ export async function createExam(payload) {
 }
 
 export async function updateExam(id, payload) {
-  await API.put(`/Exams/${id}`, {
+  const description = wrapExamDescription(payload.description, payload.pdfFileUrl || payload.pdfFilePath);
+  const body = {
     subjectId: payload.subjectId,
     SubjectId: payload.subjectId,
     title: payload.title,
@@ -636,7 +661,32 @@ export async function updateExam(id, payload) {
     Status: payload.status,
     isDraft: payload.isDraft,
     IsDraft: payload.isDraft,
-  }, FAST);
+    description,
+    Description: description,
+    pdfFileUrl: payload.pdfFileUrl,
+    PdfFileUrl: payload.pdfFileUrl,
+    pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+    PdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+  };
+  try {
+    await API.put(`/Exams/${id}`, body, FAST);
+  } catch (err) {
+    if (err?.response?.status !== 400) throw err;
+    const slim = { ...body };
+    delete slim.pdfFileUrl;
+    delete slim.PdfFileUrl;
+    delete slim.pdfFilePath;
+    delete slim.PdfFilePath;
+    await API.put(`/Exams/${id}`, slim, FAST);
+  }
+  if (payload.pdfFileUrl || payload.pdfFilePath) {
+    localDb.upsertExam({
+      id,
+      pdfFileUrl: payload.pdfFileUrl,
+      pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+      description,
+    });
+  }
 }
 
 export async function deleteExam(id) {
@@ -671,6 +721,7 @@ export async function fetchExam(id) {
     status: merged.status || merged.Status,
     pdfFilePath: merged.pdfFilePath || merged.PdfFilePath || '',
     pdfFileUrl: merged.pdfFileUrl || merged.PdfFileUrl || '',
+    description: merged.description || merged.Description || '',
     isAiGenerated: merged.isAiGenerated === true || merged.IsAiGenerated === true,
   };
 }
@@ -915,21 +966,6 @@ export function applyAiAnswers(questions, answers) {
   });
 }
 
-function parseAiQuestionList(data) {
-  const root = coerceAiJson(unwrapItem(data) || data);
-  return pickAiQuestionList(root).map(mapAiQuestion).filter((q) => q?.text);
-}
-
-export function questionsFromAiData(data) {
-  return parseAiQuestionList(data);
-}
-
-const AI_JSON_TRANSFORM = [(raw) => {
-  if (typeof raw !== 'string') return raw;
-  const parsed = coerceAiJson(raw);
-  return parsed === raw ? raw : parsed;
-}];
-
 export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   const body = {
     title: payload.title,
@@ -941,60 +977,35 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     medium: payload.medium,
     hard: payload.hard,
     source: payload.source,
-    examId: payload.examId,
-    ExamId: payload.examId,
   };
   try {
-    const res = await API.post('/Ai/questions', body, {
-      timeout: 90000,
-      transformResponse: AI_JSON_TRANSFORM,
-    });
-    const list = parseAiQuestionList(res.data);
-    return list.length ? list : null;
+    const res = await API.post('/Ai/questions', body, { timeout: 90000 });
+    const data = unwrapItem(res.data) || res.data || {};
+    const list = unwrapList(data.questions || data);
+    if (!list.length) return null;
+    return list.map((q) => ({
+      text: q.text || q.questionText || q.stem,
+      options: unwrapOptions(q.options).map((o, idx) => ({
+        letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
+        text: o.text || o.optionText,
+        isCorrect: Boolean(o.isCorrect),
+      })),
+      correctLetter: q.correctLetter
+        || unwrapOptions(q.options).find((o) => o.isCorrect)?.letter
+        || 'A',
+      difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
+    }));
   } catch (err) {
     const status = err?.response?.status;
-    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503, 504].includes(status))) return null;
+    if (!status || status === 404 || (soft && [401, 403, 405, 502, 503].includes(status))) return null;
     throw err;
   }
 }
 
-export async function extractExamPdfOnServer(examId, file, { fileName, title, subjectName, questionCount } = {}) {
-  const name = fileName || file?.name || 'exam.pdf';
-  const paths = [
-    `/Exams/${examId}/ai-from-pdf`,
-    `/Exams/${examId}/extract-questions`,
-    '/Ai/pdf',
-    '/Ai/from-pdf',
-  ];
-  let lastError;
-  for (const path of paths) {
-    const form = new FormData();
-    form.append('file', file, name);
-    form.append('questionCount', String(questionCount || 0));
-    form.append('title', title || '');
-    form.append('subjectName', subjectName || '');
-    form.append('source', 'pdf');
-    form.append('examId', String(examId || ''));
-    try {
-      const res = await API.post(path, form, {
-        timeout: 120000,
-        transformResponse: AI_JSON_TRANSFORM,
-      });
-      return unwrapItem(res.data) || res.data || {};
-    } catch (err) {
-      lastError = err;
-      const status = err?.response?.status;
-      if (status && ![404, 405, 415, 501, 502, 503, 504].includes(status)) throw err;
-    }
-  }
-  throw lastError || new Error('PDF serverdə oxunmadı.');
-}
-
-export async function uploadExamPdfPack(examId, file, questionCount, fileName) {
+export async function uploadExamPdfPack(examId, file, questionCount) {
   const form = new FormData();
-  const name = fileName || file?.name || 'exam.pdf';
-  form.append('file', file, name);
-  form.append('questionCount', String(questionCount || 0));
+  form.append('file', file, file.name || 'exam.pdf');
+  form.append('questionCount', String(questionCount));
   const paths = [`/Exams/${examId}/pdf-pack`, `/Exams/${examId}/upload-pdf`];
   let lastError;
   for (const path of paths) {
@@ -1002,7 +1013,7 @@ export async function uploadExamPdfPack(examId, file, questionCount, fileName) {
       const res = await API.post(path, form, {
         timeout: 120000,
       });
-      return unwrapItem(res.data) || res.data || { ok: true };
+      return unwrapItem(res.data) || res.data;
     } catch (err) {
       lastError = err;
     }

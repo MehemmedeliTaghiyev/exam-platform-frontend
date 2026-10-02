@@ -4,6 +4,7 @@ import { Badge, Button, Card, EmptyState, Input, Modal, Select, Textarea } from 
 import API from '../api/axios';
 import { Ban, CheckCircle2, Sparkles } from 'lucide-react';
 import { createTeacherAccount, setTeacherAiEnabled, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
+import { displayTrialMessage, teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
 import { AI_FEATURES, eventsFromTeacher, filterEventsByRange, groupUsageByDate, totalsByFeature } from '../lib/aiUsage';
 import {
@@ -111,6 +112,7 @@ const emptyForm = {
   trialDays: 14,
   trialMessage: 'Free trial bitdi.',
   aiEnabled: false,
+  driveFolderUrl: '',
 };
 
 export default function AdminTeachers() {
@@ -139,6 +141,8 @@ export default function AdminTeachers() {
       const list = unwrapList(res.data).map((t) => ({
         ...t,
         aiEnabled: isAiEnabled(t) || localDb.getTeacherAi(t.id),
+        driveFolderUrl: teacherDriveFolderUrl(t) || localDb.getTeacherDriveFolder(t.id),
+        trialMessage: displayTrialMessage(t.trialMessage || t.TrialMessage),
       }));
       setTeachers(list);
     } catch (err) {
@@ -181,8 +185,9 @@ export default function AdminTeachers() {
       startDate: toDateInput(t.trialStartsAt || t.createdAt) || todayInput(),
       billingPlan: teacherPlanOf(t),
       trialDays: teacherTrialDaysOf(t),
-      trialMessage: t.trialMessage || 'Free trial bitdi.',
+      trialMessage: displayTrialMessage(t.trialMessage || t.TrialMessage || 'Free trial bitdi.'),
       aiEnabled: isAiEnabled(t) || localDb.getTeacherAi(t.id),
+      driveFolderUrl: t.driveFolderUrl || teacherDriveFolderUrl(t) || localDb.getTeacherDriveFolder(t.id) || '',
     });
     setOpen(true);
   };
@@ -209,8 +214,10 @@ export default function AdminTeachers() {
           trialDays: days,
           trialMessage: form.trialMessage,
           aiEnabled: form.aiEnabled === true,
+          driveFolderUrl: form.driveFolderUrl,
         });
         localDb.setTeacherAi(edit.id, form.aiEnabled === true);
+        localDb.setTeacherDriveFolder(edit.id, form.driveFolderUrl);
       } else {
         const created = await createTeacherAccount({
           firstName: form.firstName.trim(),
@@ -225,8 +232,12 @@ export default function AdminTeachers() {
           trialDays: days,
           trialMessage: form.trialMessage,
           aiEnabled: form.aiEnabled === true,
+          driveFolderUrl: form.driveFolderUrl,
         });
-        if (created?.id) localDb.setTeacherAi(created.id, form.aiEnabled === true);
+        if (created?.id) {
+          localDb.setTeacherAi(created.id, form.aiEnabled === true);
+          localDb.setTeacherDriveFolder(created.id, form.driveFolderUrl);
+        }
       }
       setOpen(false);
       await load();
@@ -270,8 +281,8 @@ export default function AdminTeachers() {
   return (
     <AppShell title="Müəllim qeydiyyatı">
       <p className="mb-6 text-sm text-gray-500">
-        Hər sətirdə əvvəl pəncərə, sonra istifadə müddəti (free-trial günü siz yazırsınız; aylıq həmişə 30 gündür),
-        yanında AI düyməsi. AI açıq olan müəllim kabinetində avtomatik imtahan yarada bilir.
+        Hər müəllim üçün Google Drive qovluq linkini bura yazın. Müəllim PDF-i o qovluğa yükləyir, imtahana isə həmin
+        faylın öz linkini bağlayır — qovluqda 10 imtahan olsa belə qarışıqlıq olmur. AI hazırda heç kimə açıq deyil.
       </p>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
@@ -304,6 +315,7 @@ export default function AdminTeachers() {
                 <th className="px-5 py-3 font-medium">Nömrə</th>
                 <th className="px-5 py-3 font-medium">Pəncərə</th>
                 <th className="px-5 py-3 font-medium">İstifadə müddəti</th>
+                <th className="px-5 py-3 font-medium">Drive qovluğu</th>
                 <th className="px-5 py-3 font-medium">AI</th>
                 <th className="px-5 py-3 font-medium">AI istifadəsi (tarixə görə)</th>
                 <th className="px-5 py-3 font-medium"></th>
@@ -342,6 +354,20 @@ export default function AdminTeachers() {
                         }}
                       />
                       <p className="mt-1 text-xs text-gray-400">{formatDateTime(t.createdAt)}</p>
+                    </td>
+                    <td className="px-5 py-3">
+                      {t.driveFolderUrl ? (
+                        <a
+                          className="text-xs font-medium text-brand-600 underline"
+                          href={t.driveFolderUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Qovluğu aç
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-400">Link yoxdur</span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <Button
@@ -425,6 +451,18 @@ export default function AdminTeachers() {
               onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
             />
           )}
+          <div className="sm:col-span-2">
+            <Input
+              label="Google Drive qovluq linki"
+              value={form.driveFolderUrl}
+              onChange={(e) => setForm({ ...form, driveFolderUrl: e.target.value })}
+              placeholder="https://drive.google.com/drive/folders/..."
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Drive-da müəllimə qovluq açın, “linki olanlar düzəldə bilər” paylaşın, linki bura yapışdırın.
+              Qovluğu avtomatik yaratmaq Google hesabı (API) tələb edir — hazırda əl ilə.
+            </p>
+          </div>
           <label className="flex items-center gap-3 rounded-xl border border-gray-200 px-3 py-3 text-sm dark:border-slate-700">
             <input
               type="checkbox"
@@ -433,7 +471,7 @@ export default function AdminTeachers() {
             />
             <span>
               <span className="font-medium">AI aktiv</span>
-              <span className="mt-0.5 block text-gray-500">Kabinetdə avtomatik imtahan və PDF oxuma</span>
+              <span className="mt-0.5 block text-gray-500">Hazırda AI heç kimə açıq deyil — kod qalır, menyu gizlidir</span>
             </span>
           </label>
           <div className="sm:col-span-2">

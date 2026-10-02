@@ -6,6 +6,8 @@ import { Button, Card, Skeleton } from '../components/ui';
 import { fetchExam, fetchQuestions, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
 import { formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate } from '../lib/utils';
+import DrivePreview from '../components/DrivePreview';
+import { displayExamDescription, examDrivePreviewUrl } from '../lib/driveLinks';
 
 const OPEN_SENTINEL = 'open';
 
@@ -170,7 +172,7 @@ export default function TakeExam() {
         <Card>
           <p className="font-medium">İmtahan hələ başlamayıb.</p>
           <p className="mt-2 text-sm text-gray-500">
-            Mövzu: {exam?.description || exam?.subjectName || exam?.title}
+            Mövzu: {displayExamDescription(exam) || exam?.subjectName || exam?.title}
           </p>
           {(exam?.startTime || exam?.StartTime) && (
             <p className="mt-1 text-sm text-gray-500">Başlama: {formatDateTime(exam.startTime || exam.StartTime)}</p>
@@ -178,10 +180,14 @@ export default function TakeExam() {
           <p className="mt-3 text-sm text-gray-500">Suallar yalnız Live olanda görünəcək.</p>
         </Card>
       ) : (
-        <div className="mx-auto max-w-3xl space-y-4">
-          {questions.length === 0 ? (
-            <Card>Bu imtahanda hələ sual yoxdur.</Card>
-          ) : (
+        <div className="mx-auto max-w-5xl space-y-4">
+          {examDrivePreviewUrl(exam) ? (
+            <DrivePreview exam={exam} title={exam?.title || 'İmtahan PDF'} />
+          ) : null}
+          {questions.length === 0 && !examDrivePreviewUrl(exam) ? (
+            <Card>Bu imtahanda PDF və ya sual yoxdur.</Card>
+          ) : null}
+          {questions.length > 0 ? (
             questions.map((q, index) => {
               const current = answers[q.id] && typeof answers[q.id] === 'object' ? answers[q.id] : { optionId: answers[q.id], text: '' };
               const open = isOpenQuestion(q);
@@ -233,7 +239,7 @@ export default function TakeExam() {
                 />
               );
             })
-          )}
+          ) : null}
           <Button onClick={handleSubmit} disabled={submitting} className="w-full sm:w-auto">
             {submitting ? 'Göndərilir...' : 'İmtahanı bitir'}
           </Button>

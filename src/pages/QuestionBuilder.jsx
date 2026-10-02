@@ -6,9 +6,11 @@ import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, extractExamPdfOnServer, fetchExam, fetchQuestions, questionsFromAiData, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, fetchExam, fetchOwnProfile, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
-import { extractPdfTextFromBytes, readBlobBytes, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
+import DrivePreview from '../components/DrivePreview';
+import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
@@ -55,12 +57,12 @@ export default function QuestionBuilder() {
   const [openAnswer, setOpenAnswer] = useState('');
   const [correctAnswer, setCorrectAnswer] = useState('A');
   const [submitting, setSubmitting] = useState(false);
+  const [pdfFile, setPdfFile] = useState(null);
   const [pdfCount, setPdfCount] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [pdfBytes, setPdfBytes] = useState(null);
-  const [pdfBlob, setPdfBlob] = useState(null);
-  const [pdfName, setPdfName] = useState('');
-  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
+  const [folderUrl, setFolderUrl] = useState('');
+  const [driveBusy, setDriveBusy] = useState(false);
   const [answerKey, setAnswerKey] = useState({});
   const [openKeys, setOpenKeys] = useState({});
   const [kinds, setKinds] = useState({});
@@ -70,8 +72,15 @@ export default function QuestionBuilder() {
   const load = async () => {
     setLoading(true);
     try {
-      const [examData, qs] = await Promise.all([fetchExam(id), fetchQuestions(id)]);
+      const [examData, qs, me] = await Promise.all([
+        fetchExam(id),
+        fetchQuestions(id),
+        fetchOwnProfile().catch(() => null),
+      ]);
       setExam(examData);
+      const fileId = examDriveFileId(examData);
+      setDriveLink(fileId ? driveFileViewUrl(fileId) : '');
+      setFolderUrl(me?.driveFolderUrl || '');
       setQuestions(qs);
       const nextKey = {};
       const nextOpen = {};
@@ -95,11 +104,7 @@ export default function QuestionBuilder() {
 
   useEffect(() => {
     const cached = peekTeacherPdf(id);
-    if (cached?.bytes) {
-      setPdfBytes(cached.bytes);
-      setPdfName(cached.name || '');
-      setShowPdfPreview(false);
-    }
+    if (cached) setPdfFile(cached);
   }, [id]);
 
   const handleAddQuestion = async (e) => {
@@ -148,117 +153,76 @@ export default function QuestionBuilder() {
     }
   };
 
-  const saveParsedCards = async (list) => {
-    let parsed = normalizeGeneratedQuestions(list);
-    if (!parsed.length) {
-      throw new Error('[4 AI] Cavab gəldi, amma sual kartı çıxmadı.');
+  const handleSaveDrive = async (e) => {
+    e.preventDefault();
+    const fileId = parseDriveFileId(driveLink);
+    if (!fileId) {
+      setMessage('Google Drive fayl linkini yapışdırın (qovluq yox, konkret PDF).');
+      return;
     }
+    setDriveBusy(true);
+    setMessage('');
     try {
-      const grades = await tryGradeAiQuestions(parsed, { soft: true });
-      if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
-    } catch {
-      /* teacher can fix answers */
-    }
-    try {
-      for (const q of parsed) {
-        await addQuestion(id, toAddQuestionPayload(q));
-      }
+      const pdfFileUrl = driveFileViewUrl(fileId);
+      await updateExam(id, {
+        subjectId: exam?.subjectId,
+        title: exam?.title,
+        durationMinutes: exam?.durationMinutes,
+        totalQuestions: questions.length || exam?.totalQuestions || 1,
+        startTime: exam?.startTime,
+        endTime: exam?.endTime,
+        status: exam?.status || 'Draft',
+        isDraft: true,
+        description: exam?.description,
+        pdfFileUrl,
+      });
+      setDriveLink(pdfFileUrl);
+      await load();
+      setMessage('Bu imtahan üçün Drive faylı bağlandı. Dərc olanda şagirdlər yalnız bu PDF-i görəcək.');
     } catch (err) {
-      throw new Error(`[5 yaz] ${parsed.length} sual oxundu, saxlama: ${err?.message || err}`);
+      setMessage(errorMessage(err, 'Drive linki saxlanılmadı.'));
+    } finally {
+      setDriveBusy(false);
     }
-    return parsed.length;
-  };
-
-  const ingestExamText = async (rawText, { title, fromPdf = false } = {}) => {
-    const text = String(rawText || '').trim();
-    if (text.length < 40) {
-      throw new Error(fromPdf
-        ? 'PDF-dən mətn oxunmadı. Mətnli (skan olmayan) PDF seçin.'
-        : 'Mətn çox qısadır.');
-    }
-    let parsed = parseQuestionsFromText(text);
-    const wanted = parseInt(pdfCount, 10);
-    let aiParsed = null;
-    try {
-      aiParsed = await tryGenerateAiQuestions({
-        title: title || exam?.title || 'İmtahan',
-        topic: fromPdf ? 'PDF' : 'mətn',
-        subjectName: exam?.subjectName,
-        brief: text,
-        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-        source: fromPdf ? 'pdf' : 'text',
-        examId: id,
-      }, { soft: true });
-    } catch (err) {
-      throw new Error(`[4 AI] ${err?.message || err}`);
-    }
-    if (aiParsed?.length) parsed = aiParsed;
-    return saveParsedCards(parsed);
   };
 
   const handlePdfUpload = async (e) => {
     e.preventDefault();
-    if (!pdfBytes && !pdfBlob) {
+    if (!pdfFile) {
       setMessage('PDF seçin.');
       return;
     }
     setPdfBusy(true);
     setMessage('');
     try {
-      const typeHint = String(pdfName || '').toLowerCase();
-      if (/\.(jpg|jpeg|png|heic|webp)$/i.test(typeHint)) {
-        throw new Error('Şəkil yox, mətnli PDF seçin.');
+      const text = await extractPdfText(pdfFile);
+      let parsed = parseQuestionsFromText(text);
+      const wanted = parseInt(pdfCount, 10);
+      const aiParsed = await tryGenerateAiQuestions({
+        title: exam?.title || pdfFile.name.replace(/\.pdf$/i, ''),
+        topic: 'PDF',
+        subjectName: exam?.subjectName,
+        brief: text,
+        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+        source: 'pdf',
+      }, { soft: true });
+      if (aiParsed?.length) parsed = aiParsed;
+      parsed = normalizeGeneratedQuestions(parsed);
+      if (!parsed.length) {
+        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
       }
-      const blob = pdfBlob || new Blob([pdfBytes], { type: 'application/pdf' });
-      const phone = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
-      const wanted = parseInt(pdfCount, 10) || 0;
-      const title = exam?.title || String(pdfName || 'PDF').replace(/\.pdf$/i, '');
-
-      const finish = async (count, note) => {
-        if (pdfBytes) stashTeacherPdf(id, { bytes: pdfBytes, name: pdfName });
-        setShowPdfPreview(false);
-        await load();
-        setMessage(`${count} sual kart kimi hazırdır. ${note}`);
-      };
-
-      if (!phone && pdfBytes) {
-        const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
-        const count = await ingestExamText(text, { title, fromPdf: true });
-        await finish(count, 'Yoxlayıb dərc edin. Şagird PDF görmür.');
-        return;
-      }
-
-      let serverErr = '';
       try {
-        const data = await extractExamPdfOnServer(id, blob, {
-          fileName: pdfName || 'exam.pdf',
-          title,
-          subjectName: exam?.subjectName,
-          questionCount: wanted,
-        });
-        const parsed = questionsFromAiData(data);
-        if (data?.saved && (parsed.length || Number(data.storedCount) > 0)) {
-          await finish(parsed.length || Number(data.storedCount) || 0, 'Şagird PDF görmür.');
-          return;
-        }
-        if (parsed.length) {
-          const count = await saveParsedCards(parsed);
-          await finish(count, 'Yoxlayıb dərc edin. Şagird PDF görmür.');
-          return;
-        }
-        serverErr = 'Server kart qaytarmadı.';
-      } catch (err) {
-        serverErr = errorMessage(err, 'Server AI işləmədi.');
+        const grades = await tryGradeAiQuestions(parsed, { soft: true });
+        if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
+      } catch {
+        /* teacher can fix answers */
       }
-
-      if (!pdfBytes) {
-        throw new Error(serverErr || 'Telefonda AI işləmədi.');
+      for (const q of parsed) {
+        await addQuestion(id, toAddQuestionPayload(q));
       }
-      const text = String(await extractPdfTextFromBytes(pdfBytes) || '').trim();
-      const count = await ingestExamText(text, { title, fromPdf: true });
-      await finish(count, serverErr
-        ? `Server AI alınmadı (${serverErr.slice(0, 80)}), kartlar telefonda çıxarıldı.`
-        : 'Yoxlayıb dərc edin. Şagird PDF görmür.');
+      stashTeacherPdf(id, pdfFile);
+      await load();
+      setMessage(`${parsed.length} sual AI ilə oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
     } catch (err) {
       setMessage(errorMessage(err, 'PDF oxunmadı.'));
     } finally {
@@ -339,13 +303,12 @@ export default function QuestionBuilder() {
         endTime: end,
         status,
         isDraft: false,
+        description: exam.description,
+        pdfFileUrl: driveFileViewUrl(examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl })),
       });
       dropTeacherPdf(id);
-      setPdfBytes(null);
-      setPdfBlob(null);
-      setPdfName('');
-      setShowPdfPreview(false);
-      setMessage('İmtahan dərc olundu. Şagird yalnız sual kartlarını görür, PDF yüklənmir.');
+      setPdfFile(null);
+      setMessage('İmtahan dərc olundu. Şagirdlər Drive-dakı bu imtahanın PDF-ini görəcək.');
       await load();
     } catch (err) {
       setMessage(errorMessage(err, 'İmtahan dərc olunmadı.'));
@@ -365,7 +328,7 @@ export default function QuestionBuilder() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={publishDraft} disabled={!questions.length}>
+          <Button onClick={publishDraft} disabled={!questions.length && !parseDriveFileId(driveLink) && !examDriveFileId(exam)}>
             İmtahanı dərc et
           </Button>
           <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
@@ -417,34 +380,53 @@ export default function QuestionBuilder() {
       ) : (
         <div className="space-y-8">
           <Card>
-            <h3 className="mb-2 text-base font-bold">PDF → AI → kartlar</h3>
+            <h3 className="mb-2 text-base font-bold">Drive PDF — bu imtahan</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF yükləyin. Mətn telefonda yox, serverdə çıxır, AI kartları yazır. Dərcdən sonra şagird yalnız kartları görür.
+              PDF-i öz qovluğunuza yükləyin, faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> linkini
+              bura yazın. Qovluqda neçə imtahan olsa da, şagird yalnız bu imtahana bağlanan faylı görür.
+            </p>
+            {folderUrl ? (
+              <a
+                className="mb-4 inline-block text-sm font-medium text-brand-600 underline"
+                href={folderUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Sizin Drive qovluğunu açın
+              </a>
+            ) : (
+              <p className="mb-4 text-sm text-amber-700">
+                Qovluq linki hələ yazılmayıb. Admin Drive qovluğunu sizin hesaba bağlayandan sonra burada görünəcək.
+              </p>
+            )}
+            <form onSubmit={handleSaveDrive} className="space-y-4">
+              <Input
+                label="Bu imtahanın Drive fayl linki"
+                value={driveLink}
+                onChange={(e) => setDriveLink(e.target.value)}
+                placeholder="https://drive.google.com/file/d/.../view"
+              />
+              <Button type="submit" disabled={driveBusy}>
+                {driveBusy ? 'Saxlanılır...' : 'Faylı imtahana bağla'}
+              </Button>
+            </form>
+          </Card>
+
+          {examDriveFileId({ ...exam, pdfFileUrl: driveLink }) ? (
+            <DrivePreview exam={{ ...exam, pdfFileUrl: driveLink }} title="Bu imtahanın PDF-i" />
+          ) : null}
+
+          {AI_FEATURE_OPEN ? (
+          <Card>
+            <h3 className="mb-2 text-base font-bold">PDF-dən clickable suallar</h3>
+            <p className="mb-4 text-sm text-gray-500">
+              PDF yükləyin — AI sualları çıxarır. Eyni səhifədə PDF qalır ki, səhv oxunuşu düzəldəsiniz. Dərcdən sonra PDF bağlanır, şagird yalnız kartları görür.
             </p>
             <form onSubmit={handlePdfUpload} className="space-y-4">
               <input
                 type="file"
                 accept="application/pdf,.pdf"
-                onChange={async (e) => {
-                  const raw = e.target.files?.[0] || null;
-                  if (!raw) {
-                    setPdfBytes(null);
-                    setPdfBlob(null);
-                    setPdfName('');
-                    return;
-                  }
-                  try {
-                    const buf = await readBlobBytes(raw);
-                    setPdfBlob(raw);
-                    setPdfBytes(buf);
-                    setPdfName(raw.name || 'exam.pdf');
-                    setShowPdfPreview(false);
-                  } catch {
-                    setMessage('Fayl oxunmadı. Files-dən PDF seçin.');
-                    setPdfBytes(null);
-                    setPdfBlob(null);
-                  }
-                }}
+                onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-white"
               />
               <Input
@@ -456,19 +438,11 @@ export default function QuestionBuilder() {
                 onChange={(e) => setPdfCount(e.target.value)}
               />
               <Button type="submit" disabled={pdfBusy}>
-                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən kartları çıxar'}
+                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən sualları çıxar'}
               </Button>
             </form>
-            {pdfBytes ? (
-              <button
-                type="button"
-                className="mt-3 text-sm font-medium text-brand-600 md:hidden"
-                onClick={() => setShowPdfPreview((v) => !v)}
-              >
-                {showPdfPreview ? 'PDF önizləməni bağla' : 'PDF-ə bax (telefon yavaşlaya bilər)'}
-              </button>
-            ) : null}
           </Card>
+          ) : null}
 
           {loading ? (
             <>
@@ -476,13 +450,13 @@ export default function QuestionBuilder() {
               <Skeleton className="h-40" />
             </>
           ) : (
-            <div className={showPdfPreview && pdfBytes ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
-              {showPdfPreview && pdfBytes ? (
-                <PdfViewer bytes={pdfBytes} title="Orijinal PDF — yalnız müəllim" />
+            <div className={pdfFile ? 'grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : ''}>
+              {pdfFile ? (
+                <PdfViewer file={pdfFile} title="Orijinal PDF — yalnız müəllim" />
               ) : null}
               <div className="space-y-4">
           {questions.length === 0 ? (
-            <Card className="text-sm text-gray-500">PDF yükləyin — AI kartları burada çıxacaq. Şagird dərcdən sonra yalnız bunları görür.</Card>
+            <Card className="text-sm text-gray-500">Drive faylını bağlayın və dərc edin. Əl ilə sual da əlavə edə bilərsiniz.</Card>
           ) : (
             questions.map((q, idx) => (
                 isOpenQuestion(q) ? (

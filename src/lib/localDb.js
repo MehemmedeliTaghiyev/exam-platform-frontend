@@ -92,6 +92,17 @@ export const localDb = {
     else delete map[String(id)];
     write('teacher_ai', map);
   },
+  getTeacherDriveFolder(id) {
+    const map = read('teacher_drive_folder', {});
+    return map[String(id)] || '';
+  },
+  setTeacherDriveFolder(id, url) {
+    const map = read('teacher_drive_folder', {});
+    const next = String(url || '').trim();
+    if (next) map[String(id)] = next;
+    else delete map[String(id)];
+    write('teacher_drive_folder', map);
+  },
   getAiUsage(teacherId) {
     const all = read('teacher_ai_usage', {});
     const list = all[String(teacherId)] || [];

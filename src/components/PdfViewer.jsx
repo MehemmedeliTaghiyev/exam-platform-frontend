@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { openPdfDocument } from '../lib/pdfEngine';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 
-export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = false }) {
+try {
+  GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+  ).toString();
+} catch {
+  /* worker optional */
+}
+
+export default function PdfViewer({ file, title = 'Orijinal PDF' }) {
   const wrapRef = useRef(null);
   const hostRef = useRef(null);
   const pdfRef = useRef(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(Boolean(bytes));
+  const [loading, setLoading] = useState(Boolean(file));
   const [pages, setPages] = useState(0);
 
   useEffect(() => {
@@ -23,10 +32,7 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = fa
       const width = Math.max(240, wrap.clientWidth - 24);
       host.replaceChildren();
       const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
-      const maxPage = (!allPages && typeof window !== 'undefined' && window.innerWidth < 768)
-        ? Math.min(pdf.numPages, 3)
-        : pdf.numPages;
-      for (let pageNum = 1; pageNum <= maxPage; pageNum += 1) {
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
         if (cancelled) return;
         const page = await pdf.getPage(pageNum);
         const base = page.getViewport({ scale: 1 });
@@ -53,14 +59,21 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = fa
     };
 
     const load = async () => {
-      if (!bytes) {
+      if (!file) {
         setLoading(false);
         return;
       }
       setLoading(true);
       setError('');
       try {
-        const pdf = await openPdfDocument(bytes);
+        const buf = await file.arrayBuffer();
+        const copy = () => new Uint8Array(buf.slice(0));
+        let pdf;
+        try {
+          pdf = await getDocument({ data: copy() }).promise;
+        } catch {
+          pdf = await getDocument({ data: copy(), disableWorker: true }).promise;
+        }
         if (cancelled) return;
         pdfRef.current = pdf;
         setPages(pdf.numPages);
@@ -89,9 +102,9 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = fa
       pdfRef.current = null;
       if (hostRef.current) hostRef.current.replaceChildren();
     };
-  }, [bytes]);
+  }, [file]);
 
-  if (!bytes) return null;
+  if (!file) return null;
 
   return (
     <div
@@ -105,16 +118,12 @@ export default function PdfViewer({ bytes, title = 'Orijinal PDF', allPages = fa
       {loading && (
         <div className="flex h-40 items-center justify-center text-sm text-gray-500">PDF açılır...</div>
       )}
-      {error && !loading && (
-        <div className="px-4 py-8 text-center text-sm text-gray-500">
-          PDF önizləmə bu brauzerdə açılmadı. Sağdakı kartlar imtahandır — onları yoxlayın.
-        </div>
-      )}
+      {error && !loading && <div className="px-4 py-8 text-center text-sm text-red-600">{error}</div>}
       <div
         ref={hostRef}
         className="w-full overflow-y-auto overflow-x-hidden bg-gray-200 p-2 sm:p-3 dark:bg-slate-950"
         style={{
-          height: 'min(70dvh, 640px)',
+          height: 'min(75dvh, 880px)',
           WebkitOverflowScrolling: 'touch',
         }}
       />

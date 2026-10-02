@@ -6,8 +6,9 @@ import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, EmptyState, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
-import { createExam, createSubject, deleteExam, fetchExams, fetchSubjects, updateExam } from '../lib/examApi';
+import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, isExamDraft } from '../lib/utils';
+import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
 
 function toDatetimeLocalValue(date) {
   const d = date instanceof Date ? date : new Date(date);
@@ -41,6 +42,8 @@ export default function TeacherDashboard() {
   const [subjectId, setSubjectId] = useState('');
   const [newSubject, setNewSubject] = useState('');
   const [startLocal, setStartLocal] = useState(() => toDatetimeLocalValue(new Date()));
+  const [driveFileLink, setDriveFileLink] = useState('');
+  const [folderUrl, setFolderUrl] = useState('');
 
   formRef.current = {
     title,
@@ -51,6 +54,7 @@ export default function TeacherDashboard() {
     subjectId,
     newSubject,
     startLocal,
+    driveFileLink,
   };
 
   useEffect(() => {
@@ -61,9 +65,14 @@ export default function TeacherDashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [examList, subjectList] = await Promise.all([fetchExams(), fetchSubjects()]);
+      const [examList, subjectList, me] = await Promise.all([
+        fetchExams(),
+        fetchSubjects(),
+        fetchOwnProfile().catch(() => null),
+      ]);
       setExams(examList);
       setSubjects(subjectList);
+      if (me?.driveFolderUrl) setFolderUrl(me.driveFolderUrl);
       if (subjectList[0]) setSubjectId((prev) => prev || String(subjectList[0].id));
       else setSubjectMode('new');
     } catch {
@@ -90,6 +99,7 @@ export default function TeacherDashboard() {
       if (saved.subjectId) setSubjectId(String(saved.subjectId));
       if (saved.newSubject) setNewSubject(saved.newSubject);
       if (saved.startLocal) setStartLocal(saved.startLocal);
+      if (saved.driveFileLink) setDriveFileLink(saved.driveFileLink);
     } catch {
       /* ignore */
     }
@@ -101,13 +111,14 @@ export default function TeacherDashboard() {
       localStorage.setItem(draftStorageKey(user?.id), JSON.stringify(formRef.current));
     }, 250);
     return () => clearTimeout(timer);
-  }, [showModal, title, description, questionCount, durationMinutes, subjectMode, subjectId, newSubject, startLocal, user?.id]);
+  }, [showModal, title, description, questionCount, durationMinutes, subjectMode, subjectId, newSubject, startLocal, driveFileLink, user?.id]);
 
   const resetForm = () => {
     setTitle('');
     setDescription('');
     setNewSubject('');
     setStartLocal(toDatetimeLocalValue(new Date()));
+    setDriveFileLink('');
     setSubjectMode(subjects.length ? 'existing' : 'new');
     localStorage.removeItem(draftStorageKey(user?.id));
   };
@@ -152,6 +163,7 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
+        pdfFileUrl: driveFileViewUrl(parseDriveFileId(form.driveFileLink)) || undefined,
       };
 
       let exam;
@@ -238,6 +250,7 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
+        pdfFileUrl: driveFileViewUrl(parseDriveFileId(driveFileLink)) || undefined,
       };
 
       let exam;
@@ -409,6 +422,19 @@ export default function TeacherDashboard() {
             “Yarat” düyməsinə basmadan səhifədən çıxsanız imtahan qaralama kimi saxlanılacaq. Gələcək tarix
             seçsəniz imtahan Scheduled olacaq.
           </p>
+          {folderUrl ? (
+            <a className="block text-sm font-medium text-brand-600 underline" href={folderUrl} target="_blank" rel="noreferrer">
+              Drive qovluğunu açın — PDF-i ora yükləyin
+            </a>
+          ) : (
+            <p className="text-xs text-amber-700">Drive qovluğu admin tərəfindən bağlanandan sonra burada görünəcək.</p>
+          )}
+          <Input
+            label="Bu imtahanın Drive fayl linki"
+            value={driveFileLink}
+            onChange={(e) => setDriveFileLink(e.target.value)}
+            placeholder="https://drive.google.com/file/d/.../view"
+          />
           {error && <p className="text-sm text-red-600">{typeof error === 'string' ? error : 'Xəta baş verdi'}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button

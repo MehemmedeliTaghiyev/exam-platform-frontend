@@ -4,6 +4,7 @@ import AppShell from '../components/AppShell';
 import TeacherAiPanel from '../components/TeacherAiPanel';
 import { AuthContext } from '../context/AuthContext';
 import { localDb } from '../lib/localDb';
+import { AI_FEATURE_OPEN } from '../lib/driveLinks';
 import { isAiEnabled, normalizeRole } from '../lib/utils';
 
 function Locked() {
@@ -25,7 +26,7 @@ function Locked() {
 export default function TeacherAi() {
   const { user } = useContext(AuthContext);
   const role = normalizeRole(user?.role);
-  const unlocked = role === 'Admin' || isAiEnabled(user) || localDb.getTeacherAi(user?.id);
+  const unlocked = AI_FEATURE_OPEN && (role === 'Admin' || isAiEnabled(user) || localDb.getTeacherAi(user?.id));
 
   return (
     <AppShell title="AI özəlliyi" mainClassName="!mx-0 !max-w-none !px-0 !py-0">

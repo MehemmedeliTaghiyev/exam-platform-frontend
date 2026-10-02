@@ -47,6 +47,7 @@ export default function TeacherCabinet() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -59,6 +60,7 @@ export default function TeacherCabinet() {
       setGroups(groupList);
       setStudents(studentList.filter((s) => s.isAccessEnabled !== false));
       if (me) {
+        setDriveFolderUrl(me.driveFolderUrl || '');
         setProfile({
           firstName: me.firstName || me.FirstName || '',
           lastName: me.lastName || me.LastName || '',
@@ -169,6 +171,16 @@ export default function TeacherCabinet() {
       <Card className="mb-8">
         <h2 className="text-lg font-bold">Şəxsi məlumatlar</h2>
         <p className="mt-1 text-sm text-gray-500">Konum (yer) hesabınızda qeyd olunmalıdır.</p>
+        {driveFolderUrl ? (
+          <p className="mt-3 text-sm">
+            Drive qovluğu:{' '}
+            <a className="font-medium text-brand-600 underline" href={driveFolderUrl} target="_blank" rel="noreferrer">
+              qovluğu aç
+            </a>
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-amber-700">Drive qovluğu hələ admin tərəfindən bağlanmayıb.</p>
+        )}
         <form onSubmit={saveProfile} className="mt-4 grid gap-4 sm:grid-cols-2">
           <Input label="Ad" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} required />
           <Input label="Soyad" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} required />

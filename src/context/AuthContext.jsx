@@ -2,6 +2,7 @@ import { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { isAiEnabled, normalizeRole } from '../lib/utils';
+import { teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
 import { Button } from '../components/ui';
 
@@ -32,7 +33,7 @@ function normalizeUser(raw) {
     phone: user.phone || user.Phone || '',
     firstName: user.firstName || user.FirstName || '',
     lastName: user.lastName || user.LastName || '',
-    fatherName: user.fatherName || user.FatherName || '',
+    driveFolderUrl: user.driveFolderUrl || user.DriveFolderUrl || teacherDriveFolderUrl(user),
   };
 }
 

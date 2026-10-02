@@ -1,43 +1,30 @@
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import { pointsForDifficulty } from './questionDifficulty';
 import { unwrapOptions } from './utils';
-import { isPdfMagic, openPdfDocument } from './pdfEngine';
+
+try {
+  GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+  ).toString();
+} catch {
+  /* worker optional */
+}
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 const HEADER_RE = /buraxılış|sınağı|əlaqə|elaqe|mustafayev|uğuruna|sinif\s*$|^\s*faiz\s*$/i;
 
-function transformOf(it) {
-  const t = it?.transform;
-  if (!t) return [];
-  if (Array.isArray(t)) return t;
-  try {
-    return Array.from(t);
-  } catch {
-    return [];
-  }
-}
 function itemX(it) {
-  return Number(transformOf(it)[4] || 0);
+  return Number(it.transform?.[4] || 0);
 }
 function itemY(it) {
-  return Number(transformOf(it)[5] || 0);
+  return Number(it.transform?.[5] || 0);
 }
 function itemW(it) {
   return Number(it.width || 0);
 }
 function itemH(it) {
-  return Number(it.height || transformOf(it)[0] || 11);
-}
-
-function textItems(content) {
-  const raw = content?.items;
-  if (Array.isArray(raw)) return raw.filter((it) => it && typeof it === 'object');
-  if (raw && typeof raw === 'object' && Array.isArray(raw.$values)) {
-    return raw.$values.filter((it) => it && typeof it === 'object');
-  }
-  if (raw && typeof raw[Symbol.iterator] === 'function') {
-    return Array.from(raw).filter((it) => it && typeof it === 'object');
-  }
-  return unwrapOptions(raw).filter((it) => it && typeof it === 'object');
+  return Number(it.height || it.transform?.[0] || 11);
 }
 
 function detectSplitX(items) {
@@ -186,63 +173,30 @@ function extractColumnText(items) {
     .filter((line) => !/^[\d\s]+$/.test(line));
 }
 
-export function readBlobBytes(blob) {
-  if (!blob) return Promise.resolve(null);
-  return readWithFileReader(blob);
-}
-
-function readWithFileReader(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error('Fayl oxunmadı.'));
-    reader.readAsArrayBuffer(blob);
-  });
-}
-
-export async function extractPdfTextFromBytes(buf) {
-  if (!isPdfMagic(buf)) {
-    throw new Error('[1 fayl] Bu fayl PDF deyil (%PDF yoxdur).');
-  }
-  const pdf = await openPdfDocument(buf);
+export async function extractPdfText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await getDocument({ data: new Uint8Array(buf), disableWorker: true }).promise;
   const pages = [];
   for (let i = 1; i <= pdf.numPages; i += 1) {
-    let page;
-    let content;
-    try {
-      page = await pdf.getPage(i);
-      content = await page.getTextContent();
-    } catch (err) {
-      throw new Error(`[3 PDF.js] səhifə ${i}/${pdf.numPages} getTextContent: ${err?.message || err}`);
-    }
-    const raw = textItems(content);
-    try {
-      const viewport = page.getViewport({ scale: 1 });
-      const clipped = raw.filter((it) => {
-        const y = itemY(it);
-        return y > 40 && y < viewport.height - 20;
-      });
-      const source = clipped.length >= 8 ? clipped : raw;
-      const splitX = detectSplitX(source);
-      const columns = splitX
-        ? [source.filter((it) => itemX(it) < splitX), source.filter((it) => itemX(it) >= splitX)]
-        : [source];
-      const pageLines = [];
-      columns.forEach((col) => {
-        if (!col.length) return;
-        pageLines.push(...extractColumnText(col));
-      });
-      if (pageLines.length) pages.push(pageLines.join('\n'));
-    } catch (err) {
-      throw new Error(`[3 mətn] səhifə ${i} layout: ${err?.message || err}`);
-    }
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const raw = (content.items || []).filter((it) => {
+      const y = itemY(it);
+      return y > 88 && y < viewport.height - 36;
+    });
+    const splitX = detectSplitX(raw);
+    const columns = splitX
+      ? [raw.filter((it) => itemX(it) < splitX), raw.filter((it) => itemX(it) >= splitX)]
+      : [raw];
+    const pageLines = [];
+    columns.forEach((col) => {
+      if (!col.length) return;
+      pageLines.push(...extractColumnText(col));
+    });
+    if (pageLines.length) pages.push(pageLines.join('\n'));
   }
   return pages.join('\n');
-}
-
-export async function extractPdfText(file) {
-  const buf = await readBlobBytes(file);
-  return extractPdfTextFromBytes(buf);
 }
 
 function glueWrappedLines(text) {
@@ -436,11 +390,10 @@ export function questionsFromBrief({ topic, count, easy = 0, medium = 0, hard = 
 }
 
 export function toAddQuestionPayload(q) {
-  const opts = unwrapOptions(q.options);
-  const fromFlags = opts.find((o) => o.isCorrect)?.letter;
+  const fromFlags = (q.options || []).find((o) => o.isCorrect)?.letter;
   const correctLetter = String(q.correctLetter || fromFlags || 'A').toUpperCase();
   const options = LETTERS.map((letter) => {
-    const found = opts.find((o) => String(o.letter || '').toUpperCase() === letter);
+    const found = (q.options || []).find((o) => String(o.letter || '').toUpperCase() === letter);
     return {
       optionText: String(found?.text || letter).trim() || letter,
       isCorrect: correctLetter === letter,

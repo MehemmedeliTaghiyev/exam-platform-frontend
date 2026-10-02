@@ -4,22 +4,14 @@ export function unwrapList(data) {
 
   const candidates = [
     data.items,
-    data.Items,
     data.data,
-    data.Data,
     data.result,
-    data.Result,
     data.exams,
-    data.Exams,
     data.questions,
-    data.Questions,
     data.submissions,
-    data.Submissions,
     data.users,
-    data.Users,
     data.$values,
     data.value,
-    data.Value,
   ];
 
   for (const candidate of candidates) {
@@ -239,10 +231,7 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   if ((status === 502 || status === 503) && typeof err?.response?.data?.message === 'string') {
     return err.response.data.message;
   }
-  if (status === 503) {
-    return '503: Exam API AI-yə çıxa bilmədi. SmarterASP-də OPENAI_API_KEY yoxdursa əlavə edin; sayt yuxudadırsa bir dəqiqə sonra yenidən yoxlayın. Açarı çatda yazmayın.';
-  }
-  if (status === 502 || status === 504 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
+  if (status === 502 || status === 503 || status === 504 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
     return `API-yə qoşulmaq olmadı (${api}). Exam API (site1) işlək olmalıdır; bir az sonra yenidən yoxlayın.`;
   }
   const data = err?.response?.data;
@@ -258,7 +247,7 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
   }
   if (typeof data?.title === 'string') return data.title;
   if (typeof err?.message === 'string' && /is not a function/i.test(err.message)) {
-    return 'Telefonda PDF oxunuşu pozuldu. Files-dən mətnli PDF seçin, şəkil və ya skan göndərməyin.';
+    return 'AI cavabı gözlənilməz formatdadır. Səhifəni yeniləyin, yenidən daxil olun və bir daha cəhd edin.';
   }
   if (typeof err?.message === 'string' && err.message !== 'Network Error') return err.message;
   return fallback;

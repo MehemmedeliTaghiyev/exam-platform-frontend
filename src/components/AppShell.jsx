@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { AI_FEATURE_OPEN } from '../lib/driveLinks';
 import { normalizeRole, classNames } from '../lib/utils';
 
 const navByRole = {
@@ -48,7 +49,9 @@ export default function AppShell({ title, children, mainClassName = '' }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const role = normalizeRole(user?.role);
-  const links = navByRole[role] || navByRole.Student;
+  const links = (navByRole[role] || navByRole.Student).filter(
+    (item) => AI_FEATURE_OPEN || item.to !== '/teacher/ai',
+  );
 
   const handleLogout = () => {
     logout();

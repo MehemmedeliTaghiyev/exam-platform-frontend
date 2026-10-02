@@ -6,7 +6,7 @@ import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, fetchExam, fetchOwnProfile, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, ensurePaperQuestions, fetchExam, fetchOwnProfile, fetchQuestions, saveAnswerKey, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
@@ -176,9 +176,12 @@ export default function QuestionBuilder() {
         description: exam?.description,
         pdfFileUrl,
       });
+      if (!questions.length) {
+        await ensurePaperQuestions(id, exam?.totalQuestions || 20);
+      }
       setDriveLink(pdfFileUrl);
       await load();
-      setMessage('Bu imtahan üçün Drive faylı bağlandı. Dərc olanda şagirdlər yalnız bu PDF-i görəcək.');
+      setMessage('Drive faylı bağlandı. Aşağıda cavab vərəqi yaranır; dərcdən sonra şagird PDF + cavabları görür.');
     } catch (err) {
       setMessage(errorMessage(err, 'Drive linki saxlanılmadı.'));
     } finally {
@@ -294,11 +297,15 @@ export default function QuestionBuilder() {
       const duration = exam.durationMinutes || 45;
       const end = exam.endTime || new Date(Date.now() + duration * 60 * 1000).toISOString();
       const status = new Date(start).getTime() > Date.now() ? 'Scheduled' : 'Live';
+      const paperCount = questions.length || Number(exam.totalQuestions) || 20;
+      if (!questions.length) {
+        await ensurePaperQuestions(id, paperCount);
+      }
       await updateExam(id, {
         subjectId: exam.subjectId,
         title: exam.title,
         durationMinutes: duration,
-        totalQuestions: questions.length || exam.totalQuestions || 1,
+        totalQuestions: paperCount,
         startTime: start,
         endTime: end,
         status,

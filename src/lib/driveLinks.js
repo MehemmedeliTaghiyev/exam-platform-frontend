@@ -77,9 +77,20 @@ export function examDriveFileId(exam) {
   );
   if (fromPdf) return fromPdf;
   const desc = String(exam.description || exam.Description || '');
-  const m = desc.match(/^DRVFILE:([a-zA-Z0-9_-]+)/i);
-  if (m) return m[1];
-  return parseDriveFileId(desc);
+  const tagged = desc.match(/DRVFILE:([a-zA-Z0-9_-]+)/i);
+  if (tagged) return tagged[1];
+  const fromDesc = parseDriveFileId(desc);
+  if (fromDesc) return fromDesc;
+  try {
+    const blob = JSON.stringify(exam);
+    const file = blob.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (file) return file[1];
+    const drv = blob.match(/DRVFILE:([a-zA-Z0-9_-]+)/i);
+    if (drv) return drv[1];
+  } catch {
+    /* ignore */
+  }
+  return '';
 }
 
 export function examDrivePreviewUrl(exam) {

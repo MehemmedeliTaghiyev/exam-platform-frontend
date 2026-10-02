@@ -10,6 +10,55 @@ import DrivePreview from '../components/DrivePreview';
 import { displayExamDescription, examDrivePreviewUrl } from '../lib/driveLinks';
 
 const OPEN_SENTINEL = 'open';
+const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+
+function DriveAnswerSheet({ count, questions, answers, disabled, onPick, onOpen }) {
+  const n = Math.max(count, questions.length, 1);
+  return (
+    <Card>
+      <h3 className="mb-1 text-base font-bold">Cavab vərəqi</h3>
+      <p className="mb-4 text-sm text-gray-500">PDF-dəki sualın variantını seçin. Açıq sual üçün mətni yazın.</p>
+      <div className="space-y-3">
+        {Array.from({ length: n }, (_, index) => {
+          const q = questions[index];
+          const key = q?.id != null ? String(q.id) : `p${index + 1}`;
+          const current = answers[key] && typeof answers[key] === 'object'
+            ? answers[key]
+            : { letter: answers[key] || '', text: '' };
+          return (
+            <div key={key} className="rounded-xl border border-gray-200 px-3 py-3 dark:border-slate-700">
+              <p className="mb-2 text-sm font-semibold text-gray-600">Sual {index + 1}</p>
+              <div className="flex flex-wrap gap-2">
+                {LETTERS.map((letter) => (
+                  <button
+                    key={letter}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onPick(key, letter)}
+                    className={`h-9 w-9 rounded-lg text-sm font-bold ${
+                      current.letter === letter
+                        ? 'bg-brand-600 text-white'
+                        : 'border border-gray-200 bg-white dark:border-slate-600 dark:bg-slate-900'
+                    }`}
+                  >
+                    {letter}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="mt-3 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                placeholder="Açıq cavab (istəyə bağlı)"
+                disabled={disabled}
+                value={current.text || ''}
+                onChange={(e) => onOpen(key, e.target.value)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
 
 function isOpenQuestion(q) {
   const type = String(q?.type || '');
@@ -17,21 +66,27 @@ function isOpenQuestion(q) {
   return type === 'OpenEnded' || ['Text', 'Integer', 'Decimal', 'Number'].includes(kind);
 }
 
-function serializeAnswers(map) {
-  return Object.entries(map).map(([qId, val]) => {
-    if (val && typeof val === 'object') {
+function serializeAnswers(map, questions = []) {
+  if (questions.length) {
+    return questions.map((q, index) => {
+      const val = map[q.id] || map[String(q.id)] || map[`p${index + 1}`] || {};
+      const letter = String(val.letter || '').toUpperCase();
+      const opt = (q.options || []).find((o) => {
+        const mark = String(o.letter || o.optionText || o.text || '').trim().toUpperCase();
+        return mark === letter || mark.startsWith(`${letter})`);
+      });
       return {
-        questionId: parseInt(qId, 10),
-        selectedOptionId: val.optionId && val.optionId !== OPEN_SENTINEL ? Number(val.optionId) : 0,
-        textAnswer: val.text || '',
+        questionId: Number(q.id) || index + 1,
+        selectedOptionId: opt?.id ? Number(opt.id) : 0,
+        textAnswer: val.text || letter || '',
       };
-    }
-    return {
-      questionId: parseInt(qId, 10),
-      selectedOptionId: parseInt(val, 10) || 0,
-      textAnswer: '',
-    };
-  });
+    });
+  }
+  return Object.entries(map).map(([qId, val], index) => ({
+    questionId: parseInt(qId, 10) || index + 1,
+    selectedOptionId: 0,
+    textAnswer: (val && typeof val === 'object') ? (val.text || val.letter || '') : String(val || ''),
+  }));
 }
 
 export default function TakeExam() {
@@ -115,11 +170,11 @@ export default function TakeExam() {
         studentExamId: sessionId,
         examId: parseInt(id, 10),
         studentId: user?.id,
-        answers: serializeAnswers(answersRef.current),
+        answers: serializeAnswers(answersRef.current, questions),
       }).catch(() => {});
     }, 400);
     return () => clearTimeout(timer);
-  }, [answers, studentExamId, id, user?.id, submitting]);
+  }, [answers, studentExamId, id, user?.id, submitting, questions]);
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
@@ -137,7 +192,7 @@ export default function TakeExam() {
         examId: parseInt(id, 10),
         studentId: user?.id,
         studentName: user?.fullName,
-        answers: serializeAnswers(answersRef.current),
+        answers: serializeAnswers(answersRef.current, questions),
       });
       navigate(`/student/exams/${parseInt(id, 10)}/review`, { replace: true });
     } catch {
@@ -182,12 +237,24 @@ export default function TakeExam() {
       ) : (
         <div className="mx-auto max-w-5xl space-y-4">
           {examDrivePreviewUrl(exam) ? (
-            <DrivePreview exam={exam} title={exam?.title || 'İmtahan PDF'} />
-          ) : null}
-          {questions.length === 0 && !examDrivePreviewUrl(exam) ? (
-            <Card>Bu imtahanda PDF və ya sual yoxdur.</Card>
-          ) : null}
-          {questions.length > 0 ? (
+            <>
+              <DrivePreview exam={exam} title={exam?.title || 'İmtahan PDF'} />
+              <DriveAnswerSheet
+                count={questions.length || Number(exam?.totalQuestions) || 20}
+                questions={questions}
+                answers={answers}
+                disabled={submitting}
+                onPick={(key, letter) => {
+                  if (submittedRef.current || submitting) return;
+                  setAnswers((p) => ({ ...p, [key]: { ...(p[key] || {}), letter } }));
+                }}
+                onOpen={(key, text) => {
+                  if (submittedRef.current || submitting) return;
+                  setAnswers((p) => ({ ...p, [key]: { ...(p[key] || {}), text } }));
+                }}
+              />
+            </>
+          ) : questions.length > 0 ? (
             questions.map((q, index) => {
               const current = answers[q.id] && typeof answers[q.id] === 'object' ? answers[q.id] : { optionId: answers[q.id], text: '' };
               const open = isOpenQuestion(q);
@@ -239,7 +306,9 @@ export default function TakeExam() {
                 />
               );
             })
-          ) : null}
+          ) : (
+            <Card>Bu imtahanda PDF və ya sual yoxdur.</Card>
+          )}
           <Button onClick={handleSubmit} disabled={submitting} className="w-full sm:w-auto">
             {submitting ? 'Göndərilir...' : 'İmtahanı bitir'}
           </Button>

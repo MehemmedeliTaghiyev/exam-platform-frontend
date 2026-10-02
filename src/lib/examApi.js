@@ -719,9 +719,10 @@ export async function fetchExam(id) {
     teacherId: examOwnerId(merged) ?? (remoteOk ? currentTeacherScope() : examOwnerId(merged)),
     subjectId: merged.subjectId ?? merged.SubjectId,
     status: merged.status || merged.Status,
-    pdfFilePath: merged.pdfFilePath || merged.PdfFilePath || '',
-    pdfFileUrl: merged.pdfFileUrl || merged.PdfFileUrl || '',
-    description: merged.description || merged.Description || '',
+    pdfFilePath: merged.pdfFilePath || merged.PdfFilePath || local?.pdfFilePath || '',
+    pdfFileUrl: merged.pdfFileUrl || merged.PdfFileUrl || local?.pdfFileUrl || '',
+    description: merged.description || merged.Description || local?.description || '',
+    totalQuestions: merged.totalQuestions ?? merged.TotalQuestions ?? merged.questionCount ?? local?.totalQuestions,
     isAiGenerated: merged.isAiGenerated === true || merged.IsAiGenerated === true,
   };
 }
@@ -792,6 +793,53 @@ export async function addQuestion(examId, payload) {
   }
 
   throw lastError || new Error('Sual serverə yazılmadı.');
+}
+
+export async function ensurePaperQuestions(examId, count) {
+  const existing = await fetchQuestions(examId);
+  if (existing.length) return existing;
+  const n = Math.min(Math.max(Number(count) || 20, 1), 80);
+  const urls = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
+  for (let i = 1; i <= n; i += 1) {
+    const payload = {
+      text: `Sual ${i}`,
+      points: 1,
+      type: 'SingleChoice',
+      inputKind: 'Choice',
+      options: [
+        { optionText: 'A', isCorrect: false },
+        { optionText: 'B', isCorrect: false },
+        { optionText: 'C', isCorrect: false },
+        { optionText: 'D', isCorrect: false },
+        { optionText: 'E', isCorrect: false },
+        { optionText: 'Açıq', isCorrect: false },
+      ],
+    };
+    const bodies = [
+      payload,
+      {
+        Text: payload.text,
+        Points: 1,
+        Type: 0,
+        InputKind: 'Choice',
+        Options: payload.options,
+      },
+    ];
+    let ok = false;
+    for (const url of urls) {
+      for (const body of bodies) {
+        try {
+          await API.post(url, body, { timeout: 15000 });
+          ok = true;
+          break;
+        } catch {
+          /* next contract */
+        }
+      }
+      if (ok) break;
+    }
+  }
+  return fetchQuestions(examId);
 }
 
 export async function updateQuestion(examId, questionId, payload) {

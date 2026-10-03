@@ -4,7 +4,7 @@ import { Badge, Button, Card, EmptyState, Input, Modal, Select, Textarea } from 
 import API from '../api/axios';
 import { Ban, CheckCircle2, Sparkles } from 'lucide-react';
 import { createTeacherAccount, setTeacherAiEnabled, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
-import { displayTrialMessage, teacherDriveFolderUrl } from '../lib/driveLinks';
+import { displayTrialMessage, driveFolderOpenUrl, teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
 import { AI_FEATURES, eventsFromTeacher, filterEventsByRange, groupUsageByDate, totalsByFeature } from '../lib/aiUsage';
 import {
@@ -64,6 +64,8 @@ function TeacherPlanCell({ teacher, onSaved, onError }) {
         trialEndsAt,
         billingPlan: plan === 'Monthly' ? 'Monthly' : 'Trial14',
         trialDays: days,
+        trialMessage: teacher.trialMessage,
+        driveFolderUrl: teacher.driveFolderUrl,
       });
       onSaved({ ...teacher, ...updated, billingPlan: plan === 'Monthly' ? 'Monthly' : 'Trial14', trialDays: days, trialStartsAt, trialEndsAt });
     } catch (err) {
@@ -92,6 +94,68 @@ function TeacherPlanCell({ teacher, onSaved, onError }) {
       )}
       <div className="flex items-center justify-between gap-2">
         <span className={`text-xs ${left.className}`}>{left.text}</span>
+        <Button variant="secondary" disabled={saving} onClick={save}>
+          {saving ? '...' : 'Saxla'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DriveFolderCell({ teacher, onSaved, onError }) {
+  const [url, setUrl] = useState(teacher.driveFolderUrl || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setUrl(teacher.driveFolderUrl || '');
+  }, [teacher.id, teacher.driveFolderUrl]);
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    onError('');
+    try {
+      const folder = driveFolderOpenUrl(url);
+      await updateTeacherTrial(teacher.id, {
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        phone: teacher.phone,
+        trialStartsAt: teacher.trialStartsAt,
+        trialEndsAt: teacher.trialEndsAt,
+        billingPlan: teacher.billingPlan,
+        trialDays: teacher.trialDays,
+        trialMessage: teacher.trialMessage,
+        driveFolderUrl: folder,
+      });
+      localDb.setTeacherDriveFolder(teacher.id, folder);
+      onSaved({ ...teacher, driveFolderUrl: folder });
+    } catch (err) {
+      onError(errorMessage(err, 'Qovluq linki saxlanılmadı.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex min-w-[240px] flex-col gap-2">
+      <Input
+        placeholder="https://drive.google.com/drive/folders/..."
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+      />
+      <div className="flex items-center justify-between gap-2">
+        {teacher.driveFolderUrl ? (
+          <a
+            className="text-xs font-medium text-brand-600 underline"
+            href={teacher.driveFolderUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Aç
+          </a>
+        ) : (
+          <span className="text-xs text-gray-400">Boşdur</span>
+        )}
         <Button variant="secondary" disabled={saving} onClick={save}>
           {saving ? '...' : 'Saxla'}
         </Button>
@@ -356,18 +420,13 @@ export default function AdminTeachers() {
                       <p className="mt-1 text-xs text-gray-400">{formatDateTime(t.createdAt)}</p>
                     </td>
                     <td className="px-5 py-3">
-                      {t.driveFolderUrl ? (
-                        <a
-                          className="text-xs font-medium text-brand-600 underline"
-                          href={t.driveFolderUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Qovluğu aç
-                        </a>
-                      ) : (
-                        <span className="text-xs text-gray-400">Link yoxdur</span>
-                      )}
+                      <DriveFolderCell
+                        teacher={t}
+                        onError={setError}
+                        onSaved={(updated) => {
+                          setTeachers((prev) => prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+                        }}
+                      />
                     </td>
                     <td className="px-5 py-3">
                       <Button

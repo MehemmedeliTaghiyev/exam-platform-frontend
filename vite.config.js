@@ -1,15 +1,18 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { loadDrivePdfBuffer, parseDrivePdfId } from './api/drivePdf.js'
+import { loadDrivePdfBuffer, parseDrivePdfId, extractTextFromPdfBuffer } from './api/drivePdf.js'
 
 function drivePdfDevPlugin() {
   return {
     name: 'drive-pdf-dev',
     configureServer(server) {
+      const env = loadEnv(server.config.mode, process.cwd(), '')
+      if (env.GOOGLE_DRIVE_API_KEY) process.env.GOOGLE_DRIVE_API_KEY = env.GOOGLE_DRIVE_API_KEY
+      if (env.GOOGLE_API_KEY) process.env.GOOGLE_API_KEY = env.GOOGLE_API_KEY
       server.middlewares.use(async (req, res, next) => {
         const raw = req.url || ''
-        if (!raw.startsWith('/drive-pdf')) {
+        if (!raw.startsWith('/drive-pdf') && !raw.startsWith('/drive-extract')) {
           next()
           return
         }
@@ -18,7 +21,20 @@ function drivePdfDevPlugin() {
           const buf = id ? await loadDrivePdfBuffer(id) : null
           if (!buf) {
             res.statusCode = 404
-            res.end('pdf yoxdur')
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'pdf yoxdur' }))
+            return
+          }
+          if (raw.startsWith('/drive-extract')) {
+            const text = String(await extractTextFromPdfBuffer(buf) || '').trim()
+            if (text.length < 40) {
+              res.statusCode = 422
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.' }))
+              return
+            }
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ text: text.slice(0, 24000) }))
             return
           }
           res.setHeader('Content-Type', 'application/pdf')

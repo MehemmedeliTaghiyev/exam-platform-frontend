@@ -1,5 +1,6 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import { pointsForDifficulty } from './questionDifficulty';
+import { wrapQuestionImage } from './questionImage';
 import { unwrapOptions } from './utils';
 
 try {
@@ -403,8 +404,11 @@ export function toAddQuestionPayload(q) {
     optionText: 'Açıq',
     isCorrect: correctLetter === 'OPEN',
   });
+  const imageUrl = q.imageUrl || q.ImageUrl || '';
   return {
-    text: q.text,
+    text: wrapQuestionImage(q.text, imageUrl),
+    imageUrl: imageUrl || null,
+    ImageUrl: imageUrl || null,
     points: pointsForDifficulty(q.difficultyLevel),
     type: 'SingleChoice',
     inputKind: 'Choice',

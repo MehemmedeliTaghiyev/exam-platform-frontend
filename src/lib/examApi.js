@@ -2,6 +2,7 @@ import API from '../api/axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
+import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
 
 const FAST = { timeout: 20000 };
@@ -750,10 +751,13 @@ function normalizeQuestion(q) {
   const typeName = typeof type === 'number'
     ? ['SingleChoice', 'MultipleChoice', 'OpenEnded'][type] || 'SingleChoice'
     : (type || 'SingleChoice');
+  const rawText = q.text || q.questionText || q.title;
+  const imageUrl = parseQuestionImage({ ...q, text: rawText });
   return {
     ...q,
     id: q.id ?? q.questionId,
-    text: q.text || q.questionText || q.title,
+    text: stripQuestionImage(rawText),
+    imageUrl,
     type: typeName,
     inputKind: q.inputKind || q.InputKind || (typeName === 'OpenEnded' ? 'Text' : 'Choice'),
     correctText: q.correctText ?? q.CorrectText ?? '',
@@ -780,6 +784,8 @@ export async function addQuestion(examId, payload) {
       CorrectText: payload.correctText,
       DifficultyLevel: payload.difficultyLevel,
       Options: payload.options,
+      ImageUrl: payload.imageUrl || payload.ImageUrl || null,
+      Image: payload.imageUrl || payload.Image || null,
     },
   ];
 
@@ -894,6 +900,8 @@ export async function updateQuestion(examId, questionId, payload) {
       CorrectText: payload.correctText,
       DifficultyLevel: payload.difficultyLevel,
       Options: payload.options,
+      ImageUrl: payload.imageUrl || payload.ImageUrl || null,
+      Image: payload.imageUrl || payload.Image || null,
     },
   ];
   let lastError;
@@ -910,6 +918,17 @@ export async function updateQuestion(examId, questionId, payload) {
     }
   }
   throw lastError || new Error('Sual yenilənmədi.');
+}
+
+export async function extractDrivePdfText(fileId) {
+  const id = String(fileId || '').trim();
+  if (!id) throw new Error('Drive fayl linki yoxdur.');
+  const res = await fetch(`/drive-extract?id=${encodeURIComponent(id)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Drive PDF oxunmadı.');
+  const text = String(data.text || '').trim();
+  if (text.length < 40) throw new Error('PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.');
+  return text;
 }
 
 const pdfBytesCache = new Map();

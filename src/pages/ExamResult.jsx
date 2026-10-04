@@ -8,6 +8,7 @@ import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchQuestions } fro
 import { AuthContext } from '../context/AuthContext';
 import { Award, CheckCircle2, Percent, XCircle } from 'lucide-react';
 import { durationSecondsBetween, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
+import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
 
 function toReviewQuestions(list = []) {
@@ -26,7 +27,8 @@ function toReviewQuestions(list = []) {
     return {
       questionId: q.id ?? q.questionId,
       index: q.index || index + 1,
-      text: q.text,
+      text: stripQuestionImage(q.text),
+      imageUrl: parseQuestionImage(q),
       isCorrect,
       unanswered,
       selectedText,

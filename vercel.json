@@ -1,7 +1,8 @@
 {
   "rewrites": [
     { "source": "/drive-pdf", "destination": "/api/drive-pdf" },
-    { "source": "/((?!api/|drive-pdf).*)", "destination": "/index.html" }
+    { "source": "/drive-extract", "destination": "/api/drive-extract" },
+    { "source": "/((?!api/|drive-pdf|drive-extract).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

@@ -4,9 +4,9 @@ import { ArrowLeft, FileDown, BarChart3, Upload } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
-import QuestionCard from '../components/QuestionCard';
+import QuestionCard, { splitQuestionOptions } from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, ensurePaperQuestions, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { addQuestion, applyAiAnswers, extractDrivePdfText, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
@@ -177,16 +177,56 @@ export default function QuestionBuilder() {
         pdfFileUrl,
       });
       await saveDriveFileMarker(id, fileId);
-      if (!paperQuestionsOf(questions).length) {
-        await ensurePaperQuestions(id, exam?.totalQuestions || 20);
-      }
       setDriveLink(pdfFileUrl);
       await load();
-      setMessage('Drive faylı bağlandı. Aşağıda cavab vərəqi yaranır; dərcdən sonra şagird PDF + cavabları görür.');
+      setMessage('Drive faylı bağlandı. İndi “AI ilə kartlara çevir” — şagird telefonda yalnız kartları görəcək.');
     } catch (err) {
       setMessage(errorMessage(err, 'Drive linki saxlanılmadı.'));
     } finally {
       setDriveBusy(false);
+    }
+  };
+
+  const handleDriveAi = async () => {
+    const fileId = parseDriveFileId(driveLink) || examDriveFileId(exam);
+    if (!fileId) {
+      setMessage('Əvvəl Drive fayl linkini bağlayın.');
+      return;
+    }
+    setPdfBusy(true);
+    setMessage('');
+    try {
+      const text = await extractDrivePdfText(fileId);
+      let parsed = parseQuestionsFromText(text);
+      const wanted = parseInt(pdfCount, 10);
+      const aiParsed = await tryGenerateAiQuestions({
+        title: exam?.title || 'PDF',
+        topic: 'PDF',
+        subjectName: exam?.subjectName,
+        brief: text,
+        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+        source: 'pdf',
+      }, { soft: true });
+      if (aiParsed?.length) parsed = aiParsed;
+      parsed = normalizeGeneratedQuestions(parsed);
+      if (!parsed.length) {
+        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
+      }
+      try {
+        const grades = await tryGradeAiQuestions(parsed, { soft: true });
+        if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
+      } catch {
+        /* teacher can fix answers */
+      }
+      for (const q of parsed) {
+        await addQuestion(id, toAddQuestionPayload(q));
+      }
+      await load();
+      setMessage(`${parsed.length} sual AI ilə Drive PDF-dən kart oldu. Şagird telefonda yalnız bu kartları görür.`);
+    } catch (err) {
+      setMessage(errorMessage(err, 'AI PDF-i oxumadı.'));
+    } finally {
+      setPdfBusy(false);
     }
   };
 
@@ -277,6 +317,7 @@ export default function QuestionBuilder() {
         text: payload.text,
         correctLetter: payload.correctLetter,
         difficultyLevel: payload.difficultyLevel,
+        imageUrl: payload.imageUrl !== undefined ? payload.imageUrl : question.imageUrl,
         options: payload.options,
       }));
       const nextKey = { ...answerKey, [question.id]: payload.correctLetter };
@@ -291,6 +332,32 @@ export default function QuestionBuilder() {
     }
   };
 
+  const handleQuestionImage = async (question, dataUrl) => {
+    setEditBusy(true);
+    setMessage('');
+    try {
+      const letter = answerKey[question.id] || letterOf(question);
+      const split = splitQuestionOptions(question);
+      await updateQuestion(id, question.id, toAddQuestionPayload({
+        text: question.text,
+        correctLetter: letter,
+        difficultyLevel: question.difficultyLevel || 'orta',
+        imageUrl: dataUrl || '',
+        options: split.options.map((opt) => ({
+          letter: opt.letter,
+          text: opt.text,
+          isCorrect: opt.letter === letter,
+        })),
+      }));
+      await load();
+      setMessage(dataUrl ? 'Şəkil karta əlavə olundu.' : 'Şəkil silindi.');
+    } catch (err) {
+      setMessage(errorMessage(err, 'Şəkil saxlanılmadı.'));
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   const publishDraft = async () => {
     if (!exam) return;
     try {
@@ -298,11 +365,12 @@ export default function QuestionBuilder() {
       const duration = exam.durationMinutes || 45;
       const end = exam.endTime || new Date(Date.now() + duration * 60 * 1000).toISOString();
       const status = new Date(start).getTime() > Date.now() ? 'Scheduled' : 'Live';
-      const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
-      const paperCount = paperQuestionsOf(questions).length || Number(exam.totalQuestions) || 20;
-      if (!paperQuestionsOf(questions).length) {
-        await ensurePaperQuestions(id, paperCount);
+      const paperCount = paperQuestionsOf(questions).length;
+      if (!paperCount) {
+        setMessage('Əvvəl Drive PDF-dən AI ilə kartlara çevirin, sonra dərc edin.');
+        return;
       }
+      const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
       if (fileId) await saveDriveFileMarker(id, fileId);
       await updateExam(id, {
         subjectId: exam.subjectId,
@@ -392,8 +460,8 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">Drive PDF — bu imtahan</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF-i öz qovluğunuza yükləyin, faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> linkini
-              bura yazın. Qovluqda neçə imtahan olsa da, şagird yalnız bu imtahana bağlanan faylı görür.
+              PDF Drive-dadır. AI onu serverdə oxuyub kartlara çevirir. iPhone PDF açmır — şagird yalnız kart görür.
+              Faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> linkini bura yazın.
             </p>
             {folderUrl ? (
               <a
@@ -416,9 +484,22 @@ export default function QuestionBuilder() {
                 onChange={(e) => setDriveLink(e.target.value)}
                 placeholder="https://drive.google.com/file/d/.../view"
               />
-              <Button type="submit" disabled={driveBusy}>
-                {driveBusy ? 'Saxlanılır...' : 'Faylı imtahana bağla'}
-              </Button>
+              <Input
+                label="Sual sayı (istəyə bağlı)"
+                type="number"
+                min="1"
+                max="200"
+                value={pdfCount}
+                onChange={(e) => setPdfCount(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={driveBusy}>
+                  {driveBusy ? 'Saxlanılır...' : 'Faylı imtahana bağla'}
+                </Button>
+                <Button type="button" disabled={pdfBusy} onClick={handleDriveAi}>
+                  <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'AI ilə kartlara çevir'}
+                </Button>
+              </div>
             </form>
           </Card>
 
@@ -466,7 +547,7 @@ export default function QuestionBuilder() {
               ) : null}
               <div className="space-y-4">
           {questions.length === 0 ? (
-            <Card className="text-sm text-gray-500">Drive faylını bağlayın və dərc edin. Əl ilə sual da əlavə edə bilərsiniz.</Card>
+            <Card className="text-sm text-gray-500">Drive faylını bağlayın, AI ilə kartlara çevirin. Şagird yalnız kart görəcək.</Card>
           ) : (
             questions.filter((q) => !String(q.text || '').includes('__DRIVE__')).map((q, idx) => (
                 isOpenQuestion(q) ? (
@@ -483,6 +564,7 @@ export default function QuestionBuilder() {
                     question={{ ...q, correctLetter: answerKey[q.id] || letterOf(q), difficultyLevel: q.difficultyLevel || 'orta' }}
                     onMarkCorrect={(letter) => handleMarkCorrect(q, letter)}
                     onSaveEdit={(payload) => handleSaveCard(q, payload)}
+                    onImageChange={(dataUrl) => handleQuestionImage(q, dataUrl)}
                   />
                 )
             ))

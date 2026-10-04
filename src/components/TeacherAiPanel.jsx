@@ -313,9 +313,11 @@ Cavab: B`}</pre>
                         text: payload.text,
                         correctLetter: payload.correctLetter,
                         difficultyLevel: payload.difficultyLevel,
+                        imageUrl: payload.imageUrl !== undefined ? payload.imageUrl : q.imageUrl,
                         options: payload.options,
                       });
                     }}
+                    onImageChange={(dataUrl) => updateGenerated(index, { imageUrl: dataUrl || '' })}
                   />
                 ))}
               </div>

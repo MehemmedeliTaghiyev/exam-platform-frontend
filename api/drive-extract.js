@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json({ text: text.slice(0, 24000) });
   } catch (err) {
-    res.status(502).json({ error: 'PDF oxunmadı.' });
+    const detail = String(err?.message || err || '').slice(0, 180);
+    res.status(502).json({ error: 'PDF oxunmadı.', detail });
   }
 }

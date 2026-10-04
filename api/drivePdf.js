@@ -81,7 +81,9 @@ export async function loadDrivePdfBuffer(id) {
 }
 
 export async function extractTextFromPdfBuffer(buf) {
-  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const src = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const bytes = new Uint8Array(src.byteLength);
+  bytes.set(src);
   let pdfjs;
   try {
     pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');

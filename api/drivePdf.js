@@ -1,3 +1,7 @@
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+
+const require = createRequire(import.meta.url);
 const ID_RE = /^[a-zA-Z0-9_-]{20,}$/;
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 
@@ -89,6 +93,19 @@ export async function extractTextFromPdfBuffer(buf) {
     pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   } catch {
     pdfjs = await import('pdfjs-dist/build/pdf.mjs');
+  }
+  const workerSpecs = [
+    'pdfjs-dist/legacy/build/pdf.worker.mjs',
+    'pdfjs-dist/build/pdf.worker.mjs',
+    'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+  ];
+  for (const spec of workerSpecs) {
+    try {
+      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(require.resolve(spec)).href;
+      break;
+    } catch {
+      /* next */
+    }
   }
   const pdf = await pdfjs.getDocument({
     data: bytes,

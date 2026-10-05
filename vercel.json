@@ -4,6 +4,12 @@
     { "source": "/drive-extract", "destination": "/api/drive-extract" },
     { "source": "/((?!api/|drive-pdf|drive-extract).*)", "destination": "/index.html" }
   ],
+  "functions": {
+    "api/drive-extract.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/pdfjs-dist/**"
+    }
+  },
   "headers": [
     {
       "source": "/assets/(.*)",

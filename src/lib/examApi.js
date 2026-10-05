@@ -925,7 +925,7 @@ export async function extractDrivePdfText(fileId) {
   if (!id) throw new Error('Drive fayl linki yoxdur.');
   const res = await fetch(`/drive-extract?id=${encodeURIComponent(id)}`);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Drive PDF oxunmadı.');
+  if (!res.ok) throw new Error(data.error || data.detail || 'Drive PDF oxunmadı.');
   const text = String(data.text || '').trim();
   if (text.length < 40) throw new Error('PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.');
   return text;

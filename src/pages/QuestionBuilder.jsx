@@ -11,7 +11,6 @@ import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
 import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
-import { fetchDrivePdfBuffer, ocrPdfArrayBuffer } from '../lib/ocrExamPdf';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
@@ -195,24 +194,9 @@ export default function QuestionBuilder() {
       return;
     }
     setPdfBusy(true);
-    setMessage('Drive PDF yüklənir...');
+    setMessage('Drive PDF serverdə oxunur. Telefonda gözləyin — PDF cihazda açılmır.');
     try {
-      let text = '';
-      try {
-        text = await extractDrivePdfText(fileId);
-      } catch {
-        text = '';
-      }
-      if (String(text).trim().length < 40) {
-        setMessage('Skan PDF: səhifələr oxunur. Bu, bir neçə dəqiqə çəkə bilər.');
-        const buf = await fetchDrivePdfBuffer(fileId);
-        text = await ocrPdfArrayBuffer(buf, ({ page, total }) => {
-          setMessage(`Skan oxunur: səhifə ${page} / ${total}`);
-        });
-      }
-      if (String(text).trim().length < 40) {
-        throw new Error('PDF-dən mətn çıxmadı. Daha aydın skan və ya Word-dən mətnli PDF verin.');
-      }
+      const text = await extractDrivePdfText(fileId);
       setMessage('AI sualları karta çevirir...');
       let parsed = parseQuestionsFromText(text);
       const wanted = parseInt(pdfCount, 10);
@@ -479,7 +463,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">Drive PDF — bu imtahan</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF Drive-dadır. AI onu serverdə oxuyub kartlara çevirir. iPhone PDF açmır — şagird yalnız kart görür.
+              PDF Drive-dadır. AI onu serverdə oxuyub kartlara çevirir. Müəllim telefonda yalnız gözləyir — PDF telefonu yükləmir. Şagird yalnız kart görür.
               Faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> linkini bura yazın.
             </p>
             {folderUrl ? (

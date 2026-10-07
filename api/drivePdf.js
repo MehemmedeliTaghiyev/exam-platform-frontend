@@ -100,6 +100,140 @@ function setupPdfWorker(pdfjs) {
   }
 }
 
+function waitPdfObj(page, name, ms = 4000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (!done) {
+        done = true;
+        resolve(v || null);
+      }
+    };
+    try {
+      page.objs.get(name, (data) => finish(data));
+    } catch {
+      finish(null);
+    }
+    setTimeout(() => finish(null), ms);
+  });
+}
+
+function rgbaFromPdfImage(img) {
+  const width = Number(img?.width || 0);
+  const height = Number(img?.height || 0);
+  const src = img?.data;
+  if (!width || !height || !src) return null;
+  const kind = Number(img.kind || 3);
+  const rgba = new Uint8Array(width * height * 4);
+  if (kind === 1) {
+    for (let i = 0, p = 0; i < src.length && p < rgba.length; i += 1, p += 4) {
+      const v = src[i];
+      rgba[p] = v;
+      rgba[p + 1] = v;
+      rgba[p + 2] = v;
+      rgba[p + 3] = 255;
+    }
+  } else if (kind === 2) {
+    for (let i = 0, p = 0; i + 2 < src.length && p < rgba.length; i += 3, p += 4) {
+      rgba[p] = src[i];
+      rgba[p + 1] = src[i + 1];
+      rgba[p + 2] = src[i + 2];
+      rgba[p + 3] = 255;
+    }
+  } else {
+    const n = Math.min(src.length, rgba.length);
+    rgba.set(src.subarray ? src.subarray(0, n) : src.slice(0, n));
+  }
+  return { data: rgba, width, height };
+}
+
+function jpegFromRgba(raw) {
+  if (!raw) return null;
+  let { data, width, height } = raw;
+  const maxEdge = 1400;
+  if (Math.max(width, height) > maxEdge) {
+    const scale = maxEdge / Math.max(width, height);
+    const w = Math.max(1, Math.round(width * scale));
+    const h = Math.max(1, Math.round(height * scale));
+    const next = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y += 1) {
+      const sy = Math.min(height - 1, Math.round(y / scale));
+      for (let x = 0; x < w; x += 1) {
+        const sx = Math.min(width - 1, Math.round(x / scale));
+        const si = (sy * width + sx) * 4;
+        const di = (y * w + x) * 4;
+        next[di] = data[si];
+        next[di + 1] = data[si + 1];
+        next[di + 2] = data[si + 2];
+        next[di + 3] = 255;
+      }
+    }
+    data = next;
+    width = w;
+    height = h;
+  }
+  const { encode } = require('jpeg-js');
+  const out = encode({ data: Buffer.from(data), width, height }, 72);
+  return out?.data || null;
+}
+
+async function collectPageJpegs(pdf, pdfjs) {
+  const jpegs = [];
+  const limit = Math.min(pdf.numPages, 6);
+  for (let i = 1; i <= limit; i += 1) {
+    const page = await pdf.getPage(i);
+    const ops = await page.getOperatorList();
+    let found = null;
+    for (let j = 0; j < ops.fnArray.length; j += 1) {
+      const fn = ops.fnArray[j];
+      if (fn !== pdfjs.OPS.paintImageXObject && fn !== pdfjs.OPS.paintJpegXObject) continue;
+      const name = ops.argsArray[j]?.[0];
+      if (!name) continue;
+      const img = await waitPdfObj(page, name);
+      const jpeg = jpegFromRgba(rgbaFromPdfImage(img));
+      if (jpeg && jpeg.length > 800) {
+        found = jpeg;
+        break;
+      }
+    }
+    if (found) jpegs.push(found);
+  }
+  return jpegs;
+}
+
+async function visionOcrJpegs(jpegs) {
+  const key = driveApiKey();
+  if (!key || !jpegs.length) return '';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 40000);
+  try {
+    const res = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        requests: jpegs.slice(0, 6).map((buf) => ({
+          image: { content: Buffer.from(buf).toString('base64') },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+          imageContext: { languageHints: ['az', 'tr', 'en'] },
+        })),
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = json?.error?.message || `vision ${res.status}`;
+      if (res.status === 403) {
+        throw new Error('Cloud Vision API eyni Google açarda açıq deyil. Google Cloud → API key → Cloud Vision API əlavə edin.');
+      }
+      throw new Error(msg);
+    }
+    const parts = (json.responses || []).map((r) => String(r.fullTextAnnotation?.text || r.textAnnotations?.[0]?.description || '').trim());
+    return parts.filter(Boolean).join('\n');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function extractTextFromPdfBuffer(buf) {
   const src = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   const bytes = new Uint8Array(src.byteLength);
@@ -128,5 +262,9 @@ export async function extractTextFromPdfBuffer(buf) {
       .trim();
     if (line) pages.push(line);
   }
-  return pages.join('\n');
+  let text = pages.join('\n').trim();
+  if (text.length >= 40) return text;
+  const jpegs = await collectPageJpegs(pdf, pdfjs);
+  const ocr = String(await visionOcrJpegs(jpegs) || '').trim();
+  return ocr;
 }

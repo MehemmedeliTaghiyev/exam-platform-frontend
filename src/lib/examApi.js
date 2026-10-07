@@ -924,7 +924,7 @@ export async function extractDrivePdfText(fileId) {
   const id = String(fileId || '').trim();
   if (!id) throw new Error('Drive fayl linki yoxdur.');
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 25000);
+  const timer = setTimeout(() => ctrl.abort(), 90000);
   const res = await fetch(`/drive-extract?id=${encodeURIComponent(id)}`, { signal: ctrl.signal }).finally(() => {
     clearTimeout(timer);
   });

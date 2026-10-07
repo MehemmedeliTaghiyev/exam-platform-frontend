@@ -16,7 +16,9 @@ export default async function handler(req, res) {
     }
     const text = String(await extractTextFromPdfBuffer(buf) || '').trim();
     if (text.length < 40) {
-      res.status(422).json({ error: 'PDF-dən mətn çıxmadı. Skan oxunacaq.' });
+      res.status(422).json({
+        error: 'PDF oxunmadı. Cloud Vision API-ni eyni Google açara əlavə edin, və ya mətnli PDF verin.',
+      });
       return;
     }
     res.setHeader('Cache-Control', 'no-store');

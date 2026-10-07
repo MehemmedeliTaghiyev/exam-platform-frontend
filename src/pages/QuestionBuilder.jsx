@@ -210,7 +210,7 @@ export default function QuestionBuilder() {
       if (aiParsed?.length) parsed = aiParsed;
       parsed = normalizeGeneratedQuestions(parsed);
       if (!parsed.length) {
-        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
+        throw new Error('AI sualları kartlara çevirə bilmədi. PDF skandırsa yenidən basın, və ya sualı əl ilə əlavə edin.');
       }
       try {
         const grades = await tryGradeAiQuestions(parsed, { soft: true });

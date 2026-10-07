@@ -16,7 +16,9 @@ export default async function handler(req, res) {
     }
     const text = String(await extractTextFromPdfBuffer(buf) || '').trim();
     if (text.length < 40) {
-      res.status(422).json({ error: 'PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.' });
+      res.status(422).json({
+        error: 'PDF oxunmadı. Skan şəkillidirsə bir az gözləyin və yenidən basın, və ya Word-dən mətnli PDF verin.',
+      });
       return;
     }
     res.setHeader('Cache-Control', 'no-store');

@@ -25,6 +25,6 @@ export default async function handler(req, res) {
     res.status(200).json({ text: text.slice(0, 24000) });
   } catch (err) {
     const detail = String(err?.message || err || '').slice(0, 180);
-    res.status(502).json({ error: 'PDF oxunmadı.', detail });
+    res.status(502).json({ error: detail || 'PDF oxunmadı.', detail });
   }
 }

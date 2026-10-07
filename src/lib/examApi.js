@@ -929,7 +929,7 @@ export async function extractDrivePdfText(fileId) {
     clearTimeout(timer);
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || data.detail || 'Drive PDF oxunmadı.');
+  if (!res.ok) throw new Error(data.detail || data.error || 'Drive PDF oxunmadı.');
   const text = String(data.text || '').trim();
   if (text.length < 40) throw new Error('PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.');
   return text;

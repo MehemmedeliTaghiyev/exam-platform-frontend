@@ -100,47 +100,6 @@ function setupPdfWorker(pdfjs) {
   }
 }
 
-async function ocrPdfPages(pdf) {
-  let createCanvas;
-  try {
-    ({ createCanvas } = await import('@napi-rs/canvas'));
-  } catch {
-    return '';
-  }
-  let createWorker;
-  try {
-    ({ createWorker } = await import('tesseract.js'));
-  } catch {
-    return '';
-  }
-  const worker = await createWorker('eng', 1, {
-    cachePath: '/tmp',
-    gzip: false,
-  });
-  const pages = [];
-  const limit = Math.min(pdf.numPages, 8);
-  try {
-    for (let i = 1; i <= limit; i += 1) {
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 1.35 });
-      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-      const ctx = canvas.getContext('2d');
-      await page.render({
-        canvasContext: ctx,
-        viewport,
-        canvas,
-      }).promise;
-      const jpeg = canvas.toBuffer('image/jpeg', 75);
-      const result = await worker.recognize(jpeg);
-      const line = String(result?.data?.text || '').replace(/\s+/g, ' ').trim();
-      if (line) pages.push(line);
-    }
-  } finally {
-    await worker.terminate().catch(() => {});
-  }
-  return pages.join('\n');
-}
-
 export async function extractTextFromPdfBuffer(buf) {
   const src = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   const bytes = new Uint8Array(src.byteLength);
@@ -169,8 +128,5 @@ export async function extractTextFromPdfBuffer(buf) {
       .trim();
     if (line) pages.push(line);
   }
-  let text = pages.join('\n').trim();
-  if (text.length >= 40) return text;
-  const ocr = String(await ocrPdfPages(pdf) || '').trim();
-  return ocr.length > text.length ? ocr : text;
+  return pages.join('\n');
 }

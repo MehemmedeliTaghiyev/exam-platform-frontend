@@ -923,7 +923,11 @@ export async function updateQuestion(examId, questionId, payload) {
 export async function extractDrivePdfText(fileId) {
   const id = String(fileId || '').trim();
   if (!id) throw new Error('Drive fayl linki yoxdur.');
-  const res = await fetch(`/drive-extract?id=${encodeURIComponent(id)}`);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  const res = await fetch(`/drive-extract?id=${encodeURIComponent(id)}`, { signal: ctrl.signal }).finally(() => {
+    clearTimeout(timer);
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || data.detail || 'Drive PDF oxunmadı.');
   const text = String(data.text || '').trim();

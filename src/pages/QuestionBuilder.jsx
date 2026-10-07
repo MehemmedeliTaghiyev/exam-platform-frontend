@@ -11,6 +11,7 @@ import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
 import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
+import { fetchDrivePdfBuffer, ocrPdfArrayBuffer } from '../lib/ocrExamPdf';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
 
@@ -194,9 +195,25 @@ export default function QuestionBuilder() {
       return;
     }
     setPdfBusy(true);
-    setMessage('');
+    setMessage('Drive PDF yüklənir...');
     try {
-      const text = await extractDrivePdfText(fileId);
+      let text = '';
+      try {
+        text = await extractDrivePdfText(fileId);
+      } catch {
+        text = '';
+      }
+      if (String(text).trim().length < 40) {
+        setMessage('Skan PDF: səhifələr oxunur. Bu, bir neçə dəqiqə çəkə bilər.');
+        const buf = await fetchDrivePdfBuffer(fileId);
+        text = await ocrPdfArrayBuffer(buf, ({ page, total }) => {
+          setMessage(`Skan oxunur: səhifə ${page} / ${total}`);
+        });
+      }
+      if (String(text).trim().length < 40) {
+        throw new Error('PDF-dən mətn çıxmadı. Daha aydın skan və ya Word-dən mətnli PDF verin.');
+      }
+      setMessage('AI sualları karta çevirir...');
       let parsed = parseQuestionsFromText(text);
       const wanted = parseInt(pdfCount, 10);
       const aiParsed = await tryGenerateAiQuestions({
@@ -210,16 +227,18 @@ export default function QuestionBuilder() {
       if (aiParsed?.length) parsed = aiParsed;
       parsed = normalizeGeneratedQuestions(parsed);
       if (!parsed.length) {
-        throw new Error('AI sualları kartlara çevirə bilmədi. PDF skandırsa yenidən basın, və ya sualı əl ilə əlavə edin.');
+        throw new Error('AI sualları kartlara çevirə bilmədi. Sualı əl ilə əlavə edin.');
       }
       try {
+        setMessage('Cavablar yoxlanılır...');
         const grades = await tryGradeAiQuestions(parsed, { soft: true });
         if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
       } catch {
         /* teacher can fix answers */
       }
-      for (const q of parsed) {
-        await addQuestion(id, toAddQuestionPayload(q));
+      for (let i = 0; i < parsed.length; i += 1) {
+        setMessage(`Kartlar yazılır: ${i + 1} / ${parsed.length}`);
+        await addQuestion(id, toAddQuestionPayload(parsed[i]));
       }
       await load();
       setMessage(`${parsed.length} sual AI ilə Drive PDF-dən kart oldu. Şagird telefonda yalnız bu kartları görür.`);

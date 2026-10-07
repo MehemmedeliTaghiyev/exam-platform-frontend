@@ -221,9 +221,11 @@ async function visionOcrJpegs(jpegs) {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = json?.error?.message || `vision ${res.status}`;
+      const msg = String(json?.error?.message || `vision ${res.status}`);
       if (res.status === 403) {
-        throw new Error('Cloud Vision API eyni Google açarda açıq deyil. Google Cloud → API key → Cloud Vision API əlavə edin.');
+        throw new Error(
+          `${msg} Əgər restriction-da Cloud Vision var: OK+Save edin, 2 dəq gözləyin. Vision üçün Google Cloud-da Billing də bağlı olmalıdır.`,
+        );
       }
       throw new Error(msg);
     }

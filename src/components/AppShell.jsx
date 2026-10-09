@@ -33,7 +33,7 @@ const navByRole = {
   Student: [
     { to: '/student', label: 'İmtahanlarım', icon: BookOpen, end: true },
     { to: '/student/public', label: 'Ümumi zona', icon: LayoutGrid },
-    { to: '/student/teachers', label: 'Müəllimlər', icon: MapPin },
+    { to: '/student/teachers', label: 'Müəllim tap', icon: MapPin },
   ],
   Admin: [
     { to: '/admin', label: 'İdarə paneli', icon: Shield, end: true },
@@ -55,7 +55,9 @@ export default function AppShell({ title, children, mainClassName = '' }) {
   const role = normalizeRole(user?.role);
   const links = (navByRole[role] || navByRole.Student).filter((item) => {
     if (!AI_FEATURE_OPEN && item.to === '/teacher/ai') return false;
-    if (user?.practice) return item.to === '/teacher' || item.to === '/student' || item.to === '/student/public';
+    if (user?.practice) {
+      return item.to === '/teacher' || item.to === '/student' || item.to === '/student/public' || item.to === '/student/teachers';
+    }
     return true;
   });
 

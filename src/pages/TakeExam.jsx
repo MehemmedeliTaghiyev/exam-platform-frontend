@@ -7,6 +7,7 @@ import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExa
 import { AuthContext } from '../context/AuthContext';
 import { formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate } from '../lib/utils';
 import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
+import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
 import DrivePreview from '../components/DrivePreview';
 
 const OPEN_SENTINEL = 'open';
@@ -66,6 +67,16 @@ export default function TakeExam() {
           fetchQuestions(examId).catch(() => []),
         ]);
         setExam(examData);
+
+        if (!user) {
+          navigate('/login', { replace: true });
+          return;
+        }
+        if (!canEnterExam(user, examData)) {
+          const owner = examTeacherId(examData);
+          navigate(owner ? `/teachers/${owner}?pay=1` : '/teachers', { replace: true });
+          return;
+        }
 
         if (isExamScheduled(examData)) {
           setQuestions([]);

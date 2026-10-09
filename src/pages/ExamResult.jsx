@@ -1,15 +1,17 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell';
-import LeaderboardTable from '../components/LeaderboardTable';
+import DualExamRanking from '../components/DualExamRanking';
 import QuestionReviewList from '../components/QuestionReviewList';
 import { Button, Card, Skeleton, StatCard } from '../components/ui';
-import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchQuestions } from '../lib/examApi';
+import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, fetchQuestions } from '../lib/examApi';
+import { splitExamLeaderboards } from '../lib/stats';
 import { AuthContext } from '../context/AuthContext';
-import { Award, CheckCircle2, Percent, XCircle } from 'lucide-react';
+import { Award, CheckCircle2, Percent, Ticket, XCircle } from 'lucide-react';
 import { durationSecondsBetween, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
 import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
+import { examTeacherId, maybeAwardDiscountTicket } from '../lib/teacherAccess';
 
 function toReviewQuestions(list = []) {
   return list.map((q, index) => {
@@ -53,6 +55,8 @@ export default function ExamResult() {
   const [examMeta, setExamMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [ticket, setTicket] = useState(null);
+  const [boards, setBoards] = useState({ own: [], general: [] });
 
   useEffect(() => {
     const run = async () => {
@@ -116,6 +120,48 @@ export default function ExamResult() {
     run();
   }, [submissionId, examId, reviewId, user?.role, navigate]);
 
+  useEffect(() => {
+    if (!review || !examMeta || !user?.id) return;
+    if (user.role !== 'Student' && !user.practice) return;
+    const row = review.result || review;
+    const pct = Number(row?.percent ?? row?.score);
+    if (!Number.isFinite(pct)) return;
+    const awarded = maybeAwardDiscountTicket({
+      studentId: user.id,
+      teacherId: examTeacherId(examMeta),
+      percent: pct,
+    });
+    if (awarded) setTicket(awarded);
+  }, [review, examMeta, user]);
+
+  useEffect(() => {
+    const eid = examMeta?.id || examId;
+    if (!eid) return undefined;
+    let cancelled = false;
+    (async () => {
+      const teacherId = examTeacherId(examMeta);
+      const [subs, ownIds] = await Promise.all([
+        fetchExamSubmissions(eid).catch(() => []),
+        fetchOwnStudentIdsForTeacher(teacherId).catch(() => new Set()),
+      ]);
+      const map = new Map();
+      [...(review?.leaderboard || []), ...subs].forEach((row) => {
+        const key = String(row.studentId ?? row.studentExamId ?? row.id);
+        if (key === 'undefined' || key === 'null') return;
+        map.set(key, { ...(map.get(key) || {}), ...row });
+      });
+      if (!cancelled) {
+        setBoards(splitExamLeaderboards(Array.from(map.values()), {
+          teacherId,
+          ownStudentIds: [...ownIds],
+        }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [examMeta, examId, review]);
+
   if (loading) {
     return (
       <AppShell title="Nəticə">
@@ -145,7 +191,9 @@ export default function ExamResult() {
   const isPersonal = Boolean(result?.studentExamId || reviewId);
   const examEnded = Boolean(user?.practice) || (examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded));
   const mistakes = questions.filter((q) => !q.unanswered && q.isCorrect === false);
-  const leaderboard = examEnded ? review?.leaderboard || [] : [];
+  const myId = String(user?.id || '');
+  const ownRank = boards.own.find((r) => String(r.studentId) === myId)?.rank;
+  const generalRank = boards.general.find((r) => String(r.studentId) === myId)?.rank;
   const backTo = queryStudentId
     ? `/teacher/students/${queryStudentId}`
     : user?.role === 'Student'
@@ -158,9 +206,10 @@ export default function ExamResult() {
         {isPersonal && examEnded && (
           <Card className="text-center">
             <p className="text-sm text-gray-500">{result.examTitle || `İmtahan #${result.examId}`}</p>
-            {examEnded && result.rank ? (
+            {examEnded && (ownRank || generalRank || result.rank) ? (
               <p className="mt-2 text-sm font-medium text-brand-600">
-                Sıralama: #{result.rank}
+                Öz şagirdlər: {ownRank ? `#${ownRank}` : '—'}
+                {' · '}Ümumi: {generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}
                 {result.submittedAt ? ` · Bitirmə: ${formatDateTime(result.submittedAt)}` : ''}
                 {result.startedAt && result.submittedAt
                   ? ` · Müddət: ${formatHms(result.durationSeconds ?? durationSecondsBetween(result.startedAt, result.submittedAt))}`
@@ -178,10 +227,23 @@ export default function ExamResult() {
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <StatCard icon={Award} label="Uğur faizi" value={`${scorePercentage}%`} />
-              <StatCard icon={Percent} label="Sıralama" value={examEnded && result.rank ? `#${result.rank}` : '—'} />
+              <StatCard
+                icon={Percent}
+                label="Öz / ümumi"
+                value={examEnded ? `${ownRank ? `#${ownRank}` : '—'} / ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}` : '—'}
+              />
               <StatCard icon={CheckCircle2} label="Düzgün" value={`${correct} / ${total}`} />
               <StatCard icon={XCircle} label="Səhv" value={result.wrongAnswersCount ?? Math.max(total - correct, 0)} />
             </div>
+            {ticket ? (
+              <div className="mt-5 inline-flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                <Ticket size={18} className="mt-0.5 shrink-0" />
+                <p>
+                  Yüksək nəticəyə görə şəxsi endirim bileti: <span className="font-bold">{ticket.code}</span>.
+                  Yalnız sizə aiddir; bu müəllimdən hazırlıq müddətində növbəti ödənişdə endirim verir.
+                </p>
+              </div>
+            ) : null}
             {aiWeighted && weightedMax > 0 ? (
               <p className="mt-4 text-sm text-gray-500">
                 Çətinlik balı: <span className="font-semibold text-ink dark:text-white">{weightedEarned} / {weightedMax}</span>
@@ -209,13 +271,7 @@ export default function ExamResult() {
               </div>
             )}
 
-            <Card className="p-0">
-              <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
-                <h3 className="font-bold">İştirakçılar (sıralama)</h3>
-                <p className="mt-1 text-sm text-gray-500">Bal, sonra bitirmə müddəti (saat:dəqiqə:saniyə) üzrə</p>
-              </div>
-              <LeaderboardTable rows={leaderboard} />
-            </Card>
+            <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
           </>
         ) : (
           <div>

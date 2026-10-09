@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import LeaderboardTable from '../components/LeaderboardTable';
-import { Badge, Button, Card, Skeleton } from '../components/ui';
-import { fetchExam, fetchExamSubmissions, deleteExam } from '../lib/examApi';
+import DualExamRanking from '../components/DualExamRanking';
+import { Badge, Button, Skeleton } from '../components/ui';
+import { examOwnerId, fetchExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, deleteExam } from '../lib/examApi';
 import { errorMessage, formatDate } from '../lib/utils';
-import { buildExamStats } from '../lib/stats';
+import { buildExamStats, splitExamLeaderboards } from '../lib/stats';
 
 export default function AdminExamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [exam, setExam] = useState(null);
   const [rows, setRows] = useState([]);
+  const [ownIds, setOwnIds] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,12 +22,18 @@ export default function AdminExamDetail() {
       const [e, s] = await Promise.all([fetchExam(id), fetchExamSubmissions(id)]);
       setExam(e);
       setRows(s);
+      const ids = await fetchOwnStudentIdsForTeacher(examOwnerId(e)).catch(() => new Set());
+      setOwnIds([...ids]);
       setLoading(false);
     };
     run();
   }, [id]);
 
   const stats = buildExamStats(exam, [], rows, []);
+  const boards = splitExamLeaderboards(stats.scores, {
+    teacherId: examOwnerId(exam),
+    ownStudentIds: ownIds,
+  });
   const teacherName = exam?.teacherName || exam?.TeacherName || '—';
 
   return (
@@ -68,12 +75,7 @@ export default function AdminExamDetail() {
             </Button>
           </div>
 
-          <Card className="overflow-x-auto p-0">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
-              <h3 className="font-bold">İştirak edən tələbələrin nəticə cədvəli</h3>
-            </div>
-            <LeaderboardTable rows={stats.scores} />
-          </Card>
+          <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
         </>
       )}
     </AppShell>

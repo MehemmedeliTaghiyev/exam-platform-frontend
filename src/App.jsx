@@ -30,6 +30,8 @@ function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/exams" element={<PublicExamZone />} />
+      <Route path="/teachers" element={<BrowseTeachers />} />
+      <Route path="/teachers/:id" element={<BrowseTeachers />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/register/teacher" element={<Register />} />
@@ -179,7 +181,7 @@ function App() {
         path="/student/teachers"
         element={
           <ProtectedRoute allowedRoles={['Student']}>
-            <BrowseTeachers />
+            <BrowseTeachers embedded />
           </ProtectedRoute>
         }
       />
@@ -187,7 +189,7 @@ function App() {
         path="/student/teachers/:id"
         element={
           <ProtectedRoute allowedRoles={['Student']}>
-            <BrowseTeachers />
+            <BrowseTeachers embedded />
           </ProtectedRoute>
         }
       />

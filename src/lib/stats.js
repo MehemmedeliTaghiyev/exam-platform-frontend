@@ -63,16 +63,7 @@ export function buildExamStats(exam, questions, submissions, difficultyRows = []
 
   const difficulty = fromApi.length ? fromApi : fromAnswers;
 
-  const ranked = scores
-    .slice()
-    .sort((a, b) => {
-      const diff = b.percent - a.percent;
-      if (diff !== 0) return diff;
-      const aDur = a.durationSeconds ?? durationFallback(a);
-      const bDur = b.durationSeconds ?? durationFallback(b);
-      return aDur - bDur;
-    })
-    .map((s, index) => ({ ...s, rank: s.rank || index + 1 }));
+  const ranked = withExamRanks(scores);
 
   const trend = scores
     .slice()
@@ -82,6 +73,35 @@ export function buildExamStats(exam, questions, submissions, difficultyRows = []
   const analysis = writeAnalysis({ exam, participants, avg, passRate, difficulty });
 
   return { participants, scores: ranked, avg, passRate, difficulty, trend, analysis };
+}
+
+export function withExamRanks(scores = []) {
+  return scores
+    .slice()
+    .sort((a, b) => {
+      const diff = Number(b.percent ?? b.score ?? 0) - Number(a.percent ?? a.score ?? 0);
+      if (diff !== 0) return diff;
+      const aDur = a.durationSeconds ?? durationFallback(a);
+      const bDur = b.durationSeconds ?? durationFallback(b);
+      return aDur - bDur;
+    })
+    .map((s, index) => ({ ...s, rank: index + 1 }));
+}
+
+export function splitExamLeaderboards(scores = [], { teacherId = '', ownStudentIds = [] } = {}) {
+  const ownSet = new Set([...ownStudentIds].map(String));
+  const marked = scores.map((s) => {
+    const sid = String(s.studentId ?? s.StudentId ?? '');
+    const rowTeacher = s.teacherId ?? s.TeacherId;
+    const isOwn = Boolean(s.isOwn)
+      || (sid && ownSet.has(sid))
+      || (teacherId && rowTeacher != null && String(rowTeacher) === String(teacherId));
+    return { ...s, isOwn };
+  });
+  return {
+    own: withExamRanks(marked.filter((s) => s.isOwn)).map((s) => ({ ...s, isOwn: true })),
+    general: withExamRanks(marked),
+  };
 }
 
 function durationFallback(row) {

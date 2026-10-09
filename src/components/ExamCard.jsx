@@ -1,10 +1,10 @@
-import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles } from 'lucide-react';
+import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles, Lock } from 'lucide-react';
 import { Badge, Card } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
 import { examVisibility } from '../lib/examVisibility';
 import { isAiExam } from '../lib/questionDifficulty';
 
-export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', showTimes = false, teacherName = '' }) {
+export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', showTimes = false, teacherName = '', locked = false }) {
   const status = resolveExamStatus(exam);
   const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
   const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : status === 'Draft' ? 'Qaralama' : 'Scheduled';
@@ -34,7 +34,11 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', 
               <Sparkles size={12} /> AI
             </span>
           ) : null}
-          {examVisibility(exam) === 'public' ? (
+          {locked ? (
+            <Badge tone="neutral">
+              <span className="inline-flex items-center gap-1"><Lock size={11} /> Özəl</span>
+            </Badge>
+          ) : examVisibility(exam) === 'public' ? (
             <Badge tone="brand">Açıq</Badge>
           ) : status !== 'Draft' ? (
             <Badge tone="neutral">Özəl</Badge>
@@ -66,7 +70,13 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', 
         </span>
       </div>
       <div className="mt-5 flex items-center justify-between gap-2">
-        <div className="text-sm font-medium text-brand-600">{actionLabel} →</div>
+        <div className={`text-sm font-medium ${locked ? 'text-amber-600' : 'text-brand-600'}`}>
+          {locked ? (
+            <span className="inline-flex items-center gap-1.5"><Lock size={14} /> {actionLabel}</span>
+          ) : (
+            <>{actionLabel} →</>
+          )}
+        </div>
         {onDelete ? (
           <button
             type="button"

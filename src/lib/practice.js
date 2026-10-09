@@ -109,6 +109,20 @@ export function defaultStudentExams() {
       submissionsCount: 0,
       ...liveWindow(15),
     },
+    {
+      id: 'demo-locked',
+      title: 'Özəl hazırlıq sınağı',
+      description: 'Kilidli özəl imtahan — ödənişlə açılır',
+      subjectName: 'Riyaziyyat',
+      teacherId: 'demo-paid',
+      teacherName: 'Nigar Həsənova',
+      visibility: 'private',
+      isPublic: false,
+      totalQuestions: 4,
+      durationMinutes: 20,
+      submissionsCount: 12,
+      ...liveWindow(20),
+    },
   ];
 }
 
@@ -120,6 +134,9 @@ export function defaultStudentQuestions(examId) {
       choice('dm3', '3x = 15 tənliyində x?', 'B', { A: '3', B: '5', C: '6', D: '15', E: '12' }),
       choice('dm4', 'Hansı ədəd sadədir?', 'D', { A: '9', B: '15', C: '21', D: '17', E: '25' }),
     ];
+  }
+  if (examId === 'demo-locked') {
+    return defaultStudentQuestions('demo-math');
   }
   if (examId === 'demo-az') {
     return [
@@ -261,6 +278,7 @@ export function practiceSubmitExam(payload) {
     id: `psub-${Date.now()}`,
     examId: payload.examId,
     examTitle: exam?.title,
+    teacherId: exam?.teacherId,
     studentId: PRACTICE_STUDENT_ID,
     studentExamId: payload.studentExamId || `psess-${payload.examId}`,
     score: pct,
@@ -275,6 +293,76 @@ export function practiceSubmitExam(payload) {
   };
   addPracticeSubmission(item);
   return item;
+}
+
+export function practiceExamPeers(examId) {
+  const exam = practiceFetchExam(examId);
+  if (!exam) return [];
+  const teacherId = String(exam.teacherId || 'demo');
+  const iso = exam.startTime || new Date().toISOString();
+  const base = {
+    examId,
+    totalQuestions: exam.totalQuestions || 4,
+    submittedAt: iso,
+    durationSeconds: 420,
+  };
+  return [
+    {
+      ...base,
+      id: `${examId}-own-a`,
+      studentId: `${teacherId}-a`,
+      studentName: 'Aysel Məmmədova',
+      teacherId,
+      percent: 92,
+      score: 92,
+      correctAnswersCount: 4,
+      isOwn: true,
+    },
+    {
+      ...base,
+      id: `${examId}-own-b`,
+      studentId: `${teacherId}-b`,
+      studentName: 'Elvin Quliyev',
+      teacherId,
+      percent: 78,
+      score: 78,
+      correctAnswersCount: 3,
+      isOwn: true,
+    },
+    {
+      ...base,
+      id: `${examId}-pub-a`,
+      studentId: 'pub-a',
+      studentName: 'Rəşad Əliyev',
+      teacherId: 'other-teacher',
+      percent: 88,
+      score: 88,
+      correctAnswersCount: 4,
+    },
+    {
+      ...base,
+      id: `${examId}-pub-b`,
+      studentId: 'pub-b',
+      studentName: 'Leyla Qasımova',
+      teacherId: 'other-teacher',
+      percent: 71,
+      score: 71,
+      correctAnswersCount: 3,
+    },
+  ];
+}
+
+export function practiceOwnStudentIds(teacherId) {
+  const ids = new Set([`${teacherId}-a`, `${teacherId}-b`]);
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (user && String(user.teacherId ?? user.TeacherId ?? '') === String(teacherId)) {
+      ids.add(String(user.id));
+    }
+  } catch {
+    /* ignore */
+  }
+  return ids;
 }
 
 export function practiceFindReview(id) {

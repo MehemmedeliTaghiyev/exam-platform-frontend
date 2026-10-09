@@ -398,7 +398,7 @@ export default function QuestionBuilder() {
         description: exam.description,
         pdfFileUrl: driveFileViewUrl(examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl })),
       });
-      if (visibility === 'public' && user?.id) {
+      if (user?.id) {
         const prev = localDb.getPublicTeachers().find((t) => String(t.id) === String(user.id));
         const subjects = new Set(prev?.subjects || []);
         if (exam.subjectName) subjects.add(exam.subjectName);

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GraduationCap, BookOpen, Users } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Input } from '../components/ui';
-import PublicNav from '../components/PublicNav';
+import AuthShell from '../components/AuthShell';
 import { errorMessage } from '../lib/utils';
 import { registerOpenStudent } from '../lib/examApi';
 
@@ -13,16 +13,7 @@ const STUDENT_EMAIL_HINT = 'ad.soyad_ataadi@gmail.com';
 const STUDENT_EMAIL_RE = /^[a-z0-9əöüğçşı]+\.[a-z0-9əöüğçşı]+_[a-z0-9əöüğçşı]+@gmail\.com$/i;
 
 function Shell({ children }) {
-  return (
-    <div className="min-h-screen bg-surface dark:bg-[#0b1220]">
-      <PublicNav />
-      <div className="mx-auto w-full max-w-lg px-4 py-10">
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
+  return <AuthShell wide>{children}</AuthShell>;
 }
 
 function TeacherForm() {
@@ -89,7 +80,7 @@ function TeacherForm() {
         <Input label="Ad" name="firstName" value={formData.firstName} onChange={handleChange} required />
         <Input label="Soyad" name="lastName" value={formData.lastName} onChange={handleChange} required />
         <Input label="Konum" name="position" value={formData.position} onChange={handleChange} required placeholder="məs. Bakı, Nəsimi" />
-        <Input label="Əlaqə nömrəsi" name="phone" value={formData.phone} onChange={handleChange} />
+        <Input label="Əlaqə nömrəsi" name="phone" value={formData.phone} onChange={handleChange} required placeholder="0501234567" />
         <Input
           label={`E-poçt (${TEACHER_EMAIL_HINT})`}
           type="email"
@@ -114,6 +105,7 @@ function StudentForm() {
     lastName: '',
     fatherName: '',
     position: '',
+    phone: '',
     email: '',
     password: '',
   });
@@ -128,6 +120,15 @@ function StudentForm() {
     e.preventDefault();
     setError('');
     const email = formData.email.trim().toLowerCase();
+    const phone = formData.phone.trim();
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !phone || !email || !formData.password) {
+      setError('Ad, soyad, əlaqə nömrəsi, e-poçt və şifrə doldurulmalıdır.');
+      return;
+    }
+    if (phone.replace(/\D/g, '').length < 7) {
+      setError('Əlaqə nömrəsini düzgün yazın.');
+      return;
+    }
     if (!STUDENT_EMAIL_RE.test(email)) {
       setError(`E-poçt ${STUDENT_EMAIL_HINT} formatında olmalıdır.`);
       return;
@@ -137,6 +138,7 @@ function StudentForm() {
       await registerOpenStudent({
         ...formData,
         email,
+        phone,
         fullName: [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim(),
       });
       setDone(true);
@@ -167,12 +169,13 @@ function StudentForm() {
       <p className="mt-1 text-sm text-gray-500">
         Repetitorun yoxdursa buradan keç. Müəllimin varsa, onunla əlaqə saxla — o qrup linki verəcək.
       </p>
-      {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <Input label="Ad" name="firstName" value={formData.firstName} onChange={handleChange} required />
         <Input label="Soyad" name="lastName" value={formData.lastName} onChange={handleChange} required />
         <Input label="Ata adı" name="fatherName" value={formData.fatherName} onChange={handleChange} required />
         <Input label="Bölgə / şəhər" name="position" value={formData.position} onChange={handleChange} required placeholder="məs. Gəncə" />
+        <Input label="Əlaqə nömrəsi" name="phone" value={formData.phone} onChange={handleChange} required placeholder="0501234567" />
         <Input
           label={`E-poçt (${STUDENT_EMAIL_HINT})`}
           type="email"

@@ -3,6 +3,7 @@ import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
+import { decorateTeacher } from './teacherMarketplace';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
 import {
@@ -22,6 +23,9 @@ import {
   practiceUser,
   practiceFindReview,
   practiceWeeklyRankingSource,
+  PRACTICE_TEACHER_ID,
+  practiceExamPeers,
+  practiceOwnStudentIds,
 } from './practice';
 
 const FAST = { timeout: 20000 };
@@ -210,19 +214,46 @@ export async function registerStudentInvite(payload) {
 }
 
 export async function registerOpenStudent(payload) {
+  const firstName = String(payload.firstName || '').trim();
+  const lastName = String(payload.lastName || '').trim();
+  const fatherName = String(payload.fatherName || '').trim();
+  const phone = String(payload.phone || '').trim();
+  const email = String(payload.email || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const position = String(payload.position || '').trim();
+  const fullName = String(payload.fullName || [firstName, lastName].filter(Boolean).join(' ')).trim();
   const body = {
-    ...payload,
+    firstName,
+    lastName,
+    fatherName,
+    phone,
+    email,
+    password,
+    position,
+    fullName,
+    FirstName: firstName,
+    LastName: lastName,
+    FatherName: fatherName,
+    Phone: phone,
+    Email: email,
+    Password: password,
+    Position: position,
+    FullName: fullName,
     role: 'Student',
     Role: 'Student',
     independent: true,
     Independent: true,
   };
   try {
-    const res = await API.post('/Auth/register', body);
-    return unwrapItem(res.data) || res.data;
-  } catch {
     const res = await API.post('/Auth/register-student', body);
     return unwrapItem(res.data) || res.data;
+  } catch (first) {
+    try {
+      const res = await API.post('/Auth/register', body);
+      return unwrapItem(res.data) || res.data;
+    } catch {
+      throw first;
+    }
   }
 }
 
@@ -374,6 +405,26 @@ export async function fetchStudents() {
   if (isPractice()) return [];
   const list = await fetchUsersByRole('Student');
   return list.map(mapStudent).filter(Boolean);
+}
+
+export async function fetchOwnStudentIdsForTeacher(teacherId) {
+  const ids = new Set(localDb.getStudents(teacherId).map((s) => String(s.id)));
+  if (isPractice()) {
+    practiceOwnStudentIds(teacherId).forEach((id) => ids.add(String(id)));
+    return ids;
+  }
+  if (teacherId) {
+    try {
+      (await fetchUsersByRole('Student')).map(mapStudent).filter(Boolean).forEach((s) => {
+        if (s?.id != null && String(s.teacherId ?? s.TeacherId ?? '') === String(teacherId)) {
+          ids.add(String(s.id));
+        }
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+  return ids;
 }
 
 export async function fetchUserById(id) {
@@ -544,7 +595,7 @@ export async function createSubject(name) {
   }
 }
 
-function examOwnerId(exam) {
+export function examOwnerId(exam) {
   if (!exam) return null;
   const tid = exam.teacherId ?? exam.TeacherId;
   return tid == null || tid === '' ? null : tid;
@@ -608,8 +659,14 @@ export async function fetchExams() {
   return visibleForCurrentUser(list);
 }
 
-export async function fetchPublicExamsForTeacher(teacherId) {
+async function collectTeacherExams(teacherId) {
   if (!teacherId) return [];
+  if (isPractice()) {
+    return practiceFetchExams()
+      .filter((e) => String(e.teacherId) === String(teacherId) || (teacherId === 'demo' && String(e.teacherId) === 'demo'))
+      .map((exam) => withExamVisibility(exam))
+      .filter((exam) => resolveExamStatus(exam) !== 'Draft');
+  }
   let remote = [];
   try {
     const data = await tryGet(`/Exams?teacherId=${encodeURIComponent(teacherId)}`);
@@ -623,7 +680,36 @@ export async function fetchPublicExamsForTeacher(teacherId) {
     const item = withCounts([exam])[0];
     if (item?.id != null) map.set(String(item.id), withExamVisibility(item));
   });
-  return Array.from(map.values()).filter((e) => examVisibility(e) === 'public' && resolveExamStatus(e) !== 'Draft');
+  return Array.from(map.values()).filter((e) => resolveExamStatus(e) !== 'Draft');
+}
+
+export async function fetchListedExamsForTeacher(teacherId) {
+  return collectTeacherExams(teacherId);
+}
+
+export async function fetchPublicExamsForTeacher(teacherId) {
+  const list = await collectTeacherExams(teacherId);
+  return list.filter((e) => examVisibility(e) === 'public');
+}
+
+export async function fetchMarketplaceTeachers() {
+  const teachers = await fetchTeacherDirectory();
+  let submissions = isPractice() ? practiceSubmissions() : localDb.getSubmissions();
+  if (isPractice() && !submissions.length) {
+    submissions = [
+      { examId: 'demo-math', percent: 88 },
+      { examId: 'demo-az', percent: 74 },
+      { examId: 'demo-locked', percent: 91 },
+      { examId: 'demo-locked', percent: 67 },
+    ];
+  }
+  const rows = await Promise.all(
+    teachers.map(async (teacher) => {
+      const exams = await fetchListedExamsForTeacher(teacher.id).catch(() => []);
+      return decorateTeacher(teacher, exams, submissions);
+    }),
+  );
+  return rows;
 }
 
 export async function fetchAllPublicExams() {
@@ -1309,7 +1395,10 @@ export async function fetchQuestionDifficulty(examId) {
 
 export async function fetchExamSubmissions(examId) {
   if (isPractice()) {
-    return practiceSubmissions().filter((s) => String(s.examId) === String(examId));
+    const mine = practiceSubmissions().filter((s) => String(s.examId) === String(examId));
+    const peers = practiceExamPeers(examId);
+    const seen = new Set(mine.map((s) => String(s.studentId)));
+    return [...mine, ...peers.filter((p) => !seen.has(String(p.studentId)))];
   }
   try {
     const data = await API.get(`/Submissions/exam/${examId}`, { timeout: 8000 }).then((r) => r.data);
@@ -1361,7 +1450,28 @@ export async function fetchUsersByRole(role = 'Student') {
 }
 
 export async function fetchTeacherDirectory() {
-  if (isPractice()) return [];
+  if (isPractice()) {
+    return [
+      {
+        id: 'demo',
+        fullName: 'ExamPulse',
+        position: 'Bakı',
+        subjects: ['Riyaziyyat', 'Azərbaycan dili'],
+      },
+      {
+        id: 'demo-paid',
+        fullName: 'Nigar Həsənova',
+        position: 'Gəncə',
+        subjects: ['Riyaziyyat'],
+      },
+      {
+        id: PRACTICE_TEACHER_ID,
+        fullName: 'ExamPulse (məşq)',
+        position: 'Bakı',
+        subjects: ['Fizika'],
+      },
+    ];
+  }
   const fromLocal = localDb.getPublicTeachers();
   let remote = [];
   try {
@@ -1373,16 +1483,16 @@ export async function fetchTeacherDirectory() {
   [...fromLocal, ...remote].forEach((t) => {
     const id = t?.id;
     if (id == null) return;
+    const prev = map.get(String(id));
     map.set(String(id), {
       id,
-      fullName: t.fullName || t.email || `Müəllim #${id}`,
-      position: t.position || t.Position || 'Digər',
-      email: t.email,
+      fullName: t.fullName || t.email || prev?.fullName || `Müəllim #${id}`,
+      position: t.position || t.Position || prev?.position || 'Digər',
+      email: t.email || prev?.email,
+      subjects: [...new Set([...(prev?.subjects || []), ...(t.subjects || [])])],
     });
   });
-  return Array.from(map.values()).sort((a, b) =>
-    String(a.position).localeCompare(String(b.position), 'az') || String(a.fullName).localeCompare(String(b.fullName), 'az'),
-  );
+  return Array.from(map.values());
 }
 
 export async function fetchStudentHistoryById(studentId) {

@@ -5,13 +5,13 @@ import AppShell from '../components/AppShell';
 import ProgressChart from '../components/ProgressChart';
 import { Button, Card, Skeleton, StatCard, Badge } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
-import { fetchExam, fetchExamSubmissions, fetchQuestionDifficulty, fetchQuestions, deleteExam } from '../lib/examApi';
-import { buildExamStats } from '../lib/stats';
+import { examOwnerId, fetchExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, fetchQuestionDifficulty, fetchQuestions, deleteExam } from '../lib/examApi';
+import { buildExamStats, splitExamLeaderboards } from '../lib/stats';
 import { errorMessage, isAiEnabled } from '../lib/utils';
 import { difficultyLabel } from '../lib/questionDifficulty';
 import { localDb } from '../lib/localDb';
 import { recordAiUsage } from '../lib/aiUsage';
-import LeaderboardTable from '../components/LeaderboardTable';
+import DualExamRanking from '../components/DualExamRanking';
 
 export default function ExamStats() {
   const { id } = useParams();
@@ -23,6 +23,7 @@ export default function ExamStats() {
   const [submissions, setSubmissions] = useState([]);
   const [difficultyRows, setDifficultyRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ownIds, setOwnIds] = useState([]);
 
   useEffect(() => {
     const run = async () => {
@@ -37,6 +38,8 @@ export default function ExamStats() {
       setQuestions(q);
       setSubmissions(s);
       setDifficultyRows(d);
+      const ids = await fetchOwnStudentIdsForTeacher(examOwnerId(e) || user?.id).catch(() => new Set());
+      setOwnIds([...ids]);
       setLoading(false);
       if (aiOn && user?.id) {
         const stamp = `ai_diff_${id}_${new Date().toISOString().slice(0, 10)}`;
@@ -52,6 +55,13 @@ export default function ExamStats() {
   const stats = useMemo(
     () => buildExamStats(exam, questions, submissions, difficultyRows),
     [exam, questions, submissions, difficultyRows],
+  );
+  const boards = useMemo(
+    () => splitExamLeaderboards(stats.scores, {
+      teacherId: examOwnerId(exam) || user?.id,
+      ownStudentIds: ownIds,
+    }),
+    [stats.scores, exam, ownIds, user?.id],
   );
 
   return (
@@ -118,13 +128,9 @@ export default function ExamStats() {
             </Card>
           </div>
 
-          <Card className="mt-6 overflow-x-auto p-0">
-            <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
-              <h3 className="font-bold">İştirakçılar (sıralama)</h3>
-              <p className="mt-1 px-0 text-sm text-gray-500">Bal, sonra bitirmə müddəti (saat:dəqiqə:saniyə)</p>
-            </div>
-            <LeaderboardTable rows={stats.scores} emptyText="Hələ heç kim imtahan verməyib." />
-          </Card>
+          <div className="mt-6">
+            <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
+          </div>
 
           <Card className="mt-6 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">

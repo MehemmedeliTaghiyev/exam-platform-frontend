@@ -184,7 +184,7 @@ export const localDb = {
   getPublicTeachers() {
     return read('public_teachers', []);
   },
-  upsertPublicTeacher(teacher) {
+    upsertPublicTeacher(teacher) {
     if (!teacher?.id) return teacher;
     const list = this.getPublicTeachers();
     const idx = list.findIndex((t) => String(t.id) === String(teacher.id));
@@ -192,5 +192,61 @@ export const localDb = {
     else list.unshift(teacher);
     write('public_teachers', list);
     return teacher;
+  },
+  getTeacherAccessMap() {
+    return read('teacher_exam_access', {});
+  },
+  getPaidTeacherAccess(studentId, teacherId) {
+    if (studentId == null || teacherId == null) return null;
+    const row = this.getTeacherAccessMap()[`${studentId}:${teacherId}`];
+    if (!row) return null;
+    if (row.expiresAt && new Date(row.expiresAt).getTime() < Date.now()) return null;
+    return row;
+  },
+  grantPaidTeacherAccess(studentId, teacherId, payload = {}) {
+    const map = this.getTeacherAccessMap();
+    const key = `${studentId}:${teacherId}`;
+    const paidAt = payload.paidAt || new Date().toISOString();
+    const days = Number(payload.days) > 0 ? Number(payload.days) : 30;
+    const expires = new Date(paidAt);
+    expires.setDate(expires.getDate() + days);
+    map[key] = {
+      studentId: String(studentId),
+      teacherId: String(teacherId),
+      paidAt,
+      amount: Number(payload.amount) || 0,
+      ticketCode: payload.ticketCode || '',
+      expiresAt: expires.toISOString(),
+    };
+    write('teacher_exam_access', map);
+    return map[key];
+  },
+  getDiscountTickets() {
+    return read('discount_tickets', []);
+  },
+  saveDiscountTickets(list) {
+    write('discount_tickets', list);
+  },
+  ticketsForStudent(studentId) {
+    return this.getDiscountTickets().filter((t) => String(t.studentId) === String(studentId));
+  },
+  unusedTicketForTeacher(studentId, teacherId) {
+    return this.ticketsForStudent(studentId).find(
+      (t) => String(t.teacherId) === String(teacherId) && !t.usedAt,
+    ) || null;
+  },
+  addDiscountTicket(ticket) {
+    const list = this.getDiscountTickets();
+    if (list.some((t) => t.id === ticket.id || t.code === ticket.code)) return ticket;
+    list.unshift(ticket);
+    this.saveDiscountTickets(list);
+    return ticket;
+  },
+  markTicketUsed(code) {
+    const list = this.getDiscountTickets().map((t) => (
+      t.code === code ? { ...t, usedAt: new Date().toISOString() } : t
+    ));
+    this.saveDiscountTickets(list);
+    return list.find((t) => t.code === code) || null;
   },
 };

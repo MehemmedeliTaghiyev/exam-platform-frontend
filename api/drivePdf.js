@@ -87,12 +87,13 @@ export async function loadDrivePdfBuffer(id) {
 function setupPdfWorker(pdfjs) {
   const workerSpecs = [
     'pdfjs-dist/legacy/build/pdf.worker.mjs',
-    'pdfjs-dist/build/pdf.worker.mjs',
     'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+    'pdfjs-dist/build/pdf.worker.mjs',
   ];
   for (const spec of workerSpecs) {
     try {
-      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(require.resolve(spec)).href;
+      const file = require.resolve(spec);
+      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(file).href;
       return;
     } catch {
       /* next */

@@ -1,4 +1,9 @@
+import { createRequire } from 'node:module';
 import { extractTextFromPdfBuffer, loadDrivePdfBuffer, parseDrivePdfId } from './drivePdf.js';
+
+const require = createRequire(import.meta.url);
+require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+require.resolve('pdfjs-dist/legacy/build/pdf.mjs');
 
 export const config = { maxDuration: 60 };
 

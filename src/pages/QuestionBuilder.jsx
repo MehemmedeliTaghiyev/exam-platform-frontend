@@ -203,18 +203,24 @@ export default function QuestionBuilder() {
       setMessage('AI sualları karta çevirir...');
       let parsed = parseQuestionsFromText(text);
       const wanted = parseInt(pdfCount, 10);
-      const aiParsed = await tryGenerateAiQuestions({
-        title: exam?.title || 'PDF',
-        topic: 'PDF',
-        subjectName: exam?.subjectName,
-        brief: text,
-        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-        source: 'pdf',
-      }, { soft: true });
-      if (aiParsed?.length) parsed = aiParsed;
+      let aiError = '';
+      try {
+        const aiParsed = await tryGenerateAiQuestions({
+          title: exam?.title || 'PDF',
+          topic: 'PDF',
+          subjectName: exam?.subjectName,
+          brief: text,
+          questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
+          source: 'pdf',
+        }, { soft: false });
+        if (aiParsed?.length) parsed = aiParsed;
+      } catch (err) {
+        aiError = errorMessage(err, '');
+        if (!parsed.length) throw err;
+      }
       parsed = normalizeGeneratedQuestions(parsed);
       if (!parsed.length) {
-        throw new Error('AI sualları kartlara çevirə bilmədi. Sualı əl ilə əlavə edin.');
+        throw new Error(aiError || 'PDF mətni çıxdı, amma Exam API kart qaytarmadı. /Ai/questions işlək olmalıdır. Sualı əl ilə əlavə edə və ya faylı dərc edə bilərsiniz.');
       }
       try {
         setMessage('Cavablar yoxlanılır...');

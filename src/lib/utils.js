@@ -2,16 +2,29 @@ export function unwrapList(data) {
   if (Array.isArray(data)) return data;
   if (!data || typeof data !== 'object') return [];
 
+  const lower = {};
+  Object.keys(data).forEach((key) => {
+    lower[String(key).toLowerCase()] = data[key];
+  });
   const candidates = [
     data.items,
     data.data,
     data.result,
     data.exams,
     data.questions,
+    data.Questions,
     data.submissions,
     data.users,
     data.$values,
     data.value,
+    lower.items,
+    lower.data,
+    lower.result,
+    lower.exams,
+    lower.questions,
+    lower.submissions,
+    lower.users,
+    lower.value,
   ];
 
   for (const candidate of candidates) {

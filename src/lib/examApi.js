@@ -1208,17 +1208,18 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
   try {
     const res = await API.post('/Ai/questions', body, { timeout: 90000 });
     const data = unwrapItem(res.data) || res.data || {};
-    const list = unwrapList(data.questions || data);
+    const list = unwrapList(data.questions || data.Questions || data);
     if (!list.length) return null;
     return list.map((q) => ({
-      text: q.text || q.questionText || q.stem,
-      options: unwrapOptions(q.options).map((o, idx) => ({
-        letter: o.letter || ['A', 'B', 'C', 'D', 'E'][idx],
-        text: o.text || o.optionText,
-        isCorrect: Boolean(o.isCorrect),
+      text: q.text || q.Text || q.questionText || q.QuestionText || q.stem,
+      options: unwrapOptions(q.options || q.Options).map((o, idx) => ({
+        letter: o.letter || o.Letter || ['A', 'B', 'C', 'D', 'E'][idx],
+        text: o.text || o.Text || o.optionText || o.OptionText,
+        isCorrect: Boolean(o.isCorrect || o.IsCorrect),
       })),
-      correctLetter: q.correctLetter
-        || unwrapOptions(q.options).find((o) => o.isCorrect)?.letter
+      correctLetter: q.correctLetter || q.CorrectLetter
+        || unwrapOptions(q.options || q.Options).find((o) => o.isCorrect || o.IsCorrect)?.letter
+        || unwrapOptions(q.options || q.Options).find((o) => o.isCorrect || o.IsCorrect)?.Letter
         || 'A',
       difficultyLevel: q.difficultyLevel || q.difficulty || 'orta',
     }));

@@ -17,7 +17,8 @@ export default async function handler(req, res) {
     const text = String(await extractTextFromPdfBuffer(buf) || '').trim();
     if (text.length < 40) {
       res.status(422).json({
-        error: 'PDF-dən mətn çıxmadı. Skan üçündür: Cloud Vision API Enable + eyni API key restriction-da Cloud Vision. Billing tək başına kifayət etmir.',
+        scan: true,
+        error: 'Bu PDF skandır (seçilə bilən mətn yoxdur). Kart üçün Exam API-də GPT-4o vision lazımdır. Faylı bağlayıb dərc edə bilərsiniz — şagird Drive PDF görəcək.',
       });
       return;
     }

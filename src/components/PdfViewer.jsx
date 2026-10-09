@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import { isIosDevice } from '../lib/device';
+import NativePdfFrame from './NativePdfFrame';
 
 try {
   GlobalWorkerOptions.workerSrc = new URL(
@@ -40,7 +42,7 @@ export default function PdfViewer({
     const load = async () => {
       pdfRef.current = null;
       if (hostRef.current) hostRef.current.replaceChildren();
-      if (!file && !src) {
+      if (isIosDevice() || (!file && !src)) {
         setLoading(false);
         setPages(0);
         return;
@@ -59,6 +61,8 @@ export default function PdfViewer({
         const pdf = await getDocument({
           data,
           disableWorker: true,
+          disableRange: true,
+          disableStream: true,
           isEvalSupported: false,
           useSystemFonts: true,
         }).promise;
@@ -166,6 +170,18 @@ export default function PdfViewer({
   }, [zoom]);
 
   if (!file && !src) return null;
+
+  if (isIosDevice()) {
+    return (
+      <NativePdfFrame
+        src={src}
+        file={file}
+        title={title}
+        extraHref={extraHref}
+        extraLabel={extraLabel}
+      />
+    );
+  }
 
   const openHref = extraHref || src || '';
 

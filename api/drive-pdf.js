@@ -13,6 +13,7 @@ export default async function handler(req, res) {
   }
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'inline; filename="exam.pdf"');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'public, max-age=120');
   res.setHeader('Content-Length', String(buf.length));
   res.status(200).send(buf);

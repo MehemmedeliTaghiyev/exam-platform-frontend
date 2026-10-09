@@ -1043,7 +1043,9 @@ export async function extractDrivePdfText(fileId) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail || data.error || 'Drive PDF oxunmadı.');
   const text = String(data.text || '').trim();
-  if (text.length < 40) throw new Error('PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.');
+  if (text.length < 40) {
+    throw new Error(data.error || 'Bu PDF skandır. Kart üçün mətnli PDF lazımdır. Faylı dərc edə bilərsiniz.');
+  }
   return text;
 }
 

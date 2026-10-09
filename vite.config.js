@@ -30,7 +30,10 @@ function drivePdfDevPlugin() {
             if (text.length < 40) {
               res.statusCode = 422
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: 'PDF-dən mətn çıxmadı. Cloud Vision API Enable edin və key restriction-a Cloud Vision əlavə edin.' }))
+              res.end(JSON.stringify({
+                scan: true,
+                error: 'Bu PDF skandır (seçilə bilən mətn yoxdur). Kart üçün Exam API-də GPT-4o vision lazımdır. Faylı bağlayıb dərc edə bilərsiniz — şagird Drive PDF görəcək.',
+              }))
               return
             }
             res.setHeader('Content-Type', 'application/json')
@@ -39,6 +42,7 @@ function drivePdfDevPlugin() {
           }
           res.setHeader('Content-Type', 'application/pdf')
           res.setHeader('Content-Disposition', 'inline; filename="exam.pdf"')
+          res.setHeader('X-Content-Type-Options', 'nosniff')
           res.end(buf)
         } catch (err) {
           res.statusCode = 502

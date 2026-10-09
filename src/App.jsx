@@ -20,13 +20,20 @@ import TeacherUsers from './pages/TeacherUsers';
 import JoinStudent from './pages/JoinStudent';
 import NewStudents from './pages/NewStudents';
 import NewTeachers from './pages/NewTeachers';
+import PromoAd from './pages/PromoAd';
+import Home from './pages/Home';
+import BrowseTeachers from './pages/BrowseTeachers';
 
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/register/teacher" element={<Register />} />
+      <Route path="/register/student" element={<Register />} />
       <Route path="/join/:code" element={<JoinStudent />} />
+      <Route path="/reklam" element={<PromoAd />} />
 
       <Route
         path="/admin"
@@ -159,6 +166,22 @@ function App() {
         }
       />
       <Route
+        path="/student/teachers"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <BrowseTeachers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/teachers/:id"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <BrowseTeachers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/student/exams/:examId/review"
         element={
           <ProtectedRoute allowedRoles={['Student']}>
@@ -191,7 +214,7 @@ function App() {
         }
       />
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

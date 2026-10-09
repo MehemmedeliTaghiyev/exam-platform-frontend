@@ -25,11 +25,10 @@ function serializeAnswers(map, questions = []) {
         const mark = String(o.letter || o.optionText || o.text || '').trim().toUpperCase();
         return mark === letter || mark.startsWith(`${letter})`);
       });
-      const selected = val.optionId && val.optionId !== OPEN_SENTINEL
-        ? Number(val.optionId)
-        : (opt?.id ? Number(opt.id) : 0);
+      const rawId = val.optionId && val.optionId !== OPEN_SENTINEL ? val.optionId : opt?.id;
+      const selected = rawId == null || rawId === '' ? 0 : (Number.isNaN(Number(rawId)) ? rawId : Number(rawId));
       return {
-        questionId: Number(q.id) || index + 1,
+        questionId: Number.isNaN(Number(q.id)) ? q.id : (Number(q.id) || index + 1),
         selectedOptionId: selected,
         textAnswer: val.text || letter || '',
       };
@@ -81,7 +80,9 @@ export default function TakeExam() {
 
         const endAt = parseExamDate(examData?.endTime);
         let remainingMs = endAt ? endAt.getTime() - Date.now() : NaN;
-        if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+        if (user?.practice) {
+          remainingMs = (examData?.durationMinutes || 30) * 60 * 1000;
+        } else if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
           remainingMs = (examData?.durationMinutes || 30) * 60 * 1000;
         }
         setTimeLeft(Math.max(1, Math.floor(remainingMs / 1000)));
@@ -121,7 +122,7 @@ export default function TakeExam() {
     const timer = setTimeout(() => {
       saveExamProgress({
         studentExamId: sessionId,
-        examId: parseInt(id, 10),
+        examId: Number.isNaN(Number(id)) ? id : parseInt(id, 10),
         studentId: user?.id,
         answers: serializeAnswers(answersRef.current, paperQuestionsOf(questions)),
       }).catch(() => {});
@@ -142,14 +143,15 @@ export default function TakeExam() {
     submittedRef.current = true;
     setSubmitting(true);
     try {
+      const examKey = Number.isNaN(Number(id)) ? id : parseInt(id, 10);
       await submitExam({
-        studentExamId: Number(sessionRef.current || studentExamId) || 0,
-        examId: parseInt(id, 10),
+        studentExamId: sessionRef.current || studentExamId || 0,
+        examId: examKey,
         studentId: user?.id,
         studentName: user?.fullName,
         answers: serializeAnswers(answersRef.current, paperQuestionsOf(questions)),
       });
-      navigate(`/student/exams/${parseInt(id, 10)}/review`, { replace: true });
+      navigate(`/student/exams/${examKey}/review`, { replace: true });
     } catch {
       alert('İmtahanı təhvil verərkən xəta baş verdi.');
       submittedRef.current = false;

@@ -8,7 +8,7 @@ function homeForRole(role) {
   if (role === 'Admin') return '/admin';
   if (role === 'Teacher') return '/teacher';
   if (role === 'Student') return '/student';
-  return '/login';
+  return '/';
 }
 
 export default function ProtectedRoute({ children, allowedRoles }) {
@@ -26,7 +26,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/" replace />;
   const role = normalizeRole(user.role);
   if (allowedRoles && !allowedRoles.includes(role)) {
     return <Navigate to={homeForRole(role)} replace />;

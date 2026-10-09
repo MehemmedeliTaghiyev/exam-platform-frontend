@@ -151,4 +151,46 @@ export const localDb = {
     map[key] = this.hiddenGroupIds(teacherId).filter((x) => x !== String(id));
     write('hidden_groups', map);
   },
+  getExamVisibility(id) {
+    const map = read('exam_visibility', {});
+    return map[String(id)] || '';
+  },
+  setExamVisibility(id, visibility) {
+    if (id == null) return;
+    const map = read('exam_visibility', {});
+    const next = visibility === 'public' ? 'public' : 'private';
+    map[String(id)] = next;
+    write('exam_visibility', map);
+  },
+  followedTeacherIds(studentId) {
+    const map = read('followed_teachers', {});
+    const list = map[String(studentId || 'me')] || [];
+    return Array.isArray(list) ? list.map(String) : [];
+  },
+  followTeacher(studentId, teacherId) {
+    const map = read('followed_teachers', {});
+    const key = String(studentId || 'me');
+    const next = new Set(this.followedTeacherIds(studentId));
+    next.add(String(teacherId));
+    map[key] = Array.from(next);
+    write('followed_teachers', map);
+  },
+  unfollowTeacher(studentId, teacherId) {
+    const map = read('followed_teachers', {});
+    const key = String(studentId || 'me');
+    map[key] = this.followedTeacherIds(studentId).filter((id) => id !== String(teacherId));
+    write('followed_teachers', map);
+  },
+  getPublicTeachers() {
+    return read('public_teachers', []);
+  },
+  upsertPublicTeacher(teacher) {
+    if (!teacher?.id) return teacher;
+    const list = this.getPublicTeachers();
+    const idx = list.findIndex((t) => String(t.id) === String(teacher.id));
+    if (idx >= 0) list[idx] = { ...list[idx], ...teacher };
+    else list.unshift(teacher);
+    write('public_teachers', list);
+    return teacher;
+  },
 };

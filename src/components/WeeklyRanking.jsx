@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, BarChart3, ChevronLeft, ChevronRight, Sparkles, Trophy } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { fetchWeeklyRankingSource, mapStudent } from '../lib/examApi';
@@ -36,12 +37,13 @@ function RankDelta({ change, isNew }) {
   );
 }
 
-function RankingBars({ rows = [], highlightId }) {
+function RankingBars({ rows = [], highlightId, onRowClick }) {
   const max = Math.max(100, ...rows.map((r) => Number(r.percent) || 0));
   return (
     <div className="space-y-2.5">
       {rows.map((row) => {
         const mine = String(row.studentId) === String(highlightId);
+        const own = Boolean(row.isOwn);
         const width = Math.max(8, (Number(row.percent) / max) * 100);
         const tone = row.rank === 1
           ? 'from-amber-400 to-orange-500'
@@ -53,12 +55,21 @@ function RankingBars({ rows = [], highlightId }) {
         return (
           <div
             key={row.studentId}
-            className={`rounded-xl px-3 py-2 ${mine ? 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-800' : ''}`}
+            role={onRowClick && row.isOwn ? 'button' : undefined}
+            onClick={() => { if (row.isOwn) onRowClick?.(row); }}
+            className={`rounded-xl px-3 py-2 ${onRowClick && row.isOwn ? 'cursor-pointer' : ''} ${
+              own
+                ? 'bg-emerald-100 ring-1 ring-emerald-200 dark:bg-emerald-950/50 dark:ring-emerald-800'
+                : mine
+                  ? 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-950/40 dark:ring-brand-800'
+                  : ''
+            }`}
           >
             <div className="mb-1 flex items-center justify-between gap-3 text-sm">
               <p className="min-w-0 truncate font-medium">
                 <span className="mr-2 font-bold text-brand-600">#{row.rank}</span>
                 {row.studentName}
+                {own ? ' · sizin şagird' : ''}
                 {mine ? ' · sən' : ''}
               </p>
               <div className="flex shrink-0 items-center gap-3">
@@ -173,6 +184,7 @@ function WeekCalendar({ weeksByKey, selectedKey, onSelect }) {
 
 export default function WeeklyRanking({ variant = 'teacher' }) {
   const { user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const isTeacher = variant === 'teacher';
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState({ exams: [], students: [], submissions: [] });
@@ -200,15 +212,18 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
     ? ''
     : (user?.groupName || source.students.find((s) => String(s.id) === String(user?.id))?.groupName || '');
 
+  const teacherScope = isTeacher ? (user?.id || user?.teacherId) : '';
   const { weeks, previousWeek } = useMemo(
     () => buildWeeklyBoards({
       exams: source.exams,
       submissions: source.submissions,
       students: source.students.map(mapStudent).filter(Boolean),
       groupKey,
+      teacherId: teacherScope,
     }),
-    [source, groupKey],
+    [source, groupKey, teacherScope],
   );
+  const ownInSelected = (previousWeek?.rows || []).filter((r) => r.isOwn).length;
 
   const weeksByKey = useMemo(() => new Map(weeks.map((w) => [w.key, w])), [weeks]);
   const prevStart = previousWeekStart();
@@ -233,7 +248,7 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
               <h2 className="text-lg font-black sm:text-xl">Həftəlik sıralama</h2>
               <p className="text-sm text-white/80">
                 {isTeacher
-                  ? 'Keçən həftənin qalibi ön plandadır. Kalendardan bütün həftələrə baxın.'
+                  ? 'Keçən həftənin qalibi ön plandadır. Açıq yaşıl — sizin öz şagirdlərinizdir.'
                   : 'Yalnız keçən həftənin nəticələri — qalib, sənin yerin və qrafik.'}
               </p>
             </div>
@@ -248,6 +263,13 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
             </Button>
           ) : null}
         </div>
+
+        {isTeacher ? (
+          <p className="mb-4 rounded-xl bg-emerald-100/20 px-3 py-2 text-sm text-white ring-1 ring-emerald-200/40">
+            Keçən həftə sıralamada <span className="font-bold">{ownInSelected}</span> / {previousWeek?.rows?.length || 0} sizin öz şagirdinizdir.
+            Açıq yaşıl rəng onlardır — detallı nəticəyə toxunub baxın.
+          </p>
+        ) : null}
 
         <div className={`grid gap-4 ${isTeacher ? 'lg:grid-cols-2' : ''}`}>
           <ChampionCard
@@ -299,7 +321,11 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
         className="max-w-3xl"
       >
         {graphWeek?.rows?.length ? (
-          <RankingBars rows={graphWeek.rows} highlightId={user?.id} />
+          <RankingBars
+            rows={graphWeek.rows}
+            highlightId={user?.id}
+            onRowClick={isTeacher ? (row) => navigate(`/teacher/students/${row.studentId}`) : undefined}
+          />
         ) : (
           <p className="text-sm text-gray-500">Bu həftə üçün qrafik yoxdur.</p>
         )}

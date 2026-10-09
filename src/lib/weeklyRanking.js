@@ -69,7 +69,7 @@ function studentIdOf(row) {
   return row?.studentId ?? row?.StudentId ?? row?.userId ?? row?.UserId;
 }
 
-export function buildWeeklyBoards({ exams = [], submissions = [], students = [], groupKey = '' } = {}) {
+export function buildWeeklyBoards({ exams = [], submissions = [], students = [], groupKey = '', teacherId = '' } = {}) {
   const examById = new Map(exams.map((exam) => [String(exam.id), exam]));
   const studentById = new Map(
     students.filter(Boolean).map((s) => [String(s.id), s]),
@@ -113,12 +113,15 @@ export function buildWeeklyBoards({ exams = [], submissions = [], students = [],
           const avg = Math.round(
             entry.scores.reduce((sum, n) => sum + n, 0) / (entry.scores.length || 1),
           );
+          const peerTeacher = entry.peer?.teacherId ?? entry.peer?.TeacherId;
           return {
             studentId: entry.studentId,
             studentName: entry.name || entry.peer?.fullName || `Tələbə #${entry.studentId}`,
             percent: avg,
             examCount: entry.scores.length,
             groupName: entry.peer?.groupName || '',
+            teacherId: peerTeacher,
+            isOwn: Boolean(teacherId) && String(peerTeacher) === String(teacherId),
           };
         })
         .sort((a, b) => b.percent - a.percent || b.examCount - a.examCount || String(a.studentName).localeCompare(String(b.studentName)))

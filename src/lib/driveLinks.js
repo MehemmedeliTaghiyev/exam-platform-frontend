@@ -62,12 +62,21 @@ export function teacherDriveFolderUrl(teacher) {
   return m ? driveFolderOpenUrl(m[1].trim()) : '';
 }
 
-export function wrapExamDescription(description, fileUrlOrId) {
-  const existing = String(description || '').match(/^DRVFILE:([a-zA-Z0-9_-]+)/i)?.[1] || '';
+export function wrapExamDescription(description, fileUrlOrId, visibility) {
+  const raw = String(description || '');
+  const hadPublic = /VIS:public/i.test(raw);
+  const visPublic = visibility === 'public' || (visibility !== 'private' && hadPublic);
+  const existing = raw.match(/DRVFILE:([a-zA-Z0-9_-]+)/i)?.[1] || '';
   const id = parseDriveFileId(fileUrlOrId) || existing;
-  const clean = String(description || '').replace(/^DRVFILE:\S+\s*/i, '').trim();
-  if (!id) return clean;
-  return `DRVFILE:${id}\n${clean}`;
+  const clean = raw
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .replace(/DRVFILE:\S+\s*/gi, '')
+    .trim();
+  const parts = [];
+  if (visPublic) parts.push('VIS:public');
+  if (id) parts.push(`DRVFILE:${id}`);
+  if (clean) parts.push(clean);
+  return parts.join('\n');
 }
 
 export function examDriveFileId(exam) {
@@ -114,6 +123,7 @@ export function examDrivePreviewUrl(exam) {
 
 export function displayExamDescription(exam) {
   return String(exam?.description || exam?.Description || '')
-    .replace(/^DRVFILE:\S+\s*/i, '')
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .replace(/DRVFILE:\S+\s*/gi, '')
     .trim();
 }

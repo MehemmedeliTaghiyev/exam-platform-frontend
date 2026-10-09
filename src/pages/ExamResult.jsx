@@ -143,7 +143,7 @@ export default function ExamResult() {
   const aiWeighted = isAiExam(examMeta) || questions.some((q) => q.difficultyLevel);
   const isPassed = scorePercentage >= 50;
   const isPersonal = Boolean(result?.studentExamId || reviewId);
-  const examEnded = examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded);
+  const examEnded = Boolean(user?.practice) || (examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded));
   const mistakes = questions.filter((q) => !q.unanswered && q.isCorrect === false);
   const leaderboard = examEnded ? review?.leaderboard || [] : [];
   const backTo = queryStudentId

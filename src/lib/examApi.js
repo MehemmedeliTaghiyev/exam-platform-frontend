@@ -2,8 +2,27 @@ import API from '../api/axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
+import { examVisibility, withExamVisibility } from './examVisibility';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
+import {
+  isPractice,
+  practiceRole,
+  practiceFetchExams,
+  practiceFetchExam,
+  practiceCreateExam,
+  practiceUpdateExam,
+  practiceDeleteExam,
+  practiceQuestions,
+  practiceAddQuestion,
+  savePracticeQuestions,
+  practiceStartExam,
+  practiceSubmitExam,
+  practiceSubmissions,
+  practiceUser,
+  practiceFindReview,
+  practiceWeeklyRankingSource,
+} from './practice';
 
 const FAST = { timeout: 20000 };
 
@@ -18,8 +37,10 @@ function withCounts(exams) {
     const localCount = submissions.filter((s) => String(s.examId) === String(exam.id)).length;
     return {
       ...exam,
-      teacherId: exam.teacherId ?? exam.TeacherId,
-      teacherName: exam.teacherName || exam.TeacherName,
+    teacherId: exam.teacherId ?? exam.TeacherId,
+    teacherName: exam.teacherName || exam.TeacherName,
+    visibility: examVisibility(exam),
+    isPublic: examVisibility(exam) === 'public',
       subjectName: exam.subjectName || exam.subject || exam.SubjectName,
       totalQuestions: exam.totalQuestions ?? exam.questionCount ?? exam.TotalQuestions,
       durationMinutes: exam.durationMinutes ?? exam.DurationMinutes,
@@ -32,6 +53,7 @@ function withCounts(exams) {
 }
 
 export async function fetchSubjects() {
+  if (isPractice()) return localDb.getSubjects();
   try {
     const data = await tryGet('/Subjects');
     const list = unwrapList(data).map((s) => ({
@@ -138,6 +160,8 @@ export function mapStudent(u) {
     createdAt: u.createdAt || u.CreatedAt,
     position: u.position || u.Position || '',
     phone: u.phone || u.Phone || '',
+    teacherId: u.teacherId ?? u.TeacherId ?? null,
+    role: u.role || u.Role,
     trialMessage: u.trialMessage || u.TrialMessage || '',
     driveFolderUrl: teacherDriveFolderUrl(u) || localDb.getTeacherDriveFolder(u.id ?? u.Id),
   };
@@ -185,7 +209,25 @@ export async function registerStudentInvite(payload) {
   return unwrapItem(res.data) || res.data;
 }
 
+export async function registerOpenStudent(payload) {
+  const body = {
+    ...payload,
+    role: 'Student',
+    Role: 'Student',
+    independent: true,
+    Independent: true,
+  };
+  try {
+    const res = await API.post('/Auth/register', body);
+    return unwrapItem(res.data) || res.data;
+  } catch {
+    const res = await API.post('/Auth/register-student', body);
+    return unwrapItem(res.data) || res.data;
+  }
+}
+
 export async function fetchOwnProfile() {
+  if (isPractice()) return practiceUser(practiceRole() || 'Teacher');
   const res = await API.get('/Users/me', FAST);
   const me = unwrapItem(res.data) || res.data || {};
   const id = me.id ?? me.Id;
@@ -195,6 +237,7 @@ export async function fetchOwnProfile() {
 }
 
 export async function updateOwnProfile(payload) {
+  if (isPractice()) return { ...practiceUser(practiceRole() || 'Teacher'), ...payload };
   const res = await API.patch('/Users/me', payload);
   return unwrapItem(res.data) || res.data;
 }
@@ -209,6 +252,7 @@ function withoutHiddenGroups(teacherId, list) {
 }
 
 export async function fetchGroups() {
+  if (isPractice()) return [];
   const teacherId = currentTeacherId();
   try {
     const local = localDb.getGroups(teacherId);
@@ -327,6 +371,7 @@ export async function fetchGroup(id) {
 }
 
 export async function fetchStudents() {
+  if (isPractice()) return [];
   const list = await fetchUsersByRole('Student');
   return list.map(mapStudent).filter(Boolean);
 }
@@ -481,6 +526,7 @@ export async function deleteStudentAccount(id) {
 
 export async function createSubject(name) {
   const trimmed = name.trim();
+  if (isPractice()) return localDb.addSubject(trimmed);
   try {
     const res = await API.post('/Subjects', { name: trimmed, Name: trimmed }, FAST);
     const item = unwrapItem(res.data) || {};
@@ -507,27 +553,37 @@ function examOwnerId(exam) {
 function currentUserSnapshot() {
   try {
     const raw = localStorage.getItem('user');
-    if (!raw) return { role: null, scope: null };
+    if (!raw) return { role: null, scope: null, id: null };
     const user = JSON.parse(raw);
     const role = user.role || user.Role;
-    if (role === 'Admin' || role === 0 || role === '0') return { role: 'Admin', scope: null };
+    const id = user.id || user.userId || null;
+    if (role === 'Admin' || role === 0 || role === '0') return { role: 'Admin', scope: null, id };
     if (role === 'Teacher' || role === 1 || role === '1') {
-      return { role: 'Teacher', scope: user.id || user.userId || user.teacherId || null };
+      return { role: 'Teacher', scope: id || user.teacherId || null, id };
     }
-    return { role: 'Student', scope: user.teacherId ?? user.TeacherId ?? null };
+    return { role: 'Student', scope: user.teacherId ?? user.TeacherId ?? null, id };
   } catch {
-    return { role: null, scope: null };
+    return { role: null, scope: null, id: null };
   }
 }
 
 function visibleForCurrentUser(exams) {
-  const { role, scope } = currentUserSnapshot();
+  const { role, scope, id } = currentUserSnapshot();
   if (role === 'Admin') return exams;
-  if (scope == null) return [];
-  return exams.filter((exam) => String(examOwnerId(exam)) === String(scope));
+  if (role === 'Teacher') {
+    if (scope == null) return [];
+    return exams.filter((exam) => String(examOwnerId(exam)) === String(scope));
+  }
+  const followed = new Set(localDb.followedTeacherIds(id));
+  return exams.filter((exam) => {
+    const owner = String(examOwnerId(exam) ?? '');
+    if (scope != null && owner === String(scope)) return true;
+    return examVisibility(exam) === 'public' && followed.has(owner);
+  }).map(withExamVisibility);
 }
 
 export async function fetchExams() {
+  if (isPractice()) return practiceFetchExams();
   let remoteOk = false;
   let remote = [];
   try {
@@ -541,12 +597,33 @@ export async function fetchExams() {
   // Do not merge the shared localStorage exam cache when the API answered —
   // that cache is per-browser, not per-teacher, and leaked other teachers' exams.
   const source = remoteOk ? remote : localDb.getExams();
-  const list = withCounts(source.filter((exam) => exam?.id != null).sort((a, b) => {
+  const mergedSource = remoteOk
+    ? [...source, ...localDb.getExams().filter((e) => !source.some((r) => String(r.id ?? r.Id) === String(e.id)))]
+    : source;
+  const list = withCounts(mergedSource.filter((exam) => exam?.id != null).sort((a, b) => {
     const da = new Date(b.createdAt || 0).getTime();
     const db = new Date(a.createdAt || 0).getTime();
     return da - db;
   }));
   return visibleForCurrentUser(list);
+}
+
+export async function fetchPublicExamsForTeacher(teacherId) {
+  if (!teacherId) return [];
+  let remote = [];
+  try {
+    const data = await tryGet(`/Exams?teacherId=${encodeURIComponent(teacherId)}`);
+    remote = unwrapList(data);
+  } catch {
+    remote = [];
+  }
+  const local = localDb.getExams().filter((e) => String(examOwnerId(e)) === String(teacherId));
+  const map = new Map();
+  [...remote, ...local].forEach((exam) => {
+    const item = withCounts([exam])[0];
+    if (item?.id != null) map.set(String(item.id), withExamVisibility(item));
+  });
+  return Array.from(map.values()).filter((e) => examVisibility(e) === 'public' && resolveExamStatus(e) !== 'Draft');
 }
 
 function currentTeacherScope() {
@@ -570,6 +647,8 @@ function toLocalExam(payload, created = {}, source = 'remote') {
     isAiGenerated: created.isAiGenerated === true || created.IsAiGenerated === true || payload.isAiGenerated === true,
     pdfFileUrl: created.pdfFileUrl || created.PdfFileUrl || payload.pdfFileUrl || '',
     pdfFilePath: created.pdfFilePath || created.PdfFilePath || payload.pdfFilePath || payload.pdfFileUrl || '',
+    visibility: examVisibility({ ...payload, ...created }),
+    isPublic: examVisibility({ ...payload, ...created }) === 'public',
     status: resolveExamStatus({
       ...created,
       startTime: created.startTime || created.StartTime || payload.startTime,
@@ -581,10 +660,10 @@ function toLocalExam(payload, created = {}, source = 'remote') {
 }
 
 export async function createExam(payload) {
+  if (isPractice()) return practiceCreateExam(payload);
   const bodies = [
     {
       title: payload.title,
-      description: payload.description,
       totalQuestions: payload.totalQuestions,
       durationMinutes: payload.durationMinutes,
       teacherId: payload.teacherId,
@@ -597,7 +676,9 @@ export async function createExam(payload) {
       isAiGenerated: payload.isAiGenerated === true,
       pdfFileUrl: payload.pdfFileUrl,
       pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
-      description: wrapExamDescription(payload.description, payload.pdfFileUrl),
+      description: wrapExamDescription(payload.description, payload.pdfFileUrl, payload.visibility),
+      isPublic: payload.visibility === 'public' || payload.isPublic === true,
+      visibility: payload.visibility || (payload.isPublic ? 'public' : 'private'),
     },
     {
       Title: payload.title,
@@ -614,7 +695,9 @@ export async function createExam(payload) {
       IsAiGenerated: payload.isAiGenerated === true,
       PdfFileUrl: payload.pdfFileUrl,
       PdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
-      Description: wrapExamDescription(payload.description, payload.pdfFileUrl),
+      Description: wrapExamDescription(payload.description, payload.pdfFileUrl, payload.visibility),
+      IsPublic: payload.visibility === 'public' || payload.isPublic === true,
+      Visibility: payload.visibility || (payload.isPublic ? 'public' : 'private'),
     },
     {
       name: payload.title,
@@ -632,6 +715,7 @@ export async function createExam(payload) {
       const created = unwrapItem(res.data) || res.data || {};
       const exam = toLocalExam(payload, created, 'remote');
       localDb.upsertExam(exam);
+      if (exam.id) localDb.setExamVisibility(exam.id, examVisibility(exam));
       return exam;
     } catch {
       /* try next contract */
@@ -640,11 +724,14 @@ export async function createExam(payload) {
 
   const localExam = toLocalExam(payload, {}, 'local');
   localDb.upsertExam(localExam);
+  if (localExam.id) localDb.setExamVisibility(localExam.id, examVisibility(localExam));
   return localExam;
 }
 
 export async function updateExam(id, payload) {
-  const description = wrapExamDescription(payload.description, payload.pdfFileUrl || payload.pdfFilePath);
+  if (isPractice()) return practiceUpdateExam(id, payload);
+  const vis = payload.visibility || (payload.isPublic === true ? 'public' : payload.isPublic === false ? 'private' : undefined);
+  const description = wrapExamDescription(payload.description, payload.pdfFileUrl || payload.pdfFilePath, vis);
   const body = {
     subjectId: payload.subjectId,
     SubjectId: payload.subjectId,
@@ -668,6 +755,10 @@ export async function updateExam(id, payload) {
     PdfFileUrl: payload.pdfFileUrl,
     pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
     PdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+    isPublic: vis === 'public',
+    IsPublic: vis === 'public',
+    visibility: vis,
+    Visibility: vis,
   };
   try {
     await API.put(`/Exams/${id}`, body, FAST);
@@ -680,23 +771,32 @@ export async function updateExam(id, payload) {
     delete slim.PdfFilePath;
     await API.put(`/Exams/${id}`, slim, FAST);
   }
-  if (payload.pdfFileUrl || payload.pdfFilePath) {
-    localDb.upsertExam({
-      id,
-      pdfFileUrl: payload.pdfFileUrl,
-      pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
-      description,
-    });
-  }
+  const visStored = vis || examVisibility({ ...payload, id, description });
+  localDb.setExamVisibility(id, visStored);
+  localDb.upsertExam({
+    id,
+    pdfFileUrl: payload.pdfFileUrl,
+    pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
+    description,
+    visibility: visStored,
+    isPublic: visStored === 'public',
+    status: payload.status,
+    isDraft: payload.isDraft,
+  });
 }
 
 export async function deleteExam(id) {
+  if (isPractice()) {
+    practiceDeleteExam(id);
+    return;
+  }
   await API.delete(`/Exams/${id}`, FAST);
   const exams = localDb.getExams().filter((e) => String(e.id) !== String(id));
   localDb.saveExams(exams);
 }
 
 export async function fetchExam(id) {
+  if (isPractice()) return practiceFetchExam(id);
   let remote = null;
   try {
     const data = await tryGet(`/Exams/${id}`);
@@ -710,7 +810,7 @@ export async function fetchExam(id) {
     : (withCounts([remote || local].filter(Boolean))[0] || local || remote);
   if (!merged) return merged;
   const remoteOk = Boolean(remote && (remote.id || remote.Id || remote.title || remote.Title || remote.pdfFilePath || remote.PdfFilePath));
-  if (!remoteOk) {
+  if (currentUserSnapshot().role === 'Student' || !remoteOk) {
     const allowed = visibleForCurrentUser([merged]);
     if (!allowed.length) return null;
   }
@@ -725,6 +825,8 @@ export async function fetchExam(id) {
     description: merged.description || merged.Description || local?.description || '',
     totalQuestions: merged.totalQuestions ?? merged.TotalQuestions ?? merged.questionCount ?? local?.totalQuestions,
     isAiGenerated: merged.isAiGenerated === true || merged.IsAiGenerated === true,
+    visibility: examVisibility(merged),
+    isPublic: examVisibility(merged) === 'public',
   };
 }
 
@@ -733,6 +835,7 @@ export function paperQuestionsOf(list) {
 }
 
 export async function fetchQuestions(examId) {
+  if (isPractice()) return practiceQuestions(examId);
   const paths = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
   for (const path of paths) {
     try {
@@ -773,6 +876,7 @@ function normalizeQuestion(q) {
 }
 
 export async function addQuestion(examId, payload) {
+  if (isPractice()) return practiceAddQuestion(examId, payload);
   const urls = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
   const bodies = [
     payload,
@@ -885,6 +989,13 @@ export async function saveDriveFileMarker(examId, fileId) {
 }
 
 export async function updateQuestion(examId, questionId, payload) {
+  if (isPractice()) {
+    const list = practiceQuestions(examId).map((q) => (
+      String(q.id) === String(questionId) ? { ...q, ...payload, id: q.id } : q
+    ));
+    savePracticeQuestions(examId, list);
+    return list.find((q) => String(q.id) === String(questionId));
+  }
   const urls = [
     `/Questions/${questionId}`,
     `/Exams/${examId}/questions/${questionId}`,
@@ -921,6 +1032,7 @@ export async function updateQuestion(examId, questionId, payload) {
 }
 
 export async function extractDrivePdfText(fileId) {
+  if (isPractice()) throw new Error('Məşq rejimində Drive AI yoxdur. Real hesabla daxil olun.');
   const id = String(fileId || '').trim();
   if (!id) throw new Error('Drive fayl linki yoxdur.');
   const ctrl = new AbortController();
@@ -938,6 +1050,7 @@ export async function extractDrivePdfText(fileId) {
 const pdfBytesCache = new Map();
 
 export async function fetchExamPdfBytes(exam) {
+  if (isPractice()) return null;
   const examId = exam?.id ?? exam?.Id;
   const cacheKey = examId != null ? `id:${examId}` : `path:${examPdfUrl(exam)}`;
   const cached = pdfBytesCache.get(cacheKey);
@@ -1014,6 +1127,7 @@ function authHeaders() {
 }
 
 export async function tryGradeAiQuestions(questions, { soft = true } = {}) {
+  if (isPractice()) return null;
   const list = Array.isArray(questions) ? questions : [];
   if (!list.length) return null;
   const body = {
@@ -1074,6 +1188,10 @@ export function applyAiAnswers(questions, answers) {
 }
 
 export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
+  if (isPractice()) {
+    if (soft) return null;
+    throw new Error('Məşq rejimində AI yoxdur. Real hesabla daxil olun.');
+  }
   const body = {
     title: payload.title,
     topic: payload.topic,
@@ -1129,12 +1247,18 @@ export async function uploadExamPdfPack(examId, file, questionCount) {
 }
 
 export async function saveAnswerKey(examId, answers) {
+  if (isPractice()) {
+    const list = practiceQuestions(examId);
+    savePracticeQuestions(examId, list);
+    return list;
+  }
   const res = await API.put(`/Questions/exam/${examId}/answer-key`, { answers }, { timeout: 15000 });
   const list = Array.isArray(res.data) ? res.data : unwrapList(res.data);
   return list.map(normalizeQuestion);
 }
 
 export async function fetchQuestionDifficulty(examId) {
+  if (isPractice()) return [];
   try {
     const res = await API.get(`/Questions/exam/${examId}/difficulty`, { timeout: 8000 });
     return unwrapList(res.data);
@@ -1144,6 +1268,9 @@ export async function fetchQuestionDifficulty(examId) {
 }
 
 export async function fetchExamSubmissions(examId) {
+  if (isPractice()) {
+    return practiceSubmissions().filter((s) => String(s.examId) === String(examId));
+  }
   try {
     const data = await API.get(`/Submissions/exam/${examId}`, { timeout: 8000 }).then((r) => r.data);
     const list = unwrapList(data);
@@ -1155,6 +1282,7 @@ export async function fetchExamSubmissions(examId) {
 }
 
 export async function fetchWeeklyRankingSource() {
+  if (isPractice()) return practiceWeeklyRankingSource();
   const exams = (await fetchExams()).filter((exam) => resolveExamStatus(exam) !== 'Draft');
   let students = [];
   try {
@@ -1175,18 +1303,46 @@ export async function fetchWeeklyRankingSource() {
 }
 
 export async function fetchExamReview(studentExamId) {
+  if (isPractice()) return practiceFindReview(studentExamId);
   const res = await API.get(`/Submissions/review/${studentExamId}`, { timeout: 8000 });
   return unwrapItem(res.data) || res.data;
 }
 
 export async function fetchExamReviewByExam(examId) {
+  if (isPractice()) return practiceFindReview(examId);
   const res = await API.get(`/Submissions/exam/${examId}/review`, { timeout: 8000 });
   return unwrapItem(res.data) || res.data;
 }
 
 export async function fetchUsersByRole(role = 'Student') {
+  if (isPractice()) return [];
   const res = await API.get('/Users', { params: { role, includeDeleted: false }, timeout: 8000 });
   return unwrapList(res.data);
+}
+
+export async function fetchTeacherDirectory() {
+  if (isPractice()) return [];
+  const fromLocal = localDb.getPublicTeachers();
+  let remote = [];
+  try {
+    remote = (await fetchUsersByRole('Teacher')).map(mapStudent).filter(Boolean);
+  } catch {
+    remote = [];
+  }
+  const map = new Map();
+  [...fromLocal, ...remote].forEach((t) => {
+    const id = t?.id;
+    if (id == null) return;
+    map.set(String(id), {
+      id,
+      fullName: t.fullName || t.email || `Müəllim #${id}`,
+      position: t.position || t.Position || 'Digər',
+      email: t.email,
+    });
+  });
+  return Array.from(map.values()).sort((a, b) =>
+    String(a.position).localeCompare(String(b.position), 'az') || String(a.fullName).localeCompare(String(b.fullName), 'az'),
+  );
 }
 
 export async function fetchStudentHistoryById(studentId) {
@@ -1196,6 +1352,9 @@ export async function fetchStudentHistoryById(studentId) {
 }
 
 export async function fetchStudentHistory(studentId) {
+  if (isPractice()) {
+    return practiceSubmissions().filter((s) => !studentId || String(s.studentId) === String(studentId));
+  }
   const remote = [];
   try {
     const res = await API.get('/Submissions/history/me', { timeout: 8000 });
@@ -1224,6 +1383,7 @@ export async function fetchStudentHistory(studentId) {
 }
 
 export async function saveExamProgress(payload) {
+  if (isPractice()) return;
   if (!payload?.studentExamId) return;
   await API.post('/Submissions/progress', {
     studentExamId: Number(payload.studentExamId) || 0,
@@ -1234,11 +1394,13 @@ export async function saveExamProgress(payload) {
 }
 
 export async function startExam({ examId, studentId }) {
+  if (isPractice()) return practiceStartExam(examId);
   const res = await API.post('/Submissions', { examId, studentId }, { timeout: 25000 });
   return unwrapItem(res.data) || res.data;
 }
 
 export async function submitExam(payload) {
+  if (isPractice()) return practiceSubmitExam(payload);
   try {
     const res = await API.post('/Submissions/submit', {
       studentExamId: payload.studentExamId || 0,

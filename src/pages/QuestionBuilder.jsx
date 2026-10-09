@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 import { ArrowLeft, FileDown, BarChart3, Upload } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import PaperPreview from '../components/PaperPreview';
@@ -7,6 +8,7 @@ import PdfViewer from '../components/PdfViewer';
 import QuestionCard, { splitQuestionOptions } from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, applyAiAnswers, extractDrivePdfText, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { localDb } from '../lib/localDb';
 import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
@@ -43,6 +45,7 @@ export default function QuestionBuilder() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -361,7 +364,7 @@ export default function QuestionBuilder() {
     }
   };
 
-  const publishDraft = async () => {
+  const publishDraft = async (visibility = 'private') => {
     if (!exam) return;
     try {
       const start = exam.startTime || new Date().toISOString();
@@ -370,7 +373,7 @@ export default function QuestionBuilder() {
       const status = new Date(start).getTime() > Date.now() ? 'Scheduled' : 'Live';
       const paperCount = paperQuestionsOf(questions).length;
       if (!paperCount) {
-        setMessage('Əvvəl Drive PDF-dən AI ilə kartlara çevirin, sonra dərc edin.');
+        setMessage('Əvvəl sual kartı əlavə edin və ya Drive PDF-dən AI ilə kartlara çevirin, sonra dərc edin.');
         return;
       }
       const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
@@ -384,12 +387,26 @@ export default function QuestionBuilder() {
         endTime: end,
         status,
         isDraft: false,
+        visibility,
+        isPublic: visibility === 'public',
         description: exam.description,
         pdfFileUrl: driveFileViewUrl(examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl })),
       });
+      if (visibility === 'public' && user?.id) {
+        localDb.upsertPublicTeacher({
+          id: user.id,
+          fullName: user.fullName || user.email,
+          position: user.position || 'Digər',
+          email: user.email,
+        });
+      }
       dropTeacherPdf(id);
       setPdfFile(null);
-      setMessage('İmtahan dərc olundu. Şagirdlər Drive-dakı bu imtahanın PDF-ini görəcək.');
+      setMessage(
+        visibility === 'public'
+          ? 'İmtahan açıq dərc olundu. Bölgənizdəki qeydiyyatlı şagirdlər görə bilər.'
+          : 'İmtahan özəl dərc olundu. Yalnız sizin şagirdləriniz görəcək.',
+      );
       await load();
     } catch (err) {
       setMessage(errorMessage(err, 'İmtahan dərc olunmadı.'));
@@ -409,8 +426,18 @@ export default function QuestionBuilder() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={publishDraft} disabled={!questions.length && !parseDriveFileId(driveLink) && !examDriveFileId(exam)}>
-            İmtahanı dərc et
+          <Button
+            variant="secondary"
+            onClick={() => publishDraft('private')}
+            disabled={!questions.length && !parseDriveFileId(driveLink) && !examDriveFileId(exam)}
+          >
+            Özəl dərc et
+          </Button>
+          <Button
+            onClick={() => publishDraft('public')}
+            disabled={!questions.length && !parseDriveFileId(driveLink) && !examDriveFileId(exam)}
+          >
+            Açıq dərc et
           </Button>
           <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
             <BarChart3 size={16} /> Statistika

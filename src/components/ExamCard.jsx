@@ -1,6 +1,7 @@
 import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles } from 'lucide-react';
 import { Badge, Card } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
+import { examVisibility } from '../lib/examVisibility';
 import { isAiExam } from '../lib/questionDifficulty';
 
 export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }) {
@@ -29,6 +30,11 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }
             <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-800 dark:bg-violet-950/70 dark:text-violet-200">
               <Sparkles size={12} /> AI
             </span>
+          ) : null}
+          {examVisibility(exam) === 'public' ? (
+            <Badge tone="brand">Açıq</Badge>
+          ) : status !== 'Draft' ? (
+            <Badge tone="neutral">Özəl</Badge>
           ) : null}
           <Badge tone={tone}>{label}</Badge>
         </div>

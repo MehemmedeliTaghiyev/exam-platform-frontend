@@ -56,7 +56,7 @@ export default function StudentDashboard() {
       if (status === 'inprogress' || status === 'in_progress') return false;
       return Boolean(h.submittedAt || h.SubmittedAt);
     });
-    if (isExamLive(exam) && !submitted) {
+    if (isExamLive(exam) && (!submitted || user?.practice)) {
       navigate(`/student/exams/${exam.id}`);
       return;
     }
@@ -115,7 +115,21 @@ export default function StudentDashboard() {
         <>
           <h2 className="mb-4 text-lg font-bold">Mövcud imtahanlar</h2>
           {exams.length === 0 ? (
-            <EmptyState title="Aktiv imtahan yoxdur" text="Müəllim imtahan yaratdıqda burada görünəcək." />
+            <EmptyState
+              title="Aktiv imtahan yoxdur"
+              text={
+                user?.teacherId
+                  ? 'Müəlliminiz imtahan dərc edəndə burada görünəcək.'
+                  : 'Repetitorunuz varsa onunla əlaqə saxlayın. Yoxdursa bölgələrdəki müəllimlərin açıq imtahanlarına baxın.'
+              }
+              action={
+                user?.practice ? null : (
+                  <Button variant="secondary" onClick={() => navigate('/student/teachers')}>
+                    Müəllimlərə bax
+                  </Button>
+                )
+              }
+            />
           ) : (
             <>
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">

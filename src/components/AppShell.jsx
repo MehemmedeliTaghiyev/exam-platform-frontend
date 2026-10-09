@@ -14,6 +14,7 @@ import {
   Mail,
   Sparkles,
   UserPlus,
+  MapPin,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -30,6 +31,7 @@ const navByRole = {
   ],
   Student: [
     { to: '/student', label: 'İmtahanlarım', icon: BookOpen, end: true },
+    { to: '/student/teachers', label: 'Müəllimlər', icon: MapPin },
   ],
   Admin: [
     { to: '/admin', label: 'İdarə paneli', icon: Shield, end: true },
@@ -49,13 +51,15 @@ export default function AppShell({ title, children, mainClassName = '' }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const role = normalizeRole(user?.role);
-  const links = (navByRole[role] || navByRole.Student).filter(
-    (item) => AI_FEATURE_OPEN || item.to !== '/teacher/ai',
-  );
+  const links = (navByRole[role] || navByRole.Student).filter((item) => {
+    if (!AI_FEATURE_OPEN && item.to === '/teacher/ai') return false;
+    if (user?.practice) return item.to === '/teacher' || item.to === '/student';
+    return true;
+  });
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate(user?.practice ? '/' : '/login');
   };
 
   return (
@@ -119,6 +123,11 @@ export default function AppShell({ title, children, mainClassName = '' }) {
               {open ? <X size={18} /> : <Menu size={18} />}
             </button>
             <h1 className="text-lg font-bold">{title}</h1>
+            {user?.practice ? (
+              <span className="hidden rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 sm:inline dark:bg-amber-950/50 dark:text-amber-200">
+                Məşq rejimi
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <button

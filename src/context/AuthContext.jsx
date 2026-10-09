@@ -4,6 +4,7 @@ import API from '../api/axios';
 import { isAiEnabled, normalizeRole } from '../lib/utils';
 import { teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
+import { clearPractice, practiceUser, setPracticeRole } from '../lib/practice';
 import { Button } from '../components/ui';
 
 export const AuthContext = createContext();
@@ -47,15 +48,33 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('userId');
+    clearPractice();
     setUser(null);
+  };
+
+  const enterPractice = (role) => {
+    localStorage.removeItem('token');
+    const demo = practiceUser(role);
+    setPracticeRole(role);
+    localStorage.setItem('user', JSON.stringify(demo));
+    localStorage.setItem('userId', String(demo.id));
+    setAccessClosed(false);
+    setUser(demo);
+    return demo;
   };
 
   useEffect(() => {
     try {
       const token = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
-      if (token && storedUser && storedUser !== 'undefined') {
-        setUser(normalizeUser(JSON.parse(storedUser)));
+      if (storedUser && storedUser !== 'undefined') {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?.practice) {
+          setPracticeRole(parsed.practiceRole || 'Student');
+          setUser(parsed);
+        } else if (token) {
+          setUser(normalizeUser(parsed));
+        }
       }
     } catch {
       localStorage.removeItem('user');
@@ -75,6 +94,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (credentials) => {
+    clearPractice();
     const payload = {
       ...credentials,
       email: String(credentials?.email || '').trim(),
@@ -110,7 +130,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, accessClosed, setAccessClosed }}>
+    <AuthContext.Provider value={{ user, login, register, logout, enterPractice, loading, accessClosed, setAccessClosed }}>
       {accessClosed && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl dark:bg-slate-900">

@@ -41,7 +41,6 @@ const navByRole = {
     { to: '/admin/teachers', label: 'Müəllim qeydiyyatı', icon: Mail },
     { to: '/admin/users', label: 'Giriş hüquqları', icon: KeyRound },
     { to: '/teacher', label: 'İmtahanlar', icon: BookOpen },
-    { to: '/teacher/new-students', label: 'Yeni şagirdlər', icon: UserPlus },
     { to: '/teacher/cabinet', label: 'Kabinet', icon: Users },
     { to: '/teacher/ai', label: 'AI özəlliyi', icon: Sparkles },
   ],

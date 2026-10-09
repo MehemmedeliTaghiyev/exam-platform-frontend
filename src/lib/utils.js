@@ -92,20 +92,41 @@ export function teacherPlanOf(user) {
   return plan === 'Monthly' ? 'Monthly' : 'FreeTrial';
 }
 
+export const DEFAULT_TEACHER_TRIAL_DAYS = 20;
+
 export function teacherTrialDaysOf(user) {
   if (teacherPlanOf(user) === 'Monthly') return 30;
   const n = Number(user?.trialDays ?? user?.TrialDays);
   if (Number.isFinite(n) && n > 0) return Math.round(n);
-  return 14;
+  return DEFAULT_TEACHER_TRIAL_DAYS;
 }
 
 export function computeAccessEnd(startValue, plan, trialDays) {
   const d = parseExamDate(startValue) || (startValue ? new Date(startValue) : null);
   if (!d || Number.isNaN(d.getTime())) return null;
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
-  const days = plan === 'Monthly' ? 30 : Math.max(1, Number(trialDays) || 14);
+  const days = plan === 'Monthly' ? 30 : Math.max(1, Number(trialDays) || DEFAULT_TEACHER_TRIAL_DAYS);
   start.setDate(start.getDate() + days);
   return start.toISOString();
+}
+
+export function accessPeriodInfo(user) {
+  const plan = teacherPlanOf(user);
+  const monthly = plan === 'Monthly';
+  const days = teacherTrialDaysOf(user);
+  const start = user?.trialStartsAt || user?.TrialStartsAt || user?.createdAt || user?.CreatedAt;
+  const ends = user?.trialEndsAt || user?.TrialEndsAt || computeAccessEnd(start, plan, days);
+  const left = remainingUsageLabel(ends);
+  return {
+    monthly,
+    days,
+    ends,
+    left,
+    title: monthly ? 'Aylıq istifadə müddəti' : 'Sınaq müddəti',
+    hint: monthly
+      ? 'Aylıq paket bitəndə giriş bağlanır. Admin müddəti yeniləyə bilər.'
+      : `Qeydiyyatdan sonra ${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq avtomatik başlayır. Bitəndə admin aylıq paket aça bilər.`,
+  };
 }
 
 export function remainingUsageLabel(endsAt) {

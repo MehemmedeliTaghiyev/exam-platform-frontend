@@ -3,7 +3,7 @@ import { Ban, CheckCircle2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState } from '../components/ui';
-import { deleteStudentAccount, fetchGroups, fetchStudents, isPendingApproval, setStudentAccess } from '../lib/examApi';
+import { deleteStudentAccount, fetchGroups, fetchStudents, isPendingApproval, setStudentAccess, studentBelongsToTeacher } from '../lib/examApi';
 import { errorMessage, fullNameOf } from '../lib/utils';
 
 function groupKey(group) {
@@ -30,7 +30,8 @@ export default function NewStudents() {
     try {
       const [groupList, students] = await Promise.all([fetchGroups(), fetchStudents()]);
       setGroups(groupList);
-      setPending(students.filter(isPendingApproval));
+      const mine = students.filter((s) => studentBelongsToTeacher(s, user?.id, groupList));
+      setPending(mine.filter(isPendingApproval));
     } catch (err) {
       setError(errorMessage(err, 'Yeni şagirdlər yüklənmədi.'));
     } finally {
@@ -49,7 +50,7 @@ export default function NewStudents() {
       students.forEach((s) => used.add(s.id));
       return { key: groupKey(g) || String(g.id), title: g.number || g.name, students };
     });
-    const leftover = pending.filter((s) => !used.has(s.id));
+    const leftover = pending.filter((s) => !used.has(s.id) && String(s.teacherId || '') === String(user?.id || ''));
     if (leftover.length) {
       listed.push({ key: 'other', title: 'Qrupu göstərilməyən', students: leftover });
     }

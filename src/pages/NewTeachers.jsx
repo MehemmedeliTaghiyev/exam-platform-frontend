@@ -3,8 +3,8 @@ import { Ban, CheckCircle2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { Badge, Button, Card, EmptyState } from '../components/ui';
 import API from '../api/axios';
-import { deleteStudentAccount, isPendingApproval, setStudentAccess } from '../lib/examApi';
-import { errorMessage, formatDate, unwrapList } from '../lib/utils';
+import { deleteStudentAccount, isPendingApproval, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
+import { computeAccessEnd, DEFAULT_TEACHER_TRIAL_DAYS, errorMessage, formatDate, unwrapList } from '../lib/utils';
 
 export default function NewTeachers() {
   const [teachers, setTeachers] = useState([]);
@@ -30,12 +30,27 @@ export default function NewTeachers() {
     load();
   }, []);
 
+  const openTeacher = async (teacher) => {
+    await setStudentAccess(teacher.id, true);
+    const trialStartsAt = new Date().toISOString();
+    await updateTeacherTrial(teacher.id, {
+      firstName: teacher.firstName,
+      lastName: teacher.lastName,
+      phone: teacher.phone,
+      trialStartsAt,
+      trialEndsAt: computeAccessEnd(trialStartsAt, 'FreeTrial', DEFAULT_TEACHER_TRIAL_DAYS),
+      billingPlan: 'FreeTrial',
+      trialDays: DEFAULT_TEACHER_TRIAL_DAYS,
+      trialMessage: `${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq müddəti başladı.`,
+    }).catch(() => {});
+  };
+
   const decide = async (teacher, allow) => {
     if (!teacher.id || busyId) return;
     setBusyId(teacher.id);
     setError('');
     try {
-      if (allow) await setStudentAccess(teacher.id, true);
+      if (allow) await openTeacher(teacher);
       else await deleteStudentAccount(teacher.id);
       await load();
     } catch (err) {
@@ -48,7 +63,7 @@ export default function NewTeachers() {
   return (
     <AppShell title="Yeni müəllimlər">
       <p className="mb-6 text-sm text-gray-500">
-        Öz hesabından qeydiyyatdan keçən müəllimlər burada gözləyir. Qəbul etdikdən sonra sınaq müddəti başlayır; rədd etdikdə hesab bağlanır.
+        Qeydiyyat 20 günlük sınaq açmalıdır. Exam API hələ «admin təsdiqi» qaytarırsa, burada bir dəfə açın — sınaq avtomatik yazılır.
       </p>
       {error && <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
       {loading ? (
@@ -57,6 +72,28 @@ export default function NewTeachers() {
         <EmptyState title="Gözləyən müəllim yoxdur" text="Qeydiyyat səhifəsindən gələn müraciətlər burada görünəcək." />
       ) : (
         <div className="space-y-3">
+          {teachers.length > 1 ? (
+            <Button
+              className="mb-2"
+              disabled={Boolean(busyId)}
+              onClick={async () => {
+                setBusyId('all');
+                setError('');
+                try {
+                  for (const t of teachers) {
+                    if (t.id) await openTeacher(t);
+                  }
+                } catch (err) {
+                  setError(errorMessage(err, 'Əməliyyat alınmadı.'));
+                } finally {
+                  setBusyId(null);
+                  await load();
+                }
+              }}
+            >
+              Hamısını qəbul et (20 gün sınaq)
+            </Button>
+          ) : null}
           {teachers.map((t) => (
             <Card key={t.id} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>

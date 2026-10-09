@@ -54,7 +54,7 @@ function TeacherPlanCell({ teacher, onSaved, onError }) {
     onError('');
     try {
       const trialStartsAt = new Date(`${startDate}T12:00:00`).toISOString();
-      const days = plan === 'Monthly' ? 30 : Math.max(1, Number(trialDays) || 14);
+      const days = plan === 'Monthly' ? 30 : Math.max(1, Number(trialDays) || 20);
       const trialEndsAt = computeAccessEnd(trialStartsAt, plan, days);
       const updated = await updateTeacherTrial(teacher.id, {
         firstName: teacher.firstName,

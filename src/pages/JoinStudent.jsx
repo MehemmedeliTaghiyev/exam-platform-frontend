@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useContext, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { AuthContext } from '../context/AuthContext';
 import { Button, Input } from '../components/ui';
 import { fetchGroupInvite, registerStudentInvite } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
+import { isPublicGroupCode, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
 
 const EMAIL_HINT = 'ad.soyad_ataadi@gmail.com';
 const EMAIL_RE = /^[a-z0-9əöüğçşı]+\.[a-z0-9əöüğçşı]+_[a-z0-9əöüğçşı]+@gmail\.com$/i;
@@ -13,6 +15,9 @@ export default function JoinStudent() {
   const { code } = useParams();
   const [params] = useSearchParams();
   const namedGroup = String(params.get('group') || '').trim();
+  const publicGroup = isPublicGroupCode(code);
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
   const { dark, toggle } = useTheme();
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,42 +37,25 @@ export default function JoinStudent() {
     (async () => {
       setLoading(true);
       setError('');
-      const localPreview = namedGroup || /^g\d+$/i.test(String(code || ''))
-        ? {
-            inviteCode: code,
-            groupName: namedGroup || 'Qrup',
-            teacherName: '',
-          }
-        : null;
-      if (localPreview) {
-        setPreview(localPreview);
-        setLoading(false);
-        try {
-          const data = await fetchGroupInvite(code);
-          if (!cancelled && data?.groupName) {
-            setPreview({ ...data, groupName: data.groupName || namedGroup });
-          }
-        } catch {
-          /* qrup adı linkdə var; API cavab verməsə də forma açıq qalır */
-        }
-        return;
-      }
+      setPreview({
+        inviteCode: code,
+        groupName: namedGroup || (publicGroup ? PUBLIC_GROUP_NAME : 'Qrup'),
+        teacherName: '',
+      });
+      setLoading(false);
       try {
         const data = await fetchGroupInvite(code);
-        if (!cancelled) setPreview({ ...data, groupName: data.groupName || namedGroup });
-      } catch (err) {
-        if (!cancelled) {
-          setPreview(null);
-          setError(errorMessage(err, 'Qeydiyyat linki etibarsızdır.'));
+        if (!cancelled && data?.groupName) {
+          setPreview({ ...data, groupName: data.groupName || namedGroup || (publicGroup ? PUBLIC_GROUP_NAME : 'Qrup') });
         }
-      } finally {
-        if (!cancelled) setLoading(false);
+      } catch {
+        /* forma açıq qalır */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [code, namedGroup]);
+  }, [code, namedGroup, publicGroup]);
 
   const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -89,8 +77,30 @@ export default function JoinStudent() {
         phone: form.phone.trim(),
         email,
         password: form.password,
+        independent: publicGroup,
       });
-      setDone(result);
+      if (publicGroup) {
+        try {
+          await login({ email, password: form.password });
+          navigate('/student');
+          return;
+        } catch (err) {
+          const apiMsg = err?.response?.data?.message;
+          setDone({
+            ...result,
+            email,
+            message: apiMsg
+              ? `Ümumi qrup pulsuzdur, icazə gözlənilmir. Server hələ girişi bağlamışdır: ${apiMsg} Fərdi müəllim linkində isə həmin müəllimin icazəsi lazımdır.`
+              : 'Ümumi qrupa yazıldınız. E-poçt və şifrə ilə daxil olun.',
+          });
+          return;
+        }
+      }
+      setDone({
+        ...result,
+        email,
+        message: 'Bu müəllimin qrupundasınız. «Yeni şagirdlər»də icazə verdikdən sonra daxil ola bilərsiniz.',
+      });
     } catch (err) {
       setError(errorMessage(err, 'Qeydiyyat göndərilmədi.'));
     } finally {
@@ -124,7 +134,10 @@ export default function JoinStudent() {
             <>
               <h1 className="text-2xl font-bold">Qeydiyyat göndərildi</h1>
               <p className="mt-3 text-sm text-gray-500">
-                {done.message || 'Müəllim təsdiq edəndən sonra e-poçt və şifrə ilə daxil ola bilərsiniz. Şifrəni yadda saxlayın.'}
+                {done.message
+                  || (publicGroup
+                    ? 'Ümumi qrupa yazıldınız. E-poçt və şifrə ilə daxil ola bilərsiniz.'
+                    : 'Müəllim «Yeni şagirdlər»də icazə verdikdən sonra e-poçt və şifrə ilə daxil ola bilərsiniz. Şifrəni yadda saxlayın.')}
               </p>
               <p className="mt-2 text-sm font-medium">{done.email}</p>
               <Link to="/login" className="mt-6 inline-block text-sm font-medium text-brand-600">
@@ -139,7 +152,11 @@ export default function JoinStudent() {
           ) : (
             <>
               <h1 className="text-2xl font-bold">Şagird qeydiyyatı</h1>
-              <p className="mt-1 text-sm text-gray-500">Qrup adı dəyişdirilə bilməz. Müəllim icazə verdikdən sonra daxil olacaqsınız.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {publicGroup
+                  ? 'Bu adminin Ümumi qrupudur. Yazıldıqdan sonra daxil olub müəllim tapa bilərsiniz.'
+                  : 'Qrup adı dəyişdirilə bilməz. Yeni şagird yalnız bu qrupu göndərən müəllimin hesabına düşür.'}
+              </p>
               {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
               <form onSubmit={submit} className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
@@ -173,7 +190,9 @@ export default function JoinStudent() {
                   />
                 </div>
                 <p className="sm:col-span-2 text-xs text-gray-500">
-                  Şifrə hərf və rəqəm qarışığı ola bilər. Yadda saxlayın. Göndərdikdən sonra müəllimin «Yeni şagirdlər» siyahısına düşəcəksiniz.
+                  {publicGroup
+                    ? 'Şifrəni yadda saxlayın. Bu siyahı adminin «Yeni şagirdlər»inə düşmür.'
+                    : 'Şifrəni yadda saxlayın. Göndərdikdən sonra yalnız bu müəllimin «Yeni şagirdlər» siyahısına düşəcəksiniz.'}
                 </p>
                 <div className="sm:col-span-2">
                   <Button type="submit" className="w-full" disabled={saving}>

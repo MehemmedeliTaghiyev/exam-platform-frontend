@@ -3,6 +3,7 @@ import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
+import { PUBLIC_GROUP_CODE } from './publicGroup';
 import { decorateTeacher } from './teacherMarketplace';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
@@ -173,13 +174,7 @@ export function mapStudent(u) {
 
 export function isPendingApproval(u) {
   if (!u || u.isDeleted || u.IsDeleted) return false;
-  const enabled = (u.isAccessEnabled ?? u.IsAccessEnabled) !== false;
-  if (enabled) return false;
-  const role = String(u.role || u.Role || '');
-  const msg = String(u.trialMessage || u.TrialMessage || '');
-  if (msg.includes('təsdiqini gözləyir') || msg.includes('tesdiqini gozleyir')) return true;
-  if (/teacher/i.test(role) && !(u.trialStartsAt || u.TrialStartsAt)) return true;
-  return false;
+  return (u.isAccessEnabled ?? u.IsAccessEnabled) === false;
 }
 
 export function groupInviteSlug(group) {
@@ -209,7 +204,37 @@ export async function fetchGroupInvite(code) {
 }
 
 export async function registerStudentInvite(payload) {
-  const res = await API.post('/Auth/register-student', payload);
+  const inviteCode = String(payload.inviteCode || '').trim();
+  const firstName = String(payload.firstName || '').trim();
+  const lastName = String(payload.lastName || '').trim();
+  const fatherName = String(payload.fatherName || '').trim();
+  const phone = String(payload.phone || '').trim();
+  const email = String(payload.email || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const independent = Boolean(payload.independent);
+  const body = {
+    inviteCode,
+    InviteCode: inviteCode,
+    firstName,
+    lastName,
+    fatherName,
+    phone,
+    email,
+    password,
+    FirstName: firstName,
+    LastName: lastName,
+    FatherName: fatherName,
+    Phone: phone,
+    Email: email,
+    Password: password,
+    role: 'Student',
+    Role: 'Student',
+    independent,
+    Independent: independent,
+    isAccessEnabled: independent ? true : undefined,
+    IsAccessEnabled: independent ? true : undefined,
+  };
+  const res = await API.post('/Auth/register-student', body);
   return unwrapItem(res.data) || res.data;
 }
 
@@ -222,39 +247,16 @@ export async function registerOpenStudent(payload) {
   const password = String(payload.password || '');
   const position = String(payload.position || '').trim();
   const fullName = String(payload.fullName || [firstName, lastName].filter(Boolean).join(' ')).trim();
-  const body = {
+  return registerStudentInvite({
+    inviteCode: payload.inviteCode || PUBLIC_GROUP_CODE,
     firstName,
     lastName,
     fatherName,
     phone,
     email,
     password,
-    position,
-    fullName,
-    FirstName: firstName,
-    LastName: lastName,
-    FatherName: fatherName,
-    Phone: phone,
-    Email: email,
-    Password: password,
-    Position: position,
-    FullName: fullName,
-    role: 'Student',
-    Role: 'Student',
     independent: true,
-    Independent: true,
-  };
-  try {
-    const res = await API.post('/Auth/register-student', body);
-    return unwrapItem(res.data) || res.data;
-  } catch (first) {
-    try {
-      const res = await API.post('/Auth/register', body);
-      return unwrapItem(res.data) || res.data;
-    } catch {
-      throw first;
-    }
-  }
+  });
 }
 
 export async function fetchOwnProfile() {
@@ -401,10 +403,25 @@ export async function fetchGroup(id) {
   }
 }
 
+export function studentBelongsToTeacher(student, teacherId, groups = []) {
+  if (!student || teacherId == null || teacherId === '') return false;
+  if (student.teacherId != null && String(student.teacherId) === String(teacherId)) return true;
+  return (groups || []).some((group) => {
+    if (student.groupId != null && String(student.groupId) === String(group.id)) return true;
+    const keys = [group.number, group.name].map((v) => String(v || '').trim().toLowerCase()).filter(Boolean);
+    return keys.includes(String(student.groupName || '').trim().toLowerCase());
+  });
+}
+
 export async function fetchStudents() {
   if (isPractice()) return [];
-  const list = await fetchUsersByRole('Student');
-  return list.map(mapStudent).filter(Boolean);
+  const list = (await fetchUsersByRole('Student')).map(mapStudent).filter(Boolean);
+  const snap = currentUserSnapshot();
+  if (snap.role === 'Teacher' && snap.id) {
+    const groups = localDb.getGroups(snap.id);
+    return list.filter((s) => studentBelongsToTeacher(s, snap.id, groups));
+  }
+  return list;
 }
 
 export async function fetchOwnStudentIdsForTeacher(teacherId) {

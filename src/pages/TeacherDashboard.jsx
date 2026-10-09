@@ -8,6 +8,7 @@ import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, EmptyState, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, isExamDraft } from '../lib/utils';
+import AccessPeriodBanner from '../components/AccessPeriodBanner';
 import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
 
 function toDatetimeLocalValue(date) {
@@ -29,6 +30,7 @@ export default function TeacherDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [periodUser, setPeriodUser] = useState(user);
   const [notice, setNotice] = useState('');
   const [, setTick] = useState(0);
   const skipDraftRef = useRef(false);
@@ -72,6 +74,7 @@ export default function TeacherDashboard() {
       ]);
       setExams(examList);
       setSubjects(subjectList);
+      if (me) setPeriodUser({ ...user, ...me, role: user?.role || 'Teacher' });
       if (me?.driveFolderUrl) setFolderUrl(me.driveFolderUrl);
       if (subjectList[0]) setSubjectId((prev) => prev || String(subjectList[0].id));
       else setSubjectMode('new');
@@ -291,6 +294,7 @@ export default function TeacherDashboard() {
 
   return (
     <AppShell title="İmtahanlar">
+      <AccessPeriodBanner user={periodUser || user} />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Müəllim'}</p>

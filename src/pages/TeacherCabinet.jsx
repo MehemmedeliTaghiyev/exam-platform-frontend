@@ -15,6 +15,7 @@ import {
   DUPLICATE_GROUP_MESSAGE,
 } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
+import AccessPeriodBanner from '../components/AccessPeriodBanner';
 
 function inGroup(student, group) {
   if (!student || !group) return false;
@@ -48,6 +49,7 @@ export default function TeacherCabinet() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
+  const [periodUser, setPeriodUser] = useState(user);
 
   const load = async () => {
     setLoading(true);
@@ -60,6 +62,7 @@ export default function TeacherCabinet() {
       setGroups(groupList);
       setStudents(studentList.filter((s) => s.isAccessEnabled !== false));
       if (me) {
+        setPeriodUser({ ...user, ...me, role: user?.role || 'Teacher' });
         setDriveFolderUrl(me.driveFolderUrl || '');
         setProfile({
           firstName: me.firstName || me.FirstName || '',
@@ -158,6 +161,7 @@ export default function TeacherCabinet() {
 
   return (
     <AppShell title="Müəllim kabineti">
+      <AccessPeriodBanner user={periodUser || user} />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-gray-500">{user?.fullName}</p>

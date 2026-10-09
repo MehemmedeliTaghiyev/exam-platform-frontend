@@ -6,7 +6,8 @@ import { Button, Card, Skeleton } from '../components/ui';
 import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
 import { formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate } from '../lib/utils';
-import { displayExamDescription } from '../lib/driveLinks';
+import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
+import DrivePreview from '../components/DrivePreview';
 
 const OPEN_SENTINEL = 'open';
 
@@ -245,6 +246,8 @@ export default function TakeExam() {
                 />
               );
             })
+          ) : examDriveFileId(exam) ? (
+            <DrivePreview exam={exam} title="İmtahan PDF" mode="iframe" />
           ) : (
             <Card>Bu imtahanda PDF və ya sual yoxdur.</Card>
           )}

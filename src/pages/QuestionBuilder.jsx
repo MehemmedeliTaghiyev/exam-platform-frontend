@@ -372,17 +372,17 @@ export default function QuestionBuilder() {
       const end = exam.endTime || new Date(Date.now() + duration * 60 * 1000).toISOString();
       const status = new Date(start).getTime() > Date.now() ? 'Scheduled' : 'Live';
       const paperCount = paperQuestionsOf(questions).length;
-      if (!paperCount) {
-        setMessage('Əvvəl sual kartı əlavə edin və ya Drive PDF-dən AI ilə kartlara çevirin, sonra dərc edin.');
+      const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
+      if (!paperCount && !fileId) {
+        setMessage('Əvvəl Drive faylını bağlayın və ya sual kartı əlavə edin, sonra dərc edin. AI işləməsə belə faylı paylaşa bilərsiniz.');
         return;
       }
-      const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
       if (fileId) await saveDriveFileMarker(id, fileId);
       await updateExam(id, {
         subjectId: exam.subjectId,
         title: exam.title,
         durationMinutes: duration,
-        totalQuestions: paperCount,
+        totalQuestions: paperCount || exam.totalQuestions || 1,
         startTime: start,
         endTime: end,
         status,
@@ -403,9 +403,13 @@ export default function QuestionBuilder() {
       dropTeacherPdf(id);
       setPdfFile(null);
       setMessage(
-        visibility === 'public'
-          ? 'İmtahan açıq dərc olundu. Bölgənizdəki qeydiyyatlı şagirdlər görə bilər.'
-          : 'İmtahan özəl dərc olundu. Yalnız sizin şagirdləriniz görəcək.',
+        paperCount
+          ? (visibility === 'public'
+            ? 'İmtahan açıq dərc olundu. Bölgənizdəki qeydiyyatlı şagirdlər görə bilər.'
+            : 'İmtahan özəl dərc olundu. Yalnız sizin şagirdləriniz görəcək.')
+          : (visibility === 'public'
+            ? 'İmtahan açıq dərc olundu. AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'
+            : 'İmtahan özəl dərc olundu. AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'),
       );
       await load();
     } catch (err) {
@@ -488,10 +492,10 @@ export default function QuestionBuilder() {
       ) : (
         <div className="space-y-8">
           <Card>
-            <h3 className="mb-2 text-base font-bold">Drive PDF — bu imtahan</h3>
+            <h3 className="mb-2 text-base font-bold">1. Faylı imtahana bağla</h3>
             <p className="mb-4 text-sm text-gray-500">
-              PDF Drive-dadır. AI onu serverdə oxuyub kartlara çevirir. Müəllim telefonda yalnız gözləyir — PDF telefonu yükləmir. Şagird yalnız kart görür.
-              Faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> linkini bura yazın.
+              Faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> (qovluq yox) linkini yazın.
+              AI işləməsə belə buradan bağlayıb yuxarıda dərc edə bilərsiniz — şagird Drive PDF-i görəcək.
             </p>
             {folderUrl ? (
               <a
@@ -514,6 +518,18 @@ export default function QuestionBuilder() {
                 onChange={(e) => setDriveLink(e.target.value)}
                 placeholder="https://drive.google.com/file/d/.../view"
               />
+              <Button type="submit" disabled={driveBusy}>
+                {driveBusy ? 'Saxlanılır...' : 'Faylı imtahana bağla'}
+              </Button>
+            </form>
+          </Card>
+
+          <Card>
+            <h3 className="mb-2 text-base font-bold">2. AI ilə kartlara çevir</h3>
+            <p className="mb-4 text-sm text-gray-500">
+              Bu addım istəyə bağlıdır. AI işləyəndə şagird kart görür. İşləməsə 1-ci addımdakı faylı dərc edin.
+            </p>
+            <div className="space-y-4">
               <Input
                 label="Sual sayı (istəyə bağlı)"
                 type="number"
@@ -522,15 +538,10 @@ export default function QuestionBuilder() {
                 value={pdfCount}
                 onChange={(e) => setPdfCount(e.target.value)}
               />
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={driveBusy}>
-                  {driveBusy ? 'Saxlanılır...' : 'Faylı imtahana bağla'}
-                </Button>
-                <Button type="button" disabled={pdfBusy} onClick={handleDriveAi}>
-                  <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'AI ilə kartlara çevir'}
-                </Button>
-              </div>
-            </form>
+              <Button type="button" disabled={pdfBusy} onClick={handleDriveAi}>
+                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'AI ilə kartlara çevir'}
+              </Button>
+            </div>
           </Card>
 
           {examDriveFileId({ ...exam, pdfFileUrl: driveLink }) ? (
@@ -577,7 +588,9 @@ export default function QuestionBuilder() {
               ) : null}
               <div className="space-y-4">
           {questions.length === 0 ? (
-            <Card className="text-sm text-gray-500">Drive faylını bağlayın, AI ilə kartlara çevirin. Şagird yalnız kart görəcək.</Card>
+            <Card className="text-sm text-gray-500">
+              Drive faylını bağlayın. AI kart yarada bilsə əlavə olunur; olmasa imtahanı yenə dərc edə bilərsiniz.
+            </Card>
           ) : (
             questions.filter((q) => !String(q.text || '').includes('__DRIVE__')).map((q, idx) => (
                 isOpenQuestion(q) ? (

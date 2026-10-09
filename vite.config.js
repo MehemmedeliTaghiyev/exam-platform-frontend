@@ -30,7 +30,7 @@ function drivePdfDevPlugin() {
             if (text.length < 40) {
               res.statusCode = 422
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: 'PDF-dən mətn çıxmadı. Mətnli PDF lazımdır.' }))
+              res.end(JSON.stringify({ error: 'PDF-dən mətn çıxmadı. Cloud Vision API Enable edin və key restriction-a Cloud Vision əlavə edin.' }))
               return
             }
             res.setHeader('Content-Type', 'application/json')
@@ -40,9 +40,11 @@ function drivePdfDevPlugin() {
           res.setHeader('Content-Type', 'application/pdf')
           res.setHeader('Content-Disposition', 'inline; filename="exam.pdf"')
           res.end(buf)
-        } catch {
+        } catch (err) {
           res.statusCode = 502
-          res.end('pdf yoxdur')
+          res.setHeader('Content-Type', 'application/json')
+          const detail = String(err?.message || err || 'pdf yoxdur').slice(0, 240)
+          res.end(JSON.stringify({ error: detail, detail }))
         }
       })
     },

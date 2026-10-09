@@ -201,6 +201,58 @@ async function collectPageJpegs(pdf, pdfjs) {
   return jpegs;
 }
 
+function visionErrorMessage(json, status) {
+  const msg = String(json?.error?.message || `vision ${status}`);
+  const low = msg.toLowerCase();
+  if (status === 403 || /permission|disabled|not been used|api has not been enabled|referer|blocked/i.test(low)) {
+    return `${msg} Billing kifayət deyil. Eyni proyektdə Cloud Vision API-ni Enable edin, API key restriction-a Cloud Vision API əlavə edib Save edin, 2 dəqiqə gözləyin.`;
+  }
+  return msg;
+}
+
+function textFromVisionPayload(json) {
+  const chunks = [];
+  const take = (r) => {
+    const t = String(r?.fullTextAnnotation?.text || r?.textAnnotations?.[0]?.description || '').trim();
+    if (t) chunks.push(t);
+  };
+  (json?.responses || []).forEach((fileRes) => {
+    if (Array.isArray(fileRes?.responses)) fileRes.responses.forEach(take);
+    else take(fileRes);
+  });
+  return chunks.join('\n').trim();
+}
+
+async function visionOcrPdf(buf) {
+  const key = driveApiKey();
+  if (!key) throw new Error('GOOGLE_DRIVE_API_KEY Vercel-də yoxdur.');
+  const bytes = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 50000);
+  try {
+    const res = await fetch(`https://vision.googleapis.com/v1/files:annotate?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        requests: [{
+          inputConfig: {
+            mimeType: 'application/pdf',
+            content: bytes.toString('base64'),
+          },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+          pages: [1, 2, 3, 4, 5],
+        }],
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(visionErrorMessage(json, res.status));
+    return textFromVisionPayload(json);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function visionOcrJpegs(jpegs) {
   const key = driveApiKey();
   if (!key || !jpegs.length) return '';
@@ -212,7 +264,7 @@ async function visionOcrJpegs(jpegs) {
       headers: { 'Content-Type': 'application/json' },
       signal: ctrl.signal,
       body: JSON.stringify({
-        requests: jpegs.slice(0, 6).map((buf) => ({
+        requests: jpegs.slice(0, 5).map((buf) => ({
           image: { content: Buffer.from(buf).toString('base64') },
           features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
           imageContext: { languageHints: ['az', 'tr', 'en'] },
@@ -220,17 +272,8 @@ async function visionOcrJpegs(jpegs) {
       }),
     });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = String(json?.error?.message || `vision ${res.status}`);
-      if (res.status === 403) {
-        throw new Error(
-          `${msg} Əgər restriction-da Cloud Vision var: OK+Save edin, 2 dəq gözləyin. Vision üçün Google Cloud-da Billing də bağlı olmalıdır.`,
-        );
-      }
-      throw new Error(msg);
-    }
-    const parts = (json.responses || []).map((r) => String(r.fullTextAnnotation?.text || r.textAnnotations?.[0]?.description || '').trim());
-    return parts.filter(Boolean).join('\n');
+    if (!res.ok) throw new Error(visionErrorMessage(json, res.status));
+    return textFromVisionPayload(json);
   } finally {
     clearTimeout(timer);
   }
@@ -266,7 +309,8 @@ export async function extractTextFromPdfBuffer(buf) {
   }
   let text = pages.join('\n').trim();
   if (text.length >= 40) return text;
+  const fileOcr = String(await visionOcrPdf(src) || '').trim();
+  if (fileOcr.length >= 40) return fileOcr;
   const jpegs = await collectPageJpegs(pdf, pdfjs);
-  const ocr = String(await visionOcrJpegs(jpegs) || '').trim();
-  return ocr;
+  return String(await visionOcrJpegs(jpegs) || '').trim();
 }

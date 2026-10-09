@@ -527,7 +527,7 @@ export default function QuestionBuilder() {
           <Card>
             <h3 className="mb-2 text-base font-bold">2. AI ilə kartlara çevir</h3>
             <p className="mb-4 text-sm text-gray-500">
-              Mətnli PDF: server mətni oxuyub GPT-yə göndərir, şagird kart görür. Skan PDF-də kart olmur — 1-ci addımı dərc edin, şagird Drive faylını görür.
+              Mətnli PDF birbaşa kart olur. Skan PDF-i server GPT-4o ilə oxuyur (Vercel OPENAI_API_KEY). Olmasa faylı dərc edin — şagird Drive görür.
             </p>
             <div className="space-y-4">
               <Input

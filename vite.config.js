@@ -32,7 +32,7 @@ function drivePdfDevPlugin() {
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({
                 scan: true,
-                error: 'Bu PDF skandır (seçilə bilən mətn yoxdur). Kart üçün Exam API-də GPT-4o vision lazımdır. Faylı bağlayıb dərc edə bilərsiniz — şagird Drive PDF görəcək.',
+                error: 'Bu PDF skandır və səhifə şəkli oxunmadı. Faylı bağlayıb dərc edə bilərsiniz — şagird Drive PDF görəcək.',
               }))
               return
             }

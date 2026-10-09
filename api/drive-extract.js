@@ -4,6 +4,11 @@ import { extractTextFromPdfBuffer, loadDrivePdfBuffer, parseDrivePdfId } from '.
 const require = createRequire(import.meta.url);
 require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
 require.resolve('pdfjs-dist/legacy/build/pdf.mjs');
+try {
+  require.resolve('@napi-rs/canvas');
+} catch {
+  /* optional for scan OCR */
+}
 
 export const config = { maxDuration: 60 };
 
@@ -23,7 +28,7 @@ export default async function handler(req, res) {
     if (text.length < 40) {
       res.status(422).json({
         scan: true,
-        error: 'Bu PDF skandır (seçilə bilən mətn yoxdur). Kart üçün Exam API-də GPT-4o vision lazımdır. Faylı bağlayıb dərc edə bilərsiniz — şagird Drive PDF görəcək.',
+        error: 'Bu PDF skandır və səhifə şəkli oxunmadı. Faylı bağlayıb dərc edə bilərsiniz — şagird Drive PDF görəcək.',
       });
       return;
     }

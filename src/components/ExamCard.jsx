@@ -4,7 +4,7 @@ import { formatDateTime, resolveExamStatus } from '../lib/utils';
 import { examVisibility } from '../lib/examVisibility';
 import { isAiExam } from '../lib/questionDifficulty';
 
-export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }) {
+export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', showTimes = false, teacherName = '' }) {
   const status = resolveExamStatus(exam);
   const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
   const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : status === 'Draft' ? 'Qaralama' : 'Scheduled';
@@ -24,6 +24,9 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }
           {subject ? (
             <p className="mt-1 text-sm font-medium text-brand-600">{subject}</p>
           ) : null}
+          {teacherName ? (
+            <p className="mt-1 text-xs text-gray-500">{teacherName}</p>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {ai ? (
@@ -39,11 +42,18 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç' }
           <Badge tone={tone}>{label}</Badge>
         </div>
       </div>
-      {status === 'Scheduled' && (exam.startTime || exam.StartTime) && (
-        <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">
-          <Calendar size={14} /> Başlama: {formatDateTime(exam.startTime || exam.StartTime)}
-        </p>
-      )}
+      {(showTimes || status === 'Scheduled') && (exam.startTime || exam.StartTime || exam.endTime || exam.EndTime) ? (
+        <div className="mt-3 space-y-1 text-xs font-medium text-gray-500">
+          {exam.startTime || exam.StartTime ? (
+            <p className="inline-flex items-center gap-1.5">
+              <Calendar size={14} /> Başlama: {formatDateTime(exam.startTime || exam.StartTime)}
+            </p>
+          ) : null}
+          {exam.endTime || exam.EndTime ? (
+            <p className="block">Bitmə: {formatDateTime(exam.endTime || exam.EndTime)}</p>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-gray-500">
         <span className="inline-flex items-center gap-1.5">
           <HelpCircle size={14} /> {exam.totalQuestions ?? exam.questionCount ?? 0} sual

@@ -1,6 +1,5 @@
 import { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Input } from '../components/ui';
 import PublicNav from '../components/PublicNav';
@@ -35,17 +34,9 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4 dark:bg-[#0b1220]">
-      <div className="w-full max-w-md">
-        <div className="mb-4 flex justify-end">
-          <PublicNav />
-        </div>
-        <div className="mb-8 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <GraduationCap size={20} />
-          </div>
-          <span className="text-lg font-bold text-ink dark:text-white">ExamPulse</span>
-        </div>
+    <div className="min-h-screen bg-surface dark:bg-[#0b1220]">
+      <PublicNav />
+      <div className="mx-auto w-full max-w-md px-4 py-10">
         <p className="mb-4 text-center text-sm text-gray-500">
           <Link to="/" className="font-medium text-brand-600 hover:text-brand-500">
             ← Məşq səhifəsinə qayıt

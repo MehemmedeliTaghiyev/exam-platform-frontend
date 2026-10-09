@@ -23,11 +23,13 @@ import NewTeachers from './pages/NewTeachers';
 import PromoAd from './pages/PromoAd';
 import Home from './pages/Home';
 import BrowseTeachers from './pages/BrowseTeachers';
+import PublicExamZone from './pages/PublicExamZone';
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/exams" element={<PublicExamZone />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/register/teacher" element={<Register />} />
@@ -162,6 +164,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <StudentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/public"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <PublicExamZone embedded />
           </ProtectedRoute>
         }
       />

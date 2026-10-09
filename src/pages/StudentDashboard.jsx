@@ -5,7 +5,9 @@ import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
 import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
-import { fetchExams, fetchStudentHistory } from '../lib/examApi';
+import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
+import { localDb } from '../lib/localDb';
+import { examSubject, subjectProgress } from '../lib/publicExams';
 import { formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
 
 function examSortTime(exam) {
@@ -21,6 +23,7 @@ export default function StudentDashboard() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [exams, setExams] = useState([]);
+  const [publicExams, setPublicExams] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllExams, setShowAllExams] = useState(false);
@@ -35,12 +38,14 @@ export default function StudentDashboard() {
     const run = async () => {
       setLoading(true);
       try {
-        const [examList, hist] = await Promise.all([
+        const [examList, hist, pubs] = await Promise.all([
           fetchExams(),
           fetchStudentHistory(user?.id),
+          fetchAllPublicExams().catch(() => []),
         ]);
         setExams(examList.filter((e) => resolveExamStatus(e) !== 'Draft'));
         setHistory(hist);
+        setPublicExams(pubs);
       } finally {
         setLoading(false);
       }
@@ -69,6 +74,23 @@ export default function StudentDashboard() {
   );
   const visibleExams = showAllExams ? sortedExams : sortedExams.slice(0, 3);
   const hiddenExamCount = Math.max(0, sortedExams.length - visibleExams.length);
+
+  const fenStats = useMemo(() => {
+    const followed = new Set(localDb.followedTeacherIds(user?.id).map(String));
+    const mine = user?.teacherId != null ? String(user.teacherId) : '';
+    const joined = new Set();
+    exams.forEach((exam) => joined.add(examSubject(exam)));
+    publicExams.forEach((exam) => {
+      const owner = String(exam.teacherId ?? exam.TeacherId ?? '');
+      if (followed.has(owner) || (mine && owner === mine)) joined.add(examSubject(exam));
+    });
+    history.forEach((item) => {
+      const exam = publicExams.find((e) => String(e.id) === String(item.examId))
+        || exams.find((e) => String(e.id) === String(item.examId));
+      if (exam) joined.add(examSubject(exam));
+    });
+    return subjectProgress(publicExams, history, Array.from(joined));
+  }, [publicExams, history, exams, user?.id, user?.teacherId]);
 
   const historyRows = (() => {
     const byExam = new Map();
@@ -105,6 +127,31 @@ export default function StudentDashboard() {
       <p className="mb-8 text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Tələbə'}</p>
 
       <WeeklyRanking variant="student" />
+
+      <div className="mb-10">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">Kabinet · fənnlər</h2>
+          <Button variant="secondary" onClick={() => navigate('/student/public')}>Ümumi zona</Button>
+        </div>
+        {fenStats.length === 0 ? (
+          <Card className="text-sm text-gray-500">
+            Ümumi zonada fənnə qoşulun (açıq imtahan açın və ya müəllim izləyin). Sonra burada həmin fənnin açıq imtahanlarından neçəsinə daxil olduğunuz görünəcək.
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {fenStats.map((row) => (
+              <Card key={row.subject}>
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Fənn</p>
+                <p className="mt-1 font-bold">{row.subject}</p>
+                <p className="mt-3 text-2xl font-black text-brand-600">
+                  {row.entered} / {row.total}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">açıq imtahana daxil olub</p>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div className="grid gap-5 sm:grid-cols-2">

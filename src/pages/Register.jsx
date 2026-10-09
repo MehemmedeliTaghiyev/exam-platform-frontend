@@ -14,17 +14,9 @@ const STUDENT_EMAIL_RE = /^[a-z0-9əöüğçşı]+\.[a-z0-9əöüğçşı]+_[a-z
 
 function Shell({ children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10 dark:bg-[#0b1220]">
-      <div className="w-full max-w-lg">
-        <div className="mb-4 flex justify-end">
-          <PublicNav />
-        </div>
-        <Link to="/" className="mb-8 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <GraduationCap size={20} />
-          </div>
-          <span className="text-lg font-bold text-ink dark:text-white">ExamPulse</span>
-        </Link>
+    <div className="min-h-screen bg-surface dark:bg-[#0b1220]">
+      <PublicNav />
+      <div className="mx-auto w-full max-w-lg px-4 py-10">
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
           {children}
         </div>

@@ -399,11 +399,15 @@ export default function QuestionBuilder() {
         pdfFileUrl: driveFileViewUrl(examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl })),
       });
       if (visibility === 'public' && user?.id) {
+        const prev = localDb.getPublicTeachers().find((t) => String(t.id) === String(user.id));
+        const subjects = new Set(prev?.subjects || []);
+        if (exam.subjectName) subjects.add(exam.subjectName);
         localDb.upsertPublicTeacher({
           id: user.id,
           fullName: user.fullName || user.email,
           position: user.position || 'Digər',
           email: user.email,
+          subjects: Array.from(subjects),
         });
       }
       dropTeacherPdf(id);
@@ -411,10 +415,10 @@ export default function QuestionBuilder() {
       setMessage(
         paperCount
           ? (visibility === 'public'
-            ? 'İmtahan açıq dərc olundu. Bölgənizdəki qeydiyyatlı şagirdlər görə bilər.'
+            ? 'İmtahan açıq dərc olundu. Ümumi zonada fənninizə görə görünür.'
             : 'İmtahan özəl dərc olundu. Yalnız sizin şagirdləriniz görəcək.')
           : (visibility === 'public'
-            ? 'İmtahan açıq dərc olundu. AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'
+            ? 'İmtahan açıq dərc olundu (ümumi zona). AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'
             : 'İmtahan özəl dərc olundu. AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'),
       );
       await load();

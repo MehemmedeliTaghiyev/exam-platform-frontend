@@ -626,6 +626,43 @@ export async function fetchPublicExamsForTeacher(teacherId) {
   return Array.from(map.values()).filter((e) => examVisibility(e) === 'public' && resolveExamStatus(e) !== 'Draft');
 }
 
+export async function fetchAllPublicExams() {
+  if (isPractice()) {
+    return practiceFetchExams()
+      .map((exam) => withExamVisibility({ ...exam, isPublic: true, visibility: 'public' }))
+      .filter((exam) => resolveExamStatus(exam) !== 'Draft');
+  }
+  const teachers = await fetchTeacherDirectory().catch(() => []);
+  const names = new Map(teachers.map((t) => [String(t.id), t.fullName]));
+  let remote = [];
+  try {
+    remote = unwrapList(await tryGet('/Exams'));
+  } catch {
+    remote = [];
+  }
+  const perTeacher = (await Promise.all(
+    teachers.map((t) => fetchPublicExamsForTeacher(t.id).catch(() => [])),
+  )).flat();
+  const local = localDb.getExams();
+  const map = new Map();
+  [...remote, ...perTeacher, ...local].forEach((exam) => {
+    const item = withCounts([exam])[0];
+    if (item?.id == null) return;
+    const vis = withExamVisibility(item);
+    if (examVisibility(vis) !== 'public' || resolveExamStatus(vis) === 'Draft') return;
+    const owner = String(examOwnerId(vis) ?? '');
+    map.set(String(vis.id), {
+      ...vis,
+      teacherName: vis.teacherName || names.get(owner) || vis.TeacherName || '',
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    const da = new Date(b.startTime || b.createdAt || 0).getTime();
+    const db = new Date(a.startTime || a.createdAt || 0).getTime();
+    return da - db;
+  });
+}
+
 function currentTeacherScope() {
   return currentUserSnapshot().scope;
 }

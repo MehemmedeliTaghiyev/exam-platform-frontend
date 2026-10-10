@@ -6,6 +6,8 @@ import { Button, Input } from '../components/ui';
 import AuthShell from '../components/AuthShell';
 import { computeAccessEnd, DEFAULT_TEACHER_TRIAL_DAYS, errorMessage } from '../lib/utils';
 import { publicJoinPath } from '../lib/publicGroup';
+import { wrapTrialMessage } from '../lib/driveLinks';
+import { createTeacherDriveFolder } from '../lib/teacherDrive';
 
 const TEACHER_EMAIL_HINT = 'ad_soyad@gmail.com';
 const TEACHER_EMAIL_RE = /^[a-z0-9əöüğçşı]+_[a-z0-9əöüğçşı]+@gmail\.com$/i;
@@ -41,13 +43,25 @@ function TeacherForm() {
     setLoading(true);
     const trialStartsAt = new Date().toISOString();
     const trialEndsAt = computeAccessEnd(trialStartsAt, 'FreeTrial', DEFAULT_TEACHER_TRIAL_DAYS);
-    const trialMessage = `${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq müddəti avtomatik başladı.`;
+    const fullName = [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim();
+    let driveFolderUrl = '';
+    try {
+      const folder = await createTeacherDriveFolder(fullName);
+      driveFolderUrl = folder?.url || '';
+    } catch {
+      driveFolderUrl = '';
+    }
+    const trialMessage = wrapTrialMessage(
+      `${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq müddəti avtomatik başladı.`,
+      driveFolderUrl,
+    );
     const payload = {
       ...formData,
       email,
       role: 'Teacher',
       Role: 'Teacher',
-      fullName: [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim(),
+      fullName,
+      driveFolderUrl,
       isAccessEnabled: true,
       IsAccessEnabled: true,
       trialDays: DEFAULT_TEACHER_TRIAL_DAYS,

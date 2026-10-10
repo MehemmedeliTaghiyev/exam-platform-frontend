@@ -5,6 +5,7 @@ import API from '../api/axios';
 import { Ban, CheckCircle2, Sparkles } from 'lucide-react';
 import { createTeacherAccount, setTeacherAiEnabled, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
 import { displayTrialMessage, driveFolderOpenUrl, teacherDriveFolderUrl } from '../lib/driveLinks';
+import { createTeacherDriveFolder, teacherFolderName } from '../lib/teacherDrive';
 import { localDb } from '../lib/localDb';
 import { AI_FEATURES, eventsFromTeacher, filterEventsByRange, groupUsageByDate, totalsByFeature } from '../lib/aiUsage';
 import {
@@ -267,6 +268,16 @@ export default function AdminTeachers() {
       const days = plan === 'Monthly' ? 30 : Math.max(1, Number(form.trialDays) || 14);
       const trialEndsAt = computeAccessEnd(trialStartsAt, plan, days);
       const billingPlan = plan === 'Monthly' ? 'Monthly' : 'Trial14';
+      let driveFolderUrl = form.driveFolderUrl.trim();
+      let driveNote = '';
+      if (!driveFolderUrl) {
+        try {
+          const folder = await createTeacherDriveFolder(teacherFolderName(form));
+          driveFolderUrl = folder?.url || '';
+        } catch (err) {
+          driveNote = errorMessage(err, 'Drive qovluğu yaranmadı. Hesab saxlanıldı.');
+        }
+      }
       if (edit) {
         await updateTeacherTrial(edit.id, {
           firstName: form.firstName.trim(),
@@ -278,10 +289,10 @@ export default function AdminTeachers() {
           trialDays: days,
           trialMessage: form.trialMessage,
           aiEnabled: form.aiEnabled === true,
-          driveFolderUrl: form.driveFolderUrl,
+          driveFolderUrl,
         });
         localDb.setTeacherAi(edit.id, form.aiEnabled === true);
-        localDb.setTeacherDriveFolder(edit.id, form.driveFolderUrl);
+        localDb.setTeacherDriveFolder(edit.id, driveFolderUrl);
       } else {
         const created = await createTeacherAccount({
           firstName: form.firstName.trim(),
@@ -296,14 +307,15 @@ export default function AdminTeachers() {
           trialDays: days,
           trialMessage: form.trialMessage,
           aiEnabled: form.aiEnabled === true,
-          driveFolderUrl: form.driveFolderUrl,
+          driveFolderUrl,
         });
         if (created?.id) {
           localDb.setTeacherAi(created.id, form.aiEnabled === true);
-          localDb.setTeacherDriveFolder(created.id, form.driveFolderUrl);
+          localDb.setTeacherDriveFolder(created.id, driveFolderUrl);
         }
       }
       setOpen(false);
+      if (driveNote) setError(driveNote);
       await load();
     } catch (err) {
       setError(errorMessage(err, 'Saxlanılmadı.'));

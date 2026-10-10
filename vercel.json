@@ -2,7 +2,8 @@
   "rewrites": [
     { "source": "/drive-pdf", "destination": "/api/drive-pdf" },
     { "source": "/drive-extract", "destination": "/api/drive-extract" },
-    { "source": "/((?!api/|drive-pdf|drive-extract).*)", "destination": "/index.html" }
+    { "source": "/drive-folder", "destination": "/api/drive-folder" },
+    { "source": "/((?!api/|drive-pdf|drive-extract|drive-folder).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/drive-extract.js": {

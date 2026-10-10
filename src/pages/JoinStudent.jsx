@@ -6,16 +6,14 @@ import { AuthContext } from '../context/AuthContext';
 import { Button, Input } from '../components/ui';
 import { fetchGroupInvite, registerStudentInvite } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
-import { isPublicGroupCode, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
-
-const EMAIL_HINT = 'ad.soyad_ataadi@gmail.com';
-const EMAIL_RE = /^[a-z0-9əöüğçşı]+\.[a-z0-9əöüğçşı]+_[a-z0-9əöüğçşı]+@gmail\.com$/i;
+import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
+import { buildStudentEmail, STUDENT_EMAIL_HINT, STUDENT_EMAIL_RE } from '../lib/studentEmail';
 
 export default function JoinStudent() {
   const { code } = useParams();
   const [params] = useSearchParams();
   const namedGroup = String(params.get('group') || '').trim();
-  const publicGroup = isPublicGroupCode(code);
+  const publicGroup = isPublicGroupCode(code) || isPublicGroupName(namedGroup);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
   const { dark, toggle } = useTheme();
@@ -24,13 +22,16 @@ export default function JoinStudent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(null);
+  const [emailEdited, setEmailEdited] = useState(false);
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
+    fatherName: '',
     phone: '',
     email: '',
     password: '',
   });
+  const suggestedEmail = buildStudentEmail(form.firstName, form.lastName, form.fatherName);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,15 +58,20 @@ export default function JoinStudent() {
     };
   }, [code, namedGroup, publicGroup]);
 
-  const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'email') setEmailEdited(value.trim() !== '' && value.trim().toLowerCase() !== suggestedEmail);
+    setForm((f) => ({ ...f, [name]: value }));
+  };
+
+  const email = (emailEdited ? form.email : suggestedEmail || form.email).trim().toLowerCase();
 
   const submit = async (e) => {
     e.preventDefault();
     if (saving) return;
     setError('');
-    const email = form.email.trim().toLowerCase();
-    if (!EMAIL_RE.test(email)) {
-      setError(`E-poçt ${EMAIL_HINT} formatında olmalıdır.`);
+    if (!STUDENT_EMAIL_RE.test(email)) {
+      setError(`E-poçt ${STUDENT_EMAIL_HINT} formatında olmalıdır. Ad, soyad və ata adı yazılanda ünvan özü yaranır. Adi Gmail qəbul olunmur.`);
       return;
     }
     setSaving(true);
@@ -74,6 +80,7 @@ export default function JoinStudent() {
         inviteCode: code,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
+        fatherName: form.fatherName.trim(),
         phone: form.phone.trim(),
         email,
         password: form.password,
@@ -90,7 +97,7 @@ export default function JoinStudent() {
             ...result,
             email,
             message: apiMsg
-              ? `Ümumi qrup pulsuzdur, icazə gözlənilmir. Server hələ girişi bağlamışdır: ${apiMsg} Fərdi müəllim linkində isə həmin müəllimin icazəsi lazımdır.`
+              ? `Hesab yaradıldı (${email}). Giriş hələ bağlıdır: ${apiMsg} Ümumi qrupun sahibi «Yeni şagirdlər»də «Giriş ver» basmalıdır.`
               : 'Ümumi qrupa yazıldınız. E-poçt və şifrə ilə daxil olun.',
           });
           return;
@@ -154,8 +161,8 @@ export default function JoinStudent() {
               <h1 className="text-2xl font-bold">Şagird qeydiyyatı</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {publicGroup
-                  ? 'Bu adminin Ümumi qrupudur. Yazıldıqdan sonra daxil olub müəllim tapa bilərsiniz.'
-                  : 'Qrup adı dəyişdirilə bilməz. Yeni şagird yalnız bu qrupu göndərən müəllimin hesabına düşür.'}
+                  ? 'Bu ümumi qrupdur. E-poçt ad.soyad_ataadi@gmail.com olur. Adi Gmail qəbul olunmur.'
+                  : 'Qrup adı dəyişdirilə bilməz. Yeni şagird yalnız bu qrupu göndərən müəllimin hesabına düşür. E-poçt ad.soyad_ataadi@gmail.com olmalıdır.'}
               </p>
               {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
               <form onSubmit={submit} className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -165,18 +172,28 @@ export default function JoinStudent() {
                 <Input label="Ad" name="firstName" required value={form.firstName} onChange={onChange} />
                 <Input label="Soyad" name="lastName" required value={form.lastName} onChange={onChange} />
                 <div className="sm:col-span-2">
+                  <Input label="Ata adı" name="fatherName" required value={form.fatherName} onChange={onChange} />
+                </div>
+                <div className="sm:col-span-2">
                   <Input label="Əlaqə nömrəsi" name="phone" required value={form.phone} onChange={onChange} />
                 </div>
                 <div className="sm:col-span-2">
                   <Input
-                    label={`E-poçt (${EMAIL_HINT})`}
-                    type="email"
+                    label={`E-poçt (${STUDENT_EMAIL_HINT})`}
+                    type="text"
+                    inputMode="email"
+                    autoComplete="off"
                     name="email"
                     required
-                    value={form.email}
+                    value={emailEdited ? form.email : suggestedEmail || form.email}
                     onChange={onChange}
-                    placeholder={EMAIL_HINT}
+                    placeholder={STUDENT_EMAIL_HINT}
                   />
+                  <p className="mt-1.5 text-xs text-gray-500">
+                    {suggestedEmail
+                      ? `Giriş ünvanı: ${suggestedEmail}`
+                      : 'Ad, soyad və ata adı yazın. Ünvan belə yaranır: nigar.eliyeva_veli@gmail.com'}
+                  </p>
                 </div>
                 <div className="sm:col-span-2">
                   <Input

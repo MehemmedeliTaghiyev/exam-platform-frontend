@@ -191,9 +191,10 @@ export default function ExamResult() {
   const isPersonal = Boolean(result?.studentExamId || reviewId);
   const examEnded = Boolean(user?.practice) || (examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded));
   const mistakes = questions.filter((q) => !q.unanswered && q.isCorrect === false);
+  const isStudent = user?.role === 'Student';
   const myId = String(user?.id || '');
-  const ownRank = boards.own.find((r) => String(r.studentId) === myId)?.rank;
   const generalRank = boards.general.find((r) => String(r.studentId) === myId)?.rank;
+  const ownRank = isStudent ? null : boards.own.find((r) => String(r.studentId) === myId)?.rank;
   const backTo = queryStudentId
     ? `/teacher/students/${queryStudentId}`
     : user?.role === 'Student'
@@ -206,10 +207,11 @@ export default function ExamResult() {
         {isPersonal && examEnded && (
           <Card className="text-center">
             <p className="text-sm text-gray-500">{result.examTitle || `İmtahan #${result.examId}`}</p>
-            {examEnded && (ownRank || generalRank || result.rank) ? (
+            {examEnded && (generalRank || (!isStudent && ownRank) || result.rank) ? (
               <p className="mt-2 text-sm font-medium text-brand-600">
-                Öz şagirdlər: {ownRank ? `#${ownRank}` : '—'}
-                {' · '}Ümumi: {generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}
+                {isStudent
+                  ? `Ümumi sıralama: ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}`
+                  : `Öz şagirdlər: ${ownRank ? `#${ownRank}` : '—'} · Ümumi: ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}`}
                 {result.submittedAt ? ` · Bitirmə: ${formatDateTime(result.submittedAt)}` : ''}
                 {result.startedAt && result.submittedAt
                   ? ` · Müddət: ${formatHms(result.durationSeconds ?? durationSecondsBetween(result.startedAt, result.submittedAt))}`
@@ -229,8 +231,12 @@ export default function ExamResult() {
               <StatCard icon={Award} label="Uğur faizi" value={`${scorePercentage}%`} />
               <StatCard
                 icon={Percent}
-                label="Öz / ümumi"
-                value={examEnded ? `${ownRank ? `#${ownRank}` : '—'} / ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}` : '—'}
+                label={isStudent ? 'Ümumi sıra' : 'Öz / ümumi'}
+                value={examEnded
+                  ? (isStudent
+                    ? (generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—'))
+                    : `${ownRank ? `#${ownRank}` : '—'} / ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}`)
+                  : '—'}
               />
               <StatCard icon={CheckCircle2} label="Düzgün" value={`${correct} / ${total}`} />
               <StatCard icon={XCircle} label="Səhv" value={result.wrongAnswersCount ?? Math.max(total - correct, 0)} />
@@ -271,7 +277,7 @@ export default function ExamResult() {
               </div>
             )}
 
-            <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
+            <DualExamRanking ownRows={boards.own} generalRows={boards.general} generalOnly={isStudent} />
           </>
         ) : (
           <div>

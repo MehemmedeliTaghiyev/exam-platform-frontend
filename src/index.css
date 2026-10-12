@@ -34,6 +34,14 @@ button {
   color-scheme: light;
 }
 
+button:not(:disabled) {
+  transition: transform 150ms ease, filter 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .dark input,
 .dark textarea,
 .dark select,

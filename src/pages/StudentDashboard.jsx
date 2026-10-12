@@ -10,6 +10,16 @@ import { localDb } from '../lib/localDb';
 import { examSubject, subjectProgress } from '../lib/publicExams';
 import { formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
 
+function resultLabel(item) {
+  if (!item || item.percent == null || item.percent === '') return '';
+  const pct = Math.round(Number(item.percent));
+  if (!Number.isFinite(pct)) return '';
+  if (item.correctAnswersCount != null && item.totalQuestions) {
+    return `${pct}% · ${item.correctAnswersCount}/${item.totalQuestions}`;
+  }
+  return `${pct}%`;
+}
+
 function examSortTime(exam) {
   return (
     parseExamDate(exam.startTime || exam.StartTime)?.getTime()
@@ -67,6 +77,43 @@ export default function StudentDashboard() {
     }
     navigate(`/student/exams/${exam.id}/review`);
   };
+
+  const attemptByExam = useMemo(() => {
+    const map = new Map();
+    history.forEach((item) => {
+      if (item?.examId == null) return;
+      const key = String(item.examId);
+      const prev = map.get(key);
+      if (!prev || (item.submittedAt && !prev.submittedAt)) map.set(key, item);
+    });
+    return map;
+  }, [history]);
+
+  const myExams = useMemo(() => {
+    const known = new Set();
+    const rows = exams.filter((exam) => attemptByExam.has(String(exam.id))).map((exam) => {
+      known.add(String(exam.id));
+      return exam;
+    });
+    attemptByExam.forEach((item, id) => {
+      if (known.has(id)) return;
+      rows.push({
+        id,
+        title: item.examTitle || `İmtahan #${id}`,
+        subjectName: item.subjectName || '',
+        totalQuestions: item.totalQuestions,
+        durationMinutes: item.durationMinutes,
+        startTime: item.submittedAt,
+        endTime: item.submittedAt,
+        status: 'Finished',
+      });
+    });
+    return rows.sort((a, b) => {
+      const ta = new Date(attemptByExam.get(String(a.id))?.submittedAt || 0).getTime();
+      const tb = new Date(attemptByExam.get(String(b.id))?.submittedAt || 0).getTime();
+      return tb - ta;
+    });
+  }, [exams, attemptByExam]);
 
   const sortedExams = useMemo(
     () => [...exams].sort((a, b) => examSortTime(b) - examSortTime(a)),
@@ -160,6 +207,27 @@ export default function StudentDashboard() {
         </div>
       ) : (
         <>
+          <h2 className="mb-4 text-lg font-bold">İmtahanlarım</h2>
+          {myExams.length === 0 ? (
+            <Card className="mb-10 text-sm text-gray-500">Hələ daxil olduğunuz imtahan yoxdur.</Card>
+          ) : (
+            <div className="mb-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {myExams.map((exam) => {
+                const attempt = attemptByExam.get(String(exam.id));
+                return (
+                  <ExamCard
+                    key={`mine-${exam.id}`}
+                    exam={exam}
+                    entered
+                    resultText={resultLabel(attempt)}
+                    actionLabel="Nəticələrə bax"
+                    onOpen={() => openExam(exam)}
+                  />
+                );
+              })}
+            </div>
+          )}
+
           <h2 className="mb-4 text-lg font-bold">Mövcud imtahanlar</h2>
           {exams.length === 0 ? (
             <EmptyState
@@ -181,13 +249,16 @@ export default function StudentDashboard() {
             <>
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {visibleExams.map((exam) => {
-                  const done = history.some((h) => String(h.examId) === String(exam.id));
+                  const attempt = attemptByExam.get(String(exam.id));
+                  const done = Boolean(attempt);
                   const live = isExamLive(exam);
                   const ended = isExamEnded(exam);
                   return (
                     <ExamCard
                       key={exam.id}
                       exam={exam}
+                      entered={done}
+                      resultText={resultLabel(attempt)}
                       actionLabel={
                         live && !done
                           ? 'İmtahana başla'

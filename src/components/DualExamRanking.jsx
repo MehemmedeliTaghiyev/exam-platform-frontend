@@ -1,7 +1,18 @@
 import LeaderboardTable from './LeaderboardTable';
 import { Card } from './ui';
 
-export default function DualExamRanking({ ownRows = [], generalRows = [] }) {
+export default function DualExamRanking({ ownRows = [], generalRows = [], generalOnly = false }) {
+  if (generalOnly) {
+    return (
+      <Card className="overflow-x-auto p-0">
+        <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
+          <h3 className="font-bold">Ümumi sıralama</h3>
+          <p className="mt-1 text-sm text-gray-500">Bu imtahana daxil olan bütün iştirakçılar.</p>
+        </div>
+        <LeaderboardTable rows={generalRows} emptyText="Hələ iştirakçı yoxdur." />
+      </Card>
+    );
+  }
   return (
     <div className="space-y-6">
       <Card className="overflow-x-auto p-0">

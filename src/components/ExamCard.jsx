@@ -3,12 +3,32 @@ import { Badge, Card } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
 import { examVisibility } from '../lib/examVisibility';
 import { isAiExam } from '../lib/questionDifficulty';
+import { displayExamDescription } from '../lib/driveLinks';
 
-export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', showTimes = false, teacherName = '', locked = false }) {
+function visibleExamTitle(exam) {
+  const note = displayExamDescription(exam);
+  const title = String(exam?.title || exam?.Title || '')
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .replace(/DRVFILE:\S+\s*/gi, '')
+    .trim();
+  return note || title || 'İmtahan';
+}
+
+export default function ExamCard({
+  exam,
+  onOpen,
+  onDelete,
+  actionLabel = 'Aç',
+  showTimes = false,
+  teacherName = '',
+  locked = false,
+  entered = false,
+  resultText = '',
+}) {
   const status = resolveExamStatus(exam);
   const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
   const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : status === 'Draft' ? 'Qaralama' : 'Scheduled';
-  const topic = exam.description || exam.title;
+  const topic = visibleExamTitle(exam);
   const subject = exam.subjectName || exam.subject;
   const ai = isAiExam(exam);
 
@@ -27,6 +47,9 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', 
           {teacherName ? (
             <p className="mt-1 text-xs text-gray-500">{teacherName}</p>
           ) : null}
+          {resultText ? (
+            <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">Nəticə: {resultText}</p>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {ai ? (
@@ -34,6 +57,7 @@ export default function ExamCard({ exam, onOpen, onDelete, actionLabel = 'Aç', 
               <Sparkles size={12} /> AI
             </span>
           ) : null}
+          {entered ? <Badge tone="success">Daxil olundu</Badge> : null}
           {locked ? (
             <Badge tone="neutral">
               <span className="inline-flex items-center gap-1"><Lock size={11} /> Özəl</span>

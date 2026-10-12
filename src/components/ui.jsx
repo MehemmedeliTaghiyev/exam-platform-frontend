@@ -22,7 +22,7 @@ export function Button({
     <button
       type={type}
       className={classNames(
-        'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.96] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
         styles[variant],
         className,
       )}
@@ -39,7 +39,7 @@ export function Card({ children, className = '', onClick }) {
       onClick={onClick}
       className={classNames(
         'rounded-2xl border border-gray-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900/80',
-        onClick && 'cursor-pointer hover:border-brand-200 dark:hover:border-brand-700 transition-all duration-200',
+        onClick && 'cursor-pointer hover:border-brand-200 active:scale-[0.98] active:brightness-95 dark:hover:border-brand-700 transition-all duration-150',
         className,
       )}
     >

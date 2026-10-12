@@ -42,6 +42,35 @@ button:active:not(:disabled) {
   transform: scale(0.96);
 }
 
+@keyframes exam-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.exam-fade-in {
+  animation: exam-fade-in 280ms ease;
+}
+
+@keyframes exam-timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
+}
+
+.exam-timer-urgent {
+  color: #ef4444;
+  animation: exam-timer-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes exam-saved-out {
+  0% { opacity: 0.8; }
+  65% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+.exam-saved {
+  animation: exam-saved-out 1s ease forwards;
+}
+
 .dark input,
 .dark textarea,
 .dark select,

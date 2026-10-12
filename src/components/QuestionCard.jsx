@@ -52,6 +52,19 @@ export function splitQuestionOptions(question) {
   return { options, open };
 }
 
+export function visibleStudentOptions(question) {
+  const raw = unwrapOptions(question?.options).filter((opt) => !isOpenChoiceOption(opt));
+  return raw.map((opt, index) => {
+    const letter = optionLetterOf(opt, index);
+    return {
+      id: opt?.id,
+      letter,
+      text: optionBody(opt, letter),
+      optionText: opt?.optionText || opt?.text || '',
+    };
+  }).filter((opt) => opt.id != null || opt.text || opt.optionText);
+}
+
 function QuestionImagePane({ src, teacher, dark, onPick, onRemove }) {
   const [zoom, setZoom] = useState(false);
   const fileRef = useRef(null);
@@ -213,6 +226,7 @@ export default function QuestionCard({
   const muted = dark ? 'text-indigo-200' : 'text-gray-500';
 
   const selectedId = selectedOptionId != null ? String(selectedOptionId) : '';
+  const studentOptions = visibleStudentOptions(question);
 
   const renderVariant = (opt, oi) => {
     const letter = opt.letter || LETTERS[oi];
@@ -236,12 +250,20 @@ export default function QuestionCard({
         type="button"
         disabled={disabled}
         onClick={click}
-        className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-200 ${
-          active ? variantOn : variantIdle
-        } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        className={teacher
+          ? `flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-200 ${
+            active ? variantOn : variantIdle
+          } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`
+          : `flex w-full select-none items-start gap-3 rounded-xl border px-3 py-3 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
+            active
+              ? 'border-[#4F46E5] bg-[#EEF2FF] text-[#4F46E5]'
+              : 'border-[#E5E7EB] bg-white text-[#1F2937] hover:border-[#C7D2FE]'
+          } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
       >
-        <span className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-          active ? (dark ? 'bg-amber-400 text-indigo-950' : 'bg-brand-600 text-white') : (dark ? 'bg-white/10' : 'bg-gray-100 dark:bg-slate-800')
+        <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+          teacher
+            ? (active ? (dark ? 'bg-amber-400 text-indigo-950' : 'bg-brand-600 text-white') : (dark ? 'bg-white/10' : 'bg-gray-100 dark:bg-slate-800'))
+            : (active ? 'bg-[#4F46E5] text-white' : 'bg-[#F3F4F6] text-[#1F2937]')
         }`}>{letter}</span>
         {editing && teacher ? (
           <input
@@ -260,28 +282,35 @@ export default function QuestionCard({
   const body = (
     <div className="flex items-start gap-3">
       <div className="min-w-0 flex-1 space-y-3">
-        <p className={`text-sm font-semibold ${muted}`}>Sual {index + 1}</p>
+        <p className={`text-sm font-semibold ${teacher ? muted : 'text-[#6B7280]'}`}>Sual {index + 1}</p>
         {editing && teacher ? (
           <Textarea rows={3} value={draftText} onChange={(e) => setDraftText(e.target.value)} />
-        ) : (
+        ) : teacher ? (
           <div className={textCard}>{stem || 'Sual mətni yoxdur'}</div>
+        ) : (
+          <div className="select-none text-[18px] font-medium leading-[1.5] text-[#1F2937]">{stem || 'Sual mətni yoxdur'}</div>
         )}
 
         <div className="space-y-2">
-          {(editing ? LETTERS.map((letter) => ({ letter, text: draftOpts[letter] || '', id: split.options.find((o) => o.letter === letter)?.id })) : split.options).map(renderVariant)}
+          {(teacher
+            ? (editing ? LETTERS.map((letter) => ({ letter, text: draftOpts[letter] || '', id: split.options.find((o) => o.letter === letter)?.id })) : split.options)
+            : studentOptions
+          ).map(renderVariant)}
           {!teacher && (
             <button
               type="button"
               disabled={disabled}
               onClick={() => onSelect?.({ id: split.open?.id || 'open', letter: 'OPEN' })}
-              className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm ${
-                selectedId === String(split.open?.id || 'open') ? variantOn : variantIdle
+              className={`flex w-full select-none items-center gap-3 rounded-xl border px-3 py-3 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
+                selectedId === String(split.open?.id || 'open')
+                  ? 'border-[#4F46E5] bg-[#EEF2FF] text-[#4F46E5]'
+                  : 'border-[#E5E7EB] bg-white text-[#1F2937] hover:border-[#C7D2FE]'
               }`}
             >
-              <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-lg px-1 text-xs font-bold ${
+              <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1 text-xs font-bold ${
                 selectedId === String(split.open?.id || 'open')
-                  ? (dark ? 'bg-amber-400 text-indigo-950' : 'bg-brand-600 text-white')
-                  : (dark ? 'bg-white/10' : 'bg-gray-100 dark:bg-slate-800')
+                  ? 'bg-[#4F46E5] text-white'
+                  : 'bg-[#F3F4F6] text-[#1F2937]'
               }`}>Açıq</span>
               Öz cavabınız
             </button>
@@ -365,5 +394,9 @@ export default function QuestionCard({
   );
 
   if (dark) return <div className={shell}>{body}</div>;
-  return <Card className={shell}>{body}</Card>;
+  return (
+    <Card className={teacher ? shell : 'border-[#E5E7EB] !bg-white text-[#1F2937] !shadow-[0_1px_3px_rgba(0,0,0,0.05)]'}>
+      {body}
+    </Card>
+  );
 }

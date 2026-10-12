@@ -27,6 +27,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+input,
+textarea,
+select,
+button {
+  color-scheme: light;
+}
+
+.dark input,
+.dark textarea,
+.dark select,
+.dark button {
+  color-scheme: dark;
+}
+
 .dark body {
   background: #0b1220;
   color: #e5e7eb;

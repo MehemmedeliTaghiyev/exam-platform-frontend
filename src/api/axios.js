@@ -39,7 +39,9 @@ API.interceptors.response.use(
     const url = String(err?.config?.url || '');
     const isLogin = url.includes('/Auth/login');
     if (!isLogin && err?.response?.status === 403 && code === 'ACCESS_CLOSED') {
-      window.dispatchEvent(new CustomEvent('access-closed'));
+      window.dispatchEvent(new CustomEvent('access-closed', {
+        detail: { message: typeof data?.message === 'string' ? data.message : '' },
+      }));
     }
     return Promise.reject(err);
   },

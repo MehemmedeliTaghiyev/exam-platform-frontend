@@ -160,7 +160,7 @@ export default function TeacherAiPanel() {
     }));
   };
 
-  const saveGenerated = async ({ publish }) => {
+  const saveGenerated = async ({ publish, visibility = 'private' }) => {
     if (busy) return;
     if (!generated.length) {
       setError('Əvvəl sualları hazırlayın.');
@@ -202,8 +202,12 @@ export default function TeacherAiPanel() {
           endTime: end.toISOString(),
           status,
           isDraft: false,
+          visibility,
+          isPublic: visibility === 'public',
         });
-        setMessage(`${cleaned.length} sual dərc olundu.`);
+        setMessage(visibility === 'public'
+          ? `${cleaned.length} sual açıq dərc olundu.`
+          : `${cleaned.length} sual özəl dərc olundu.`);
       } else {
         setMessage(`${cleaned.length} sual qaralama kimi saxlandı.`);
       }
@@ -330,10 +334,18 @@ Cavab: B`}</pre>
                 <Button
                   type="button"
                   disabled={busy}
-                  className="bg-amber-400 text-indigo-950 hover:bg-amber-300"
-                  onClick={() => saveGenerated({ publish: true })}
+                  className="border border-white bg-white text-gray-900 hover:bg-gray-100"
+                  onClick={() => saveGenerated({ publish: true, visibility: 'private' })}
                 >
-                  İmtahanı dərc et
+                  Özəl dərc et
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busy}
+                  className="bg-amber-400 text-indigo-950 hover:bg-amber-300"
+                  onClick={() => saveGenerated({ publish: true, visibility: 'public' })}
+                >
+                  Açıq dərc et
                 </Button>
               </div>
             </form>

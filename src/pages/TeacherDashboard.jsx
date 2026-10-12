@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
-import { Button, EmptyState, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
+import { Button, EmptyState, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, isExamDraft } from '../lib/utils';
 import AccessPeriodBanner from '../components/AccessPeriodBanner';
@@ -46,6 +46,7 @@ export default function TeacherDashboard() {
   const [startLocal, setStartLocal] = useState(() => toDatetimeLocalValue(new Date()));
   const [driveFileLink, setDriveFileLink] = useState('');
   const [folderUrl, setFolderUrl] = useState('');
+  const [visibility, setVisibility] = useState('private');
 
   formRef.current = {
     title,
@@ -57,6 +58,7 @@ export default function TeacherDashboard() {
     newSubject,
     startLocal,
     driveFileLink,
+    visibility,
   };
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function TeacherDashboard() {
       if (saved.newSubject) setNewSubject(saved.newSubject);
       if (saved.startLocal) setStartLocal(saved.startLocal);
       if (saved.driveFileLink) setDriveFileLink(saved.driveFileLink);
+      if (saved.visibility === 'public' || saved.visibility === 'private') setVisibility(saved.visibility);
     } catch {
       /* ignore */
     }
@@ -114,7 +117,7 @@ export default function TeacherDashboard() {
       localStorage.setItem(draftStorageKey(user?.id), JSON.stringify(formRef.current));
     }, 250);
     return () => clearTimeout(timer);
-  }, [showModal, title, description, questionCount, durationMinutes, subjectMode, subjectId, newSubject, startLocal, driveFileLink, user?.id]);
+  }, [showModal, title, description, questionCount, durationMinutes, subjectMode, subjectId, newSubject, startLocal, driveFileLink, visibility, user?.id]);
 
   const resetForm = () => {
     setTitle('');
@@ -122,6 +125,7 @@ export default function TeacherDashboard() {
     setNewSubject('');
     setStartLocal(toDatetimeLocalValue(new Date()));
     setDriveFileLink('');
+    setVisibility('private');
     setSubjectMode(subjects.length ? 'existing' : 'new');
     localStorage.removeItem(draftStorageKey(user?.id));
   };
@@ -166,6 +170,8 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
+        visibility: form.visibility === 'public' ? 'public' : 'private',
+        isPublic: form.visibility === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(form.driveFileLink)) || undefined,
       };
 
@@ -253,6 +259,8 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
+        visibility: visibility === 'public' ? 'public' : 'private',
+        isPublic: visibility === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(driveFileLink)) || undefined,
       };
 
@@ -351,14 +359,42 @@ export default function TeacherDashboard() {
       )}
 
       <Modal open={showModal} title="Yeni imtahan yarat" onClose={closeModal}>
-        <form onSubmit={handleCreateExam} className="space-y-4">
+        <form onSubmit={handleCreateExam} noValidate className="space-y-4">
+          <p className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100">
+            AI lazım deyil. İmtahanı özəl və ya açıq dərc edə bilərsiniz — ikisini də özünüz seçirsiniz.
+          </p>
           <Input label="İmtahan mövzusu" value={title} onChange={(e) => setTitle(e.target.value)} required />
           <Textarea
             label="Əlavə qeyd (istəyə bağlı)"
             rows={2}
+            className="bg-white text-gray-900 placeholder:text-gray-500 dark:bg-slate-900 dark:text-gray-100"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibility('private')}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                visibility === 'private'
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
+              }`}
+            >
+              Özəl
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibility('public')}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                visibility === 'public'
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
+              }`}
+            >
+              Açıq
+            </button>
+          </div>
           <div className="flex gap-2 rounded-xl bg-gray-50 p-1 dark:bg-slate-800">
             <button
               type="button"
@@ -422,24 +458,22 @@ export default function TeacherDashboard() {
               required
             />
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-gray-800 dark:text-gray-200">
             “Yarat” düyməsinə basmadan səhifədən çıxsanız imtahan qaralama kimi saxlanılacaq. Gələcək tarix
             seçsəniz imtahan Scheduled olacaq.
           </p>
           {folderUrl ? (
-            <a className="block text-sm font-medium text-brand-600 underline" href={folderUrl} target="_blank" rel="noreferrer">
+            <a className="block text-sm font-medium text-brand-700 underline dark:text-brand-300" href={folderUrl} target="_blank" rel="noreferrer">
               Drive qovluğunu açın — PDF-i ora yükləyin
             </a>
-          ) : (
-            <p className="text-xs text-amber-700">Drive qovluğu admin tərəfindən bağlanandan sonra burada görünəcək.</p>
-          )}
+          ) : null}
           <Input
             label="Bu imtahanın Drive fayl linki"
             value={driveFileLink}
             onChange={(e) => setDriveFileLink(e.target.value)}
             placeholder="https://drive.google.com/file/d/.../view"
           />
-          {error && <p className="text-sm text-red-600">{typeof error === 'string' ? error : 'Xəta baş verdi'}</p>}
+          <FormError message={typeof error === 'string' ? error : ''} />
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="secondary"

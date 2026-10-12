@@ -93,6 +93,44 @@ export function teacherPlanOf(user) {
 }
 
 export const DEFAULT_TEACHER_TRIAL_DAYS = 20;
+export const TRIAL_ENDED_MESSAGE = 'Sizin test müddəti bitib, davam etmək istəyirsinizsə adminlə əlaqə saxlayın.';
+
+function trialStorageKey(email) {
+  return `exampulse_trial_end_${String(email || '').trim().toLowerCase()}`;
+}
+
+export function rememberTeacherTrial(email, endsAt) {
+  try {
+    if (!email || !endsAt) return;
+    localStorage.setItem(trialStorageKey(email), endsAt);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function rememberedTrialEnded(email) {
+  try {
+    const ends = localStorage.getItem(trialStorageKey(email));
+    if (!ends) return false;
+    return new Date(ends).getTime() <= Date.now();
+  } catch {
+    return false;
+  }
+}
+
+export function trialHasEnded(user) {
+  if (!user) return false;
+  const plan = teacherPlanOf(user);
+  if (plan === 'Monthly') {
+    const ends = user.trialEndsAt || user.TrialEndsAt;
+    if (!ends) return false;
+    return new Date(ends).getTime() <= Date.now();
+  }
+  const start = user.trialStartsAt || user.TrialStartsAt || user.createdAt || user.CreatedAt;
+  const ends = user.trialEndsAt || user.TrialEndsAt || computeAccessEnd(start, 'FreeTrial', teacherTrialDaysOf(user));
+  if (!ends) return false;
+  return new Date(ends).getTime() <= Date.now();
+}
 
 export function teacherTrialDaysOf(user) {
   if (teacherPlanOf(user) === 'Monthly') return 30;
@@ -117,15 +155,19 @@ export function accessPeriodInfo(user) {
   const start = user?.trialStartsAt || user?.TrialStartsAt || user?.createdAt || user?.CreatedAt;
   const ends = user?.trialEndsAt || user?.TrialEndsAt || computeAccessEnd(start, plan, days);
   const left = remainingUsageLabel(ends);
+  const ended = left.days != null && left.days < 0;
   return {
     monthly,
     days,
     ends,
     left,
+    ended,
     title: monthly ? 'Aylıq istifadə müddəti' : 'Sınaq müddəti',
-    hint: monthly
-      ? 'Aylıq paket bitəndə giriş bağlanır. Admin müddəti yeniləyə bilər.'
-      : `Qeydiyyatdan sonra ${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq avtomatik başlayır. Bitəndə admin aylıq paket aça bilər.`,
+    hint: ended
+      ? TRIAL_ENDED_MESSAGE
+      : monthly
+        ? 'Aylıq paket bitəndə giriş bağlanır. Davam etmək üçün adminlə əlaqə saxlayın.'
+        : `Qeydiyyatdan sonra ${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq avtomatik başlayır. Admin təsdiqi gözlənilmir.`,
   };
 }
 
@@ -277,7 +319,7 @@ export function errorMessage(err, fallback = 'Xəta baş verdi') {
     const parts = Object.values(data.errors).flatMap((v) => (Array.isArray(v) ? v : [v]))
       .map((x) => (typeof x === 'string' ? x : x == null ? '' : JSON.stringify(x)))
       .filter(Boolean);
-    if (parts.length) return parts.join(' ');
+    if (parts.length) return parts.join('\n');
   }
   if (typeof data?.message === 'string') {
     return data.detail ? `${data.message} (${data.detail})` : data.message;

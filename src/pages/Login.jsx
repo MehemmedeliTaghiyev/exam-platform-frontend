@@ -1,14 +1,15 @@
 import { useContext, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { Button, Input } from '../components/ui';
+import { Button, FormError, Input } from '../components/ui';
 import AuthShell from '../components/AuthShell';
-import { errorMessage } from '../lib/utils';
+import { errorMessage, rememberedTrialEnded, TRIAL_ENDED_MESSAGE } from '../lib/utils';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const location = useLocation();
+  const [error, setError] = useState(location.state?.notice || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -24,7 +25,12 @@ export default function Login() {
       else navigate('/student');
     } catch (err) {
       if (err?.response?.data?.code === 'ACCESS_CLOSED') {
-        setError(err.response.data.message || 'Hesabınız bağlanıb. Giriş üçün adminə müraciət edin.');
+        const apiMsg = String(err.response.data.message || '');
+        const ended = rememberedTrialEnded(email) || /test müddəti|sınaq müddəti|trial/i.test(apiMsg);
+        if (ended) setError(TRIAL_ENDED_MESSAGE);
+        else if (/müəllim təsdiq/i.test(apiMsg)) setError(apiMsg);
+        else if (/admin təsdiq/i.test(apiMsg)) setError('20 günlük sınaq başlayıb. Admin təsdiqi gözlənilmir. E-poçt və şifrəni yoxlayıb yenidən daxil olun.');
+        else setError(apiMsg || 'Giriş hazırda bağlıdır. Məlumatları yoxlayıb yenidən cəhd edin.');
       } else {
         setError(errorMessage(err, 'Giriş uğursuz oldu. E-poçt və ya şifrə yanlışdır.'));
       }
@@ -44,7 +50,7 @@ export default function Login() {
       <p className="mt-1 text-sm text-slate-500">
         Müəllimin verdiyi e-poçt ilə daxil olun. Repetitorunuz varsa, o sizə giriş açmalıdır. Yoxdursa, qeydiyyatdan keçib bölgə müəllimlərini görün.
       </p>
-      {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
+      {error ? <div className="mt-4"><FormError message={error} /></div> : null}
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <Input label="E-poçt və ya istifadəçi adı" type="text" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <Input label="Şifrə" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { GraduationCap, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { AuthContext } from '../context/AuthContext';
-import { Button, Input } from '../components/ui';
+import { Button, FormError, Input } from '../components/ui';
 import { fetchGroupInvite, registerStudentInvite } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
@@ -70,8 +70,19 @@ export default function JoinStudent() {
     e.preventDefault();
     if (saving) return;
     setError('');
+    const problems = [];
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.fatherName.trim()) {
+      problems.push('Ad, soyad və ata adını yazın.');
+    }
+    if (!/^\+?\d[\d\s()-]{6,}$/.test(form.phone.trim())) {
+      problems.push('Əlaqə nömrəsini rəqəmlə yazın. Məsələn: 0501234567.');
+    }
     if (!STUDENT_EMAIL_RE.test(email)) {
-      setError(`E-poçt ${STUDENT_EMAIL_HINT} formatında olmalıdır. Ad, soyad və ata adı yazılanda ünvan özü yaranır. Adi Gmail qəbul olunmur.`);
+      problems.push(`E-poçt ${STUDENT_EMAIL_HINT} olmalıdır. Ad, soyad və ata adı yazılanda ünvan özü yaranır. Adi Gmail qəbul olunmur.`);
+    }
+    if (String(form.password || '').length < 4) problems.push('Şifrə ən azı 4 simvol olmalıdır.');
+    if (problems.length) {
+      setError(problems.join('\n'));
       return;
     }
     setSaving(true);
@@ -164,8 +175,8 @@ export default function JoinStudent() {
                   ? 'Bu ümumi qrupdur. E-poçt ad.soyad_ataadi@gmail.com olur. Adi Gmail qəbul olunmur.'
                   : 'Qrup adı dəyişdirilə bilməz. Yeni şagird yalnız bu qrupu göndərən müəllimin hesabına düşür. E-poçt ad.soyad_ataadi@gmail.com olmalıdır.'}
               </p>
-              {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-              <form onSubmit={submit} className="mt-6 grid gap-4 sm:grid-cols-2">
+              {error ? <div className="mt-4 sm:col-span-2"><FormError message={error} /></div> : null}
+              <form onSubmit={submit} noValidate className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <Input label="Qrup" value={preview.groupName} readOnly disabled />
                 </div>

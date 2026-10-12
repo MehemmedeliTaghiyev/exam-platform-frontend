@@ -442,14 +442,14 @@ export default function QuestionBuilder() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
+            className="border border-gray-300 bg-white text-gray-900"
             onClick={() => publishDraft('private')}
-            disabled={!questions.length && !parseDriveFileId(driveLink) && !examDriveFileId(exam)}
           >
             Özəl dərc et
           </Button>
           <Button
+            className="bg-brand-600 text-white"
             onClick={() => publishDraft('public')}
-            disabled={!questions.length && !parseDriveFileId(driveLink) && !examDriveFileId(exam)}
           >
             Açıq dərc et
           </Button>
@@ -468,8 +468,12 @@ export default function QuestionBuilder() {
         </div>
       )}
 
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100">
+        AI lazım deyil. Faylı bağlayın və ya sual yazın, sonra yuxarıdan <strong>Özəl dərc et</strong> və ya <strong>Açıq dərc et</strong> seçin.
+      </div>
+
       {message && (
-        <p className="mb-4 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:bg-brand-950/40 dark:text-brand-200">
+        <p className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100">
           {message}
         </p>
       )}
@@ -509,18 +513,14 @@ export default function QuestionBuilder() {
             </p>
             {folderUrl ? (
               <a
-                className="mb-4 inline-block text-sm font-medium text-brand-600 underline"
+                className="mb-4 inline-block text-sm font-medium text-brand-700 underline dark:text-brand-300"
                 href={folderUrl}
                 target="_blank"
                 rel="noreferrer"
               >
                 Sizin Drive qovluğunu açın
               </a>
-            ) : (
-              <p className="mb-4 text-sm text-amber-700">
-                Qovluq linki hələ yazılmayıb. Admin Drive qovluğunu sizin hesaba bağlayandan sonra burada görünəcək.
-              </p>
-            )}
+            ) : null}
             <form onSubmit={handleSaveDrive} className="space-y-4">
               <Input
                 label="Bu imtahanın Drive fayl linki"

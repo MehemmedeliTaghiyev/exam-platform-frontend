@@ -14,8 +14,10 @@ export default function AccessPeriodBanner({ user }) {
         </div>
         <div>
           <p className="text-sm font-bold text-ink dark:text-white">{info.title}</p>
-          <p className={`mt-1 text-sm ${info.left.className}`}>{info.left.text}</p>
-          <p className="mt-1 text-xs text-gray-500">{info.hint}</p>
+          <p className={`mt-1 text-sm ${info.ended ? 'font-semibold text-red-700 dark:text-red-300' : info.left.className}`}>
+            {info.ended ? info.hint : info.left.text}
+          </p>
+          {info.ended ? null : <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{info.hint}</p>}
         </div>
       </div>
     </Card>

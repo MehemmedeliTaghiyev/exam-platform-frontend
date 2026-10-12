@@ -1,7 +1,7 @@
 import { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
-import { isAiEnabled, normalizeRole } from '../lib/utils';
+import { isAiEnabled, normalizeRole, TRIAL_ENDED_MESSAGE, trialHasEnded } from '../lib/utils';
 import { teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
 import { clearPractice, practiceUser, setPracticeRole } from '../lib/practice';
@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accessClosed, setAccessClosed] = useState(false);
+  const [accessNote, setAccessNote] = useState('');
   const navigate = useNavigate();
 
   const logout = () => {
@@ -85,8 +86,20 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const onClosed = () => {
+    const onClosed = (event) => {
+      let stored = null;
+      try {
+        stored = JSON.parse(localStorage.getItem('user') || 'null');
+      } catch {
+        stored = null;
+      }
+      const apiMsg = String(event?.detail?.message || '');
+      const ended = trialHasEnded(stored) || /test müddəti|sınaq müddəti|trial/i.test(apiMsg);
+      const teacher = normalizeRole(stored?.role) === 'Teacher';
       logout();
+      if (ended) setAccessNote(TRIAL_ENDED_MESSAGE);
+      else if (teacher && /admin təsdiq/i.test(apiMsg)) setAccessNote('20 günlük sınaq davam edir. Admin təsdiqi gözlənilmir.');
+      else setAccessNote(apiMsg || 'Giriş hazırda bağlıdır.');
       setAccessClosed(true);
     };
     window.addEventListener('access-closed', onClosed);
@@ -134,9 +147,11 @@ export const AuthProvider = ({ children }) => {
       {accessClosed && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl dark:bg-slate-900">
-            <h1 className="text-2xl font-bold text-ink dark:text-white">Pəncərə bağlıdır</h1>
-            <p className="mt-3 text-sm text-gray-500">
-              Hesabınızın girişi bağlanıb. Ödəniş edəndən sonra admin pəncərəni açacaq.
+            <h1 className="text-2xl font-bold text-ink dark:text-white">
+              {accessNote === TRIAL_ENDED_MESSAGE ? 'Sınaq müddəti bitib' : 'Giriş bağlıdır'}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-gray-700 dark:text-gray-200">
+              {accessNote || 'Giriş hazırda bağlıdır.'}
             </p>
             <Button
               className="mt-6 w-full"

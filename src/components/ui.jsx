@@ -160,6 +160,25 @@ export function EmptyState({ title, text, action }) {
   );
 }
 
+export function FormError({ message }) {
+  if (!message) return null;
+  const lines = String(message).split('\n').map((line) => line.trim()).filter(Boolean);
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100" role="alert">
+      <p className="font-semibold text-red-900 dark:text-red-50">Məlumatı yoxlayın</p>
+      {lines.length === 1 ? (
+        <p className="mt-1 leading-5">{lines[0]}</p>
+      ) : (
+        <ul className="mt-1 list-disc space-y-1 pl-4 leading-5">
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function Badge({ children, tone = 'neutral' }) {
   const tones = {
     neutral: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-300',

@@ -176,15 +176,13 @@ export default function TeacherCabinet() {
         <h2 className="text-lg font-bold">Şəxsi məlumatlar</h2>
         <p className="mt-1 text-sm text-gray-500">Konum (yer) hesabınızda qeyd olunmalıdır.</p>
         {driveFolderUrl ? (
-          <p className="mt-3 text-sm">
+          <p className="mt-3 text-sm text-gray-800 dark:text-gray-200">
             Drive qovluğu:{' '}
-            <a className="font-medium text-brand-600 underline" href={driveFolderUrl} target="_blank" rel="noreferrer">
+            <a className="font-medium text-brand-700 underline dark:text-brand-300" href={driveFolderUrl} target="_blank" rel="noreferrer">
               qovluğu aç
             </a>
           </p>
-        ) : (
-          <p className="mt-3 text-sm text-amber-700">Drive qovluğu hələ admin tərəfindən bağlanmayıb.</p>
-        )}
+        ) : null}
         <form onSubmit={saveProfile} className="mt-4 grid gap-4 sm:grid-cols-2">
           <Input label="Ad" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} required />
           <Input label="Soyad" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} required />

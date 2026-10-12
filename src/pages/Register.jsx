@@ -2,15 +2,13 @@ import { useContext, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, Users } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
-import { Button, Input } from '../components/ui';
+import { Button, FormError, Input } from '../components/ui';
 import AuthShell from '../components/AuthShell';
-import { computeAccessEnd, DEFAULT_TEACHER_TRIAL_DAYS, errorMessage } from '../lib/utils';
+import { computeAccessEnd, DEFAULT_TEACHER_TRIAL_DAYS, errorMessage, rememberTeacherTrial } from '../lib/utils';
 import { publicJoinPath } from '../lib/publicGroup';
 import { wrapTrialMessage } from '../lib/driveLinks';
 import { createTeacherDriveFolder } from '../lib/teacherDrive';
-
-const TEACHER_EMAIL_HINT = 'ad_soyad@gmail.com';
-const TEACHER_EMAIL_RE = /^[a-z0-9əöüğçşı]+_[a-z0-9əöüğçşı]+@gmail\.com$/i;
+import { buildTeacherEmail, TEACHER_EMAIL_HINT, TEACHER_EMAIL_RE } from '../lib/studentEmail';
 
 function Shell({ children }) {
   return <AuthShell wide>{children}</AuthShell>;
@@ -25,19 +23,34 @@ function TeacherForm() {
     email: '',
     password: '',
   });
+  const [emailEdited, setEmailEdited] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register, login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const suggestedEmail = buildTeacherEmail(formData.firstName, formData.lastName);
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'email') {
+      setEmailEdited(value.trim() !== '' && value.trim().toLowerCase() !== suggestedEmail);
+    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const email = (emailEdited ? formData.email : suggestedEmail || formData.email).trim().toLowerCase();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const email = formData.email.trim().toLowerCase();
-    if (!TEACHER_EMAIL_RE.test(email)) {
-      setError(`E-poçt ${TEACHER_EMAIL_HINT} formatında olmalıdır.`);
+    const problems = [];
+    if (!formData.firstName.trim() || !formData.lastName.trim()) problems.push('Ad və soyadı yazın.');
+    if (!formData.position.trim()) problems.push('Konum yazın. Məsələn: Bakı, Nəsimi.');
+    if (!/^\+?\d[\d\s()-]{6,}$/.test(formData.phone.trim())) problems.push('Əlaqə nömrəsini rəqəmlə yazın. Məsələn: 0501234567.');
+    if (!TEACHER_EMAIL_RE.test(email)) problems.push(`E-poçt ${TEACHER_EMAIL_HINT} olmalıdır. Ad və soyad yazılanda ünvan özü yaranır.`);
+    if (String(formData.password || '').length < 4) problems.push('Şifrə ən azı 4 simvol olmalıdır.');
+    if (problems.length) {
+      setError(problems.join('\n'));
       return;
     }
     setLoading(true);
@@ -76,17 +89,21 @@ function TeacherForm() {
       TrialMessage: trialMessage,
     };
     try {
+      rememberTeacherTrial(email, trialEndsAt);
       await register(payload);
       try {
         await login({ email, password: formData.password });
         navigate('/teacher');
         return;
-      } catch {
-        setError('Hesab yaradıldı, amma avtomatik giriş alınmadı. E-poçt və şifrə ilə daxil olun.');
-        navigate('/login');
+      } catch (err) {
+        const apiMsg = String(err?.response?.data?.message || '');
+        const notice = err?.response?.data?.code === 'ACCESS_CLOSED' && /təsdiq/i.test(apiMsg)
+          ? 'Hesab yaradıldı və 20 günlük sınaq başladı. Admin təsdiqi gözlənilmir. E-poçt və şifrə ilə daxil olun.'
+          : 'Hesab yaradıldı. E-poçt və şifrə ilə daxil olun.';
+        navigate('/login', { state: { notice } });
       }
     } catch (err) {
-      setError(errorMessage(err, 'Qeydiyyat zamanı xəta baş verdi.'));
+      setError(errorMessage(err, 'Qeydiyyat zamanı xəta baş verdi. Yazılan məlumatı yoxlayın.'));
     } finally {
       setLoading(false);
     }
@@ -98,21 +115,28 @@ function TeacherForm() {
       <p className="mt-1 text-sm text-gray-500">
         Konum mütləqdir. Qeydiyyatdan sonra hesabınız dərhal açılır və {DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq başlayır — admin təsdiqi lazım deyil.
       </p>
-      {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      {error ? <div className="mt-4"><FormError message={error} /></div> : null}
+      <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
         <Input label="Ad" name="firstName" value={formData.firstName} onChange={handleChange} required />
         <Input label="Soyad" name="lastName" value={formData.lastName} onChange={handleChange} required />
         <Input label="Konum" name="position" value={formData.position} onChange={handleChange} required placeholder="məs. Bakı, Nəsimi" />
         <Input label="Əlaqə nömrəsi" name="phone" value={formData.phone} onChange={handleChange} required placeholder="0501234567" />
-        <Input
-          label={`E-poçt (${TEACHER_EMAIL_HINT})`}
-          type="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          required
-          placeholder={TEACHER_EMAIL_HINT}
-        />
+        <div>
+          <Input
+            label={`E-poçt (${TEACHER_EMAIL_HINT})`}
+            type="text"
+            inputMode="email"
+            autoComplete="off"
+            name="email"
+            value={emailEdited ? formData.email : suggestedEmail || formData.email}
+            onChange={handleChange}
+            required
+            placeholder={TEACHER_EMAIL_HINT}
+          />
+          <p className="mt-1.5 text-xs text-gray-600 dark:text-gray-300">
+            {suggestedEmail ? `Giriş ünvanı: ${suggestedEmail}` : 'Ad və soyad yazın. Ünvan belə yaranır: aysel_eliyeva@gmail.com'}
+          </p>
+        </div>
         <Input label="Şifrə" type="password" name="password" value={formData.password} onChange={handleChange} required minLength={4} />
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? 'Qeydiyyat edilir...' : 'Qeydiyyatdan keç və daxil ol'}

@@ -13,7 +13,9 @@ export default function JoinStudent() {
   const { code } = useParams();
   const [params] = useSearchParams();
   const namedGroup = String(params.get('group') || '').trim();
+  const icaze = String(params.get('icaze') || '').trim().toLowerCase();
   const publicGroup = isPublicGroupCode(code) || isPublicGroupName(namedGroup);
+  const openJoin = publicGroup || icaze === 'yox' || icaze === '0';
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
   const { dark, toggle } = useTheme();
@@ -95,9 +97,9 @@ export default function JoinStudent() {
         phone: form.phone.trim(),
         email,
         password: form.password,
-        independent: publicGroup,
+        independent: openJoin,
       });
-      if (publicGroup) {
+      if (openJoin) {
         try {
           await login({ email, password: form.password });
           navigate('/student');
@@ -108,8 +110,8 @@ export default function JoinStudent() {
             ...result,
             email,
             message: apiMsg
-              ? `Hesab yaradıldı (${email}). Giriş hələ bağlıdır: ${apiMsg} Ümumi qrupun sahibi «Yeni şagirdlər»də «Giriş ver» basmalıdır.`
-              : 'Ümumi qrupa yazıldınız. E-poçt və şifrə ilə daxil olun.',
+              ? `Hesab yaradıldı (${email}). Bu qrupda müəllim icazəsi tələb olunmur. Giriş hələ açılmayıbsa bir neçə saniyə sonra yenidən daxil olun.`
+              : 'Qrupa yazıldınız. E-poçt və şifrə ilə daxil ola bilərsiniz.',
           });
           return;
         }
@@ -153,8 +155,8 @@ export default function JoinStudent() {
               <h1 className="text-2xl font-bold">Qeydiyyat göndərildi</h1>
               <p className="mt-3 text-sm text-gray-500">
                 {done.message
-                  || (publicGroup
-                    ? 'Ümumi qrupa yazıldınız. E-poçt və şifrə ilə daxil ola bilərsiniz.'
+                  || (openJoin
+                    ? 'Qrupa yazıldınız. E-poçt və şifrə ilə daxil ola bilərsiniz.'
                     : 'Müəllim «Yeni şagirdlər»də icazə verdikdən sonra e-poçt və şifrə ilə daxil ola bilərsiniz. Şifrəni yadda saxlayın.')}
               </p>
               <p className="mt-2 text-sm font-medium">{done.email}</p>
@@ -172,8 +174,10 @@ export default function JoinStudent() {
               <h1 className="text-2xl font-bold">Şagird qeydiyyatı</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {publicGroup
-                  ? 'Bu ümumi qrupdur. E-poçt ad.soyad_ataadi@gmail.com olur. Adi Gmail qəbul olunmur.'
-                  : 'Qrup adı dəyişdirilə bilməz. Yeni şagird yalnız bu qrupu göndərən müəllimin hesabına düşür. E-poçt ad.soyad_ataadi@gmail.com olmalıdır.'}
+                  ? 'Bu ümumi qrupdur. E-poçt ad.soyad_ataadi@gmail.com olur. Adi Gmail qəbul olunmur. Müəllimin icazəsi tələb olunmur.'
+                  : openJoin
+                    ? 'Bu qrupda müəllimin icazəsi tələb olunmur. Qeydiyyatdan sonra e-poçt və şifrə ilə daxil ola bilərsiniz.'
+                    : 'Qrup adı dəyişdirilə bilməz. Yeni şagird yalnız bu qrupu göndərən müəllimin hesabına düşür və icazədən sonra daxil olur. E-poçt ad.soyad_ataadi@gmail.com olmalıdır.'}
               </p>
               {error ? <div className="mt-4 sm:col-span-2"><FormError message={error} /></div> : null}
               <form onSubmit={submit} noValidate className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -218,8 +222,8 @@ export default function JoinStudent() {
                   />
                 </div>
                 <p className="sm:col-span-2 text-xs text-gray-500">
-                  {publicGroup
-                    ? 'Şifrəni yadda saxlayın. Bu siyahı adminin «Yeni şagirdlər»inə düşmür.'
+                  {openJoin
+                    ? 'Şifrəni yadda saxlayın. Bu qrupda «Giriş ver» gözlənilmir.'
                     : 'Şifrəni yadda saxlayın. Göndərdikdən sonra yalnız bu müəllimin «Yeni şagirdlər» siyahısına düşəcəksiniz.'}
                 </p>
                 <div className="sm:col-span-2">

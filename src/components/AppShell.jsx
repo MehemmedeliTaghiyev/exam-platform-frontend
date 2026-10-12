@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import {
   BookOpen,
   Users,
@@ -21,6 +21,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { AI_FEATURE_OPEN } from '../lib/driveLinks';
 import { normalizeRole, classNames } from '../lib/utils';
+import { releaseOpenGroupStudents } from '../lib/examApi';
 
 const navByRole = {
   Teacher: [
@@ -52,6 +53,10 @@ export default function AppShell({ title, children, mainClassName = '' }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const role = normalizeRole(user?.role);
+  useEffect(() => {
+    if (!user || user.practice || role !== 'Teacher') return;
+    releaseOpenGroupStudents().catch(() => {});
+  }, [user, role]);
   const links = (navByRole[role] || navByRole.Student).filter((item) => {
     if (!AI_FEATURE_OPEN && item.to === '/teacher/ai') return false;
     if (user?.practice) {

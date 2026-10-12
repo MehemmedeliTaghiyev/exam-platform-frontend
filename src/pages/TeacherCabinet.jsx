@@ -15,6 +15,7 @@ import {
   DUPLICATE_GROUP_MESSAGE,
 } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
+import { groupNeedsApproval } from '../lib/groupApproval';
 import AccessPeriodBanner from '../components/AccessPeriodBanner';
 
 function inGroup(student, group) {
@@ -39,6 +40,7 @@ export default function TeacherCabinet() {
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
   const [schedule, setSchedule] = useState('');
+  const [needsApproval, setNeedsApproval] = useState(true);
   const [profile, setProfile] = useState({
     firstName: '',
     lastName: '',
@@ -92,6 +94,7 @@ export default function TeacherCabinet() {
       name: name.trim(),
       number: number.trim() || name.trim(),
       schedule,
+      approvalRequired: needsApproval,
     };
     if (findLocalDuplicate(groups, payload)) {
       setError(DUPLICATE_GROUP_MESSAGE);
@@ -104,6 +107,7 @@ export default function TeacherCabinet() {
       setName('');
       setNumber('');
       setSchedule('');
+      setNeedsApproval(true);
       setOpen(false);
       await load();
     } catch (err) {
@@ -215,6 +219,9 @@ export default function TeacherCabinet() {
                   <h3 className="text-lg font-bold">{g.number || g.name}</h3>
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge>{count} tələbə</Badge>
+                    <Badge tone={groupNeedsApproval(g) ? 'warning' : 'success'}>
+                      {groupNeedsApproval(g) ? 'İcazə lazımdır' : 'İcazə lazım deyil'}
+                    </Badge>
                     <Button
                       variant="ghost"
                       className="px-2 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
@@ -245,6 +252,38 @@ export default function TeacherCabinet() {
             onChange={(e) => setSchedule(e.target.value)}
             placeholder={'Bazar ertəsi 15:00\nÇərşənbə 17:00'}
           />
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">Şagird qeydiyyatı</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setNeedsApproval(true)}
+                className={`rounded-xl border px-3 py-2 text-left text-sm font-semibold ${
+                  needsApproval
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
+                }`}
+              >
+                İcazəm lazımdır
+              </button>
+              <button
+                type="button"
+                onClick={() => setNeedsApproval(false)}
+                className={`rounded-xl border px-3 py-2 text-left text-sm font-semibold ${
+                  needsApproval
+                    ? 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
+                    : 'border-brand-600 bg-brand-600 text-white'
+                }`}
+              >
+                İcazə lazım deyil
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              {needsApproval
+                ? 'Şagird qeydiyyatdan sonra «Yeni şagirdlər»də siz «Giriş ver» basandan sonra daxil olur.'
+                : 'Ümumi qrup kimi: şagird qeydiyyatdan sonra icazə gözləmədən daxil ola bilər.'}
+            </p>
+          </div>
           {error && <p className="text-sm text-amber-700 dark:text-amber-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" disabled={saving} onClick={closeModal}>

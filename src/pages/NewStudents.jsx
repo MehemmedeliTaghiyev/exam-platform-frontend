@@ -75,7 +75,7 @@ export default function NewStudents() {
   return (
     <AppShell title="Yeni şagirdlər">
       <p className="mb-6 text-sm text-gray-500">
-        Qrup linkindən qeydiyyatı tamamlayan şagirdlər burada, aid olduqları qrupun altında görünür. İcazə verdikdən sonra şagird e-poçt və şifrə ilə daxil ola bilər.
+        Qrup linkindən yazılan şagirdlər burada görünür. İcazə tələb olunan qrupda «Giriş ver» basırsınız. İcazəsiz qrupda giriş özü açılır.
       </p>
       {error && <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
       {loading ? (

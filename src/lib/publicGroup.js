@@ -16,5 +16,5 @@ export function isPublicGroupName(name) {
 }
 
 export function publicJoinPath() {
-  return `/join/${encodeURIComponent(PUBLIC_GROUP_CODE)}?group=${encodeURIComponent(PUBLIC_GROUP_NAME)}`;
+  return `/join/${encodeURIComponent(PUBLIC_GROUP_CODE)}?group=${encodeURIComponent(PUBLIC_GROUP_NAME)}&icaze=yox`;
 }

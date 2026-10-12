@@ -5,6 +5,7 @@ import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
 import { createStudentAccount, deleteGroup, deleteStudentAccount, ensureGroupOnServer, fetchGroup, fetchStudents, groupInviteSlug, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
+import { groupNeedsApproval } from '../lib/groupApproval';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
 
 const emptyForm = {
@@ -231,7 +232,12 @@ export default function GroupDetail() {
           <Button variant="ghost" onClick={() => navigate('/teacher/cabinet')}>
             <ArrowLeft size={16} /> Kabinet
           </Button>
-          <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule}</p>
+          <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule || 'Dərs cədvəli əlavə edilməyib'}</p>
+          <div className="mt-3">
+            <Badge tone={groupNeedsApproval(group) ? 'warning' : 'success'}>
+              {groupNeedsApproval(group) ? 'Şagird üçün icazə lazımdır' : 'Şagird icazəsiz daxil olur'}
+            </Badge>
+          </div>
           {error && !open && !editing && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -259,7 +265,7 @@ export default function GroupDetail() {
                   navigate(`/teacher/groups/${saved.id}`, { replace: true });
                 }
                 const slug = groupInviteSlug(saved);
-                const url = groupInviteUrl(slug, saved.name || saved.number || groupLabel);
+                const url = groupInviteUrl(slug, saved.name || saved.number || groupLabel, groupNeedsApproval(saved));
                 if (!url) {
                   setError('Qrup serverə yazılmadı. Bir az sonra yenidən yoxlayın.');
                   return;

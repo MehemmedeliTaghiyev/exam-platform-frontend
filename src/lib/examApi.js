@@ -4,6 +4,7 @@ import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus,
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
 import { PUBLIC_GROUP_CODE } from './publicGroup';
+import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher } from './teacherMarketplace';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
@@ -109,14 +110,22 @@ export async function createStudentAccount(payload) {
 }
 
 function mapGroup(g) {
-  return {
+  const rawSchedule = g.schedule || g.Schedule || '';
+  const group = {
     id: g.id ?? g.Id,
     name: g.name || g.Name || '',
     number: g.number || g.Number || g.name || g.Name || '',
-    schedule: g.schedule || g.Schedule || '',
+    schedule: rawSchedule,
     studentCount: g.studentCount ?? g.StudentCount ?? 0,
     createdAt: g.createdAt || g.CreatedAt,
     inviteCode: g.inviteCode || g.InviteCode || '',
+    approvalRequired: g.approvalRequired,
+    approvalMarked: /\[\[APPR:[01]\]\]/.test(rawSchedule),
+  };
+  return {
+    ...group,
+    schedule: stripApprovalMark(rawSchedule),
+    approvalRequired: groupNeedsApproval(group),
   };
 }
 
@@ -185,12 +194,15 @@ export function groupInviteSlug(group) {
   return '';
 }
 
-export function groupInviteUrl(inviteCode, groupName = '') {
+export function groupInviteUrl(inviteCode, groupName = '', approvalRequired = true) {
   const code = String(inviteCode || '').trim();
   if (!code) return '';
-  const url = `${window.location.origin}/join/${encodeURIComponent(code)}`;
+  const params = new URLSearchParams();
   const name = String(groupName || '').trim();
-  return name ? `${url}?group=${encodeURIComponent(name)}` : url;
+  if (name) params.set('group', name);
+  params.set('icaze', approvalRequired ? 'var' : 'yox');
+  const query = params.toString();
+  return `${window.location.origin}/join/${encodeURIComponent(code)}${query ? `?${query}` : ''}`;
 }
 
 export async function fetchGroupInvite(code) {
@@ -303,14 +315,21 @@ export async function fetchGroups() {
         await API.post('/Groups', {
           name: g.name || g.number,
           number: g.number || g.name,
-          schedule: g.schedule || '',
+          schedule: withApprovalMark(g.schedule || '', groupNeedsApproval(g)),
         });
       } catch {
         /* duplicate or offline */
       }
     }
     const data = await tryGet('/Groups');
-    const list = withoutHiddenGroups(teacherId, unwrapList(data).map(mapGroup));
+    const remembered = new Map(localDb.getGroups(teacherId).map((g) => [String(g.id), g.approvalRequired]));
+    const list = withoutHiddenGroups(teacherId, unwrapList(data).map(mapGroup)).map((g) => {
+      const approvalRequired = g.approvalMarked
+        ? g.approvalRequired
+        : (remembered.get(String(g.id)) === false ? false : g.approvalRequired);
+      const { approvalMarked, ...rest } = g;
+      return { ...rest, approvalRequired };
+    });
     if (list.length) {
       localDb.saveGroups(teacherId, list);
       return list;
@@ -324,10 +343,12 @@ export async function fetchGroups() {
 
 export async function createGroup(payload) {
   const teacherId = currentTeacherId();
+  const approvalRequired = payload.approvalRequired !== false;
   const incoming = {
     name: String(payload.name || '').trim(),
     number: String(payload.number || payload.name || '').trim(),
-    schedule: payload.schedule || '',
+    schedule: withApprovalMark(payload.schedule || '', approvalRequired),
+    approvalRequired,
   };
   if (findDuplicateGroup(localDb.getGroups(teacherId).filter((g) => Number(g.id) > 0), incoming)) {
     throw duplicateGroupError();
@@ -338,7 +359,9 @@ export async function createGroup(payload) {
       number: incoming.number,
       schedule: incoming.schedule,
     }, FAST);
-    const group = mapGroup(unwrapItem(res.data) || res.data);
+    const mapped = mapGroup(unwrapItem(res.data) || res.data);
+    const { approvalMarked, ...group } = mapped;
+    if (!approvalMarked) group.approvalRequired = incoming.approvalRequired;
     if (Number(group?.id) > 0) {
       localDb.unhideGroup(teacherId, group.id);
       const current = localDb.getGroups(teacherId);
@@ -363,7 +386,26 @@ export async function ensureGroupOnServer(group) {
     name: group?.name || group?.number,
     number: group?.number || group?.name,
     schedule: group?.schedule || '',
+    approvalRequired: groupNeedsApproval(group),
   });
+}
+
+export async function releaseOpenGroupStudents() {
+  if (isPractice()) return;
+  const snap = currentUserSnapshot();
+  if (snap.role !== 'Teacher') return;
+  const groups = (await fetchGroups()).filter((g) => !groupNeedsApproval(g));
+  if (!groups.length) return;
+  const waiting = (await fetchStudents()).filter(
+    (student) => isPendingApproval(student) && groups.some((group) => studentMatchesGroup(student, group)),
+  );
+  for (const student of waiting) {
+    try {
+      await setStudentAccess(student.id, true);
+    } catch {
+      /* növbəti açılışda yenidən cəhd */
+    }
+  }
 }
 
 export async function deleteGroup(id) {
@@ -395,7 +437,13 @@ export async function deleteGroup(id) {
 export async function fetchGroup(id) {
   try {
     const res = await API.get(`/Groups/${id}`, FAST);
-    return mapGroup(unwrapItem(res.data) || res.data);
+    const mapped = mapGroup(unwrapItem(res.data) || res.data);
+    const { approvalMarked, ...group } = mapped;
+    if (!approvalMarked) {
+      const local = localDb.getGroups(currentTeacherId()).find((g) => String(g.id) === String(id));
+      if (local?.approvalRequired === false) group.approvalRequired = false;
+    }
+    return group;
   } catch (err) {
     const local = localDb.getGroups(currentTeacherId()).find((g) => String(g.id) === String(id));
     if (local) return local;

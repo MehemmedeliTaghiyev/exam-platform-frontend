@@ -1,9 +1,10 @@
 import API from '../api/axios';
+import axios from 'axios';
 import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
-import { PUBLIC_GROUP_CODE } from './publicGroup';
+import { isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher } from './teacherMarketplace';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
@@ -28,6 +29,7 @@ import {
   PRACTICE_TEACHER_ID,
   practiceExamPeers,
   practiceOwnStudentIds,
+  practiceGroupmates,
 } from './practice';
 
 const FAST = { timeout: 20000 };
@@ -393,8 +395,13 @@ export async function ensureGroupOnServer(group) {
 export async function releaseOpenGroupStudents() {
   if (isPractice()) return;
   const snap = currentUserSnapshot();
-  if (snap.role !== 'Teacher') return;
-  const groups = (await fetchGroups()).filter((g) => !groupNeedsApproval(g));
+  const admin = snap.role === 'Admin';
+  if (snap.role !== 'Teacher' && !admin) return;
+  const groups = (await fetchGroups()).filter((g) => (
+    admin
+      ? (isPublicGroupName(g.name) || isPublicGroupName(g.number))
+      : !groupNeedsApproval(g)
+  ));
   if (!groups.length) return;
   const waiting = (await fetchStudents()).filter(
     (student) => isPendingApproval(student) && groups.some((group) => studentMatchesGroup(student, group)),
@@ -459,6 +466,25 @@ export function studentBelongsToTeacher(student, teacherId, groups = []) {
     const keys = [group.number, group.name].map((v) => String(v || '').trim().toLowerCase()).filter(Boolean);
     return keys.includes(String(student.groupName || '').trim().toLowerCase());
   });
+}
+
+export async function fetchGroupmates(user) {
+  if (!user?.id) return [];
+  if (user.practice) return practiceGroupmates();
+  const groupName = String(user.groupName || '').trim().toLowerCase();
+  const groupId = user.groupId;
+  if (!groupName && (groupId == null || groupId === '')) return [];
+  try {
+    const list = (await fetchUsersByRole('Student')).map(mapStudent).filter(Boolean);
+    return list.filter((student) => {
+      if (String(student.id) === String(user.id)) return false;
+      if (groupId != null && groupId !== '' && student.groupId != null && String(student.groupId) === String(groupId)) return true;
+      const name = String(student.groupName || '').trim().toLowerCase();
+      return Boolean(groupName && name === groupName);
+    });
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchStudents() {
@@ -1022,19 +1048,43 @@ export function paperQuestionsOf(list) {
   return (list || []).filter((q) => !isDriveMarkerQuestion(q));
 }
 
-export async function fetchQuestions(examId) {
+export async function fetchQuestions(examId, exam = null) {
   if (isPractice()) return practiceQuestions(examId);
   const paths = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
+  const found = [];
   for (const path of paths) {
     try {
       const res = await API.get(path, { timeout: 15000 });
-      const list = Array.isArray(res.data) ? res.data : unwrapList(res.data);
-      return list.map(normalizeQuestion);
+      const list = extractQuestionList(res.data).map(normalizeQuestion);
+      found.push(...list);
+      if (paperQuestionsOf(list).length) break;
     } catch {
       /* try next */
     }
   }
-  return localDb.getQuestions(examId);
+  const embedded = extractQuestionList(exam?.questions || exam?.Questions).map(normalizeQuestion);
+  const local = (localDb.getQuestions(examId) || []).map(normalizeQuestion);
+  const apiPaper = paperQuestionsOf(found);
+  if (apiPaper.length) {
+    const merged = dedupeQuestions([...found, ...embedded]);
+    localDb.saveQuestions(examId, merged);
+    return merged;
+  }
+  const extraPaper = paperQuestionsOf([...embedded, ...local]);
+  if (extraPaper.length) return dedupeQuestions([...embedded, ...local, ...found]);
+  return dedupeQuestions(found.length ? found : local);
+}
+
+function rawQuestionOptions(q) {
+  const raw = q?.options ?? q?.Options ?? q?.answers ?? q?.Answers ?? q?.choices ?? q?.Choices ?? [];
+  const list = Array.isArray(raw) ? raw : unwrapList(raw);
+  return list.map((opt) => ({
+    ...opt,
+    id: opt.id ?? opt.Id ?? opt.optionId ?? opt.OptionId,
+    optionText: opt.optionText || opt.OptionText || opt.text || opt.Text || '',
+    text: opt.text || opt.Text || opt.optionText || opt.OptionText || '',
+    isCorrect: Boolean(opt.isCorrect ?? opt.IsCorrect),
+  }));
 }
 
 function normalizeQuestion(q) {
@@ -1042,25 +1092,49 @@ function normalizeQuestion(q) {
   const typeName = typeof type === 'number'
     ? ['SingleChoice', 'MultipleChoice', 'OpenEnded'][type] || 'SingleChoice'
     : (type || 'SingleChoice');
-  const rawText = q.text || q.questionText || q.title;
+  const rawText = q.text || q.Text || q.questionText || q.QuestionText || q.title || q.Title || '';
   const imageUrl = parseQuestionImage({ ...q, text: rawText });
+  const marker = isDriveMarkerQuestion({ text: rawText });
+  const text = marker
+    ? String(rawText || '').trim()
+    : stripQuestionImage(rawText)
+      .replace(/^__DRIVE__\s*/i, '')
+      .replace(/DRVFILE:\S+\s*/gi, '')
+      .replace(/VIS:(public|private)\s*/gi, '')
+      .trim();
   return {
     ...q,
-    id: q.id ?? q.questionId,
-    text: stripQuestionImage(rawText),
+    id: q.id ?? q.Id ?? q.questionId ?? q.QuestionId,
+    text,
     imageUrl,
     type: typeName,
     inputKind: q.inputKind || q.InputKind || (typeName === 'OpenEnded' ? 'Text' : 'Choice'),
     correctText: q.correctText ?? q.CorrectText ?? '',
     difficultyLevel: q.difficultyLevel || q.DifficultyLevel || '',
     points: Number(q.points ?? q.Points ?? pointsForDifficulty(q.difficultyLevel || q.DifficultyLevel)) || 1,
-    options: (q.options || q.answers || []).map((opt) => ({
-      ...opt,
-      id: opt.id ?? opt.optionId,
-      optionText: opt.optionText || opt.text,
-      text: opt.text || opt.optionText,
-    })),
+    options: rawQuestionOptions(q),
   };
+}
+
+function extractQuestionList(data) {
+  if (Array.isArray(data)) return data;
+  const list = unwrapList(data);
+  if (list.length) return list;
+  if (!data || typeof data !== 'object') return [];
+  if (data.text || data.Text || data.questionText || data.QuestionText) return [data];
+  return [];
+}
+
+function dedupeQuestions(list) {
+  const seen = new Set();
+  const rows = [];
+  (list || []).forEach((q) => {
+    const key = q?.id != null ? String(q.id) : '';
+    if (key && seen.has(key)) return;
+    if (key) seen.add(key);
+    rows.push(q);
+  });
+  return rows;
 }
 
 export async function addQuestion(examId, payload) {
@@ -1512,6 +1586,23 @@ export async function fetchUsersByRole(role = 'Student') {
   if (isPractice()) return [];
   const res = await API.get('/Users', { params: { role, includeDeleted: false }, timeout: 8000 });
   return unwrapList(res.data);
+}
+
+function countUsers(data) {
+  return unwrapList(data).filter((user) => !(user?.isDeleted || user?.IsDeleted)).length;
+}
+
+export async function fetchCommunityCounts() {
+  const root = String(import.meta.env.VITE_API_URL || 'https://mahammadali-001-site1.jtempurl.com/api').replace(/\/$/, '');
+  const load = (role) => axios.get(`${root}/Users`, {
+    params: { role, includeDeleted: false },
+    timeout: 8000,
+  });
+  const [teachers, students] = await Promise.all([load('Teacher'), load('Student')]);
+  return {
+    teachers: countUsers(teachers.data),
+    students: countUsers(students.data),
+  };
 }
 
 export async function fetchTeacherDirectory() {

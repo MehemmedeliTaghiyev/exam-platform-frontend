@@ -2,10 +2,10 @@ import PublicNav from './PublicNav';
 
 export default function AuthShell({ children, wide = false }) {
   return (
-    <div className="min-h-screen bg-[#eef2ff] text-slate-900">
-      <PublicNav appearance="light" />
-      <div className={`mx-auto px-4 py-10 ${wide ? 'max-w-lg' : 'max-w-md'}`}>
-        <div className="rounded-3xl bg-white p-8 text-slate-900 shadow-[0_24px_60px_rgba(15,23,42,0.08)] ring-1 ring-indigo-100 [&_h1]:text-slate-900 [&_input]:border-indigo-100 [&_input]:bg-white [&_input]:text-slate-900 [&_label>span]:text-slate-600">
+    <div className="min-h-screen bg-[#161616] text-[#d4d4d4]">
+      <PublicNav darkOnNavy />
+      <div className={`mx-auto px-5 py-12 ${wide ? 'max-w-lg' : 'max-w-md'}`}>
+        <div className="[&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:text-[#f2f2f2] [&_input]:border-[#333] [&_input]:bg-[#1f1f1f] [&_input]:text-[#f3f3f3] [&_label>span]:text-[#c8c8c8] [&_p]:text-[#bdbdbd]">
           {children}
         </div>
       </div>

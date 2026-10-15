@@ -404,6 +404,13 @@ export function practiceWeeklyRankingSource() {
   return { exams: [exam], students, submissions };
 }
 
+export function practiceGroupmates() {
+  return [
+    { id: 'own-a', fullName: 'Aysel Məmmədova', groupName: 'Məşq qrupu', groupId: 'practice-group' },
+    { id: 'own-b', fullName: 'Elvin Quliyev', groupName: 'Məşq qrupu', groupId: 'practice-group' },
+  ];
+}
+
 export function practiceUser(role) {
   if (role === 'Teacher') {
     return {
@@ -426,5 +433,7 @@ export function practiceUser(role) {
     fullName: 'Məşq şagirdi',
     email: 'practice.student@local',
     teacherId: 'demo',
+    groupName: 'Məşq qrupu',
+    groupId: 'practice-group',
   };
 }

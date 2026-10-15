@@ -111,8 +111,8 @@ function TeacherForm() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold text-ink dark:text-white">Müəllim qeydiyyatı</h1>
-      <p className="mt-1 text-sm text-gray-500">
+      <h1 className="text-2xl font-semibold text-[#f2f2f2]">Müəllim qeydiyyatı</h1>
+      <p className="mt-1 text-sm text-[#bdbdbd]">
         Konum mütləqdir. Qeydiyyatdan sonra hesabınız dərhal açılır və {DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq başlayır — admin təsdiqi lazım deyil.
       </p>
       {error ? <div className="mt-4"><FormError message={error} /></div> : null}
@@ -133,7 +133,7 @@ function TeacherForm() {
             required
             placeholder={TEACHER_EMAIL_HINT}
           />
-          <p className="mt-1.5 text-xs text-gray-600 dark:text-gray-300">
+          <p className="mt-1.5 text-xs text-[#a3a3a3]">
             {suggestedEmail ? `Giriş ünvanı: ${suggestedEmail}` : 'Ad və soyad yazın. Ünvan belə yaranır: aysel_eliyeva@gmail.com'}
           </p>
         </div>
@@ -159,33 +159,33 @@ export default function Register() {
       {kind === 'teacher' ? <TeacherForm /> : null}
       {kind === 'hub' ? (
         <>
-          <h1 className="text-2xl font-bold text-ink dark:text-white">Hesab yarat</h1>
-          <p className="mt-2 text-sm text-gray-500">Kim kimi qeydiyyatdan keçirsiniz?</p>
+          <h1 className="text-2xl font-semibold text-[#f2f2f2]">Hesab yarat</h1>
+          <p className="mt-2 text-sm text-[#bdbdbd]">Kim kimi qeydiyyatdan keçirsiniz?</p>
           <div className="mt-6 grid gap-4">
-            <Link to="/register/teacher" className="rounded-2xl border border-gray-200 p-5 hover:border-brand-400 dark:border-slate-700">
-              <Users className="text-brand-600" size={22} />
-              <p className="mt-3 font-bold">Müəlliməm</p>
-              <p className="mt-1 text-sm text-gray-500">20 günlük sınaqla dərhal daxil olun. Admin təsdiqi yoxdur.</p>
+            <Link to="/register/teacher" className="rounded-xl border border-[#2e2e2e] bg-[#1c1c1c] p-5 hover:border-[#5a353b]">
+              <Users className="text-[#e7a8a8]" size={22} />
+              <p className="mt-3 font-semibold text-[#f2f2f2]">Müəlliməm</p>
+              <p className="mt-1 text-sm text-[#bdbdbd]">20 günlük sınaqla dərhal daxil olun. Admin təsdiqi yoxdur.</p>
             </Link>
-            <Link to={publicJoinPath()} className="rounded-2xl border border-gray-200 p-5 hover:border-brand-400 dark:border-slate-700">
-              <BookOpen className="text-brand-600" size={22} />
-              <p className="mt-3 font-bold">Şagirdəm, repetitorum yoxdur</p>
-              <p className="mt-1 text-sm text-gray-500">Adminin Ümumi qrupuna yazılın, sonra müəllim tapın.</p>
+            <Link to={publicJoinPath()} className="rounded-xl border border-[#2e2e2e] bg-[#1c1c1c] p-5 hover:border-[#5a353b]">
+              <BookOpen className="text-[#e7a8a8]" size={22} />
+              <p className="mt-3 font-semibold text-[#f2f2f2]">Şagirdəm, repetitorum yoxdur</p>
+              <p className="mt-1 text-sm text-[#bdbdbd]">Adminin Ümumi qrupuna yazılın, sonra müəllim tapın.</p>
             </Link>
           </div>
-          <div className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="mt-6 rounded-xl border border-[#5a4030] bg-[#2a221c] px-4 py-3 text-sm text-[#f0d0a8]">
             Repetitorun ExamPulse istifadə edirsə, burada yazılma. Müəllimin qrup linkini aç — yeni şagird yalnız onun kabinetinə düşür.
           </div>
-          <p className="mt-6 text-center text-sm text-gray-500">
+          <p className="mt-6 text-center text-sm text-[#a3a3a3]">
             Hesabınız var?{' '}
-            <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
+            <Link to="/login" className="font-medium text-[#e7a8a8] hover:text-[#f3c4c4]">
               Daxil olun
             </Link>
           </p>
         </>
       ) : (
-        <p className="mt-6 text-center text-sm text-gray-500">
-          <Link to="/register" className="font-medium text-brand-600">
+        <p className="mt-6 text-center text-sm text-[#a3a3a3]">
+          <Link to="/register" className="font-medium text-[#e7a8a8]">
             ← Geri
           </Link>
         </p>

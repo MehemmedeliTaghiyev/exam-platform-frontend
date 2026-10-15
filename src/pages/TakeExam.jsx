@@ -134,7 +134,7 @@ const QuestionCanvas = memo(function QuestionCanvas({
   const showSaved = flash?.id != null && String(flash.id) === String(question.id);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex min-h-[12rem] flex-col">
       <div className="mb-3 flex items-center justify-between gap-3">
         <button
           type="button"
@@ -151,7 +151,7 @@ const QuestionCanvas = memo(function QuestionCanvas({
           {showSaved ? <span key={flash.n} className="exam-saved">✓ Saved</span> : null}
         </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mt-1">
         {open ? (
           <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
             <p className="text-sm font-semibold text-[#6B7280]">Sual {index + 1}</p>
@@ -246,10 +246,7 @@ export default function TakeExam() {
     const run = async () => {
       const examId = Number.isNaN(Number(id)) ? id : parseInt(id, 10);
       try {
-        const [examData, qs] = await Promise.all([
-          fetchExam(examId),
-          fetchQuestions(examId).catch(() => []),
-        ]);
+        const examData = await fetchExam(examId);
         setExam(examData);
 
         if (!user) {
@@ -267,6 +264,7 @@ export default function TakeExam() {
           return;
         }
 
+        const qs = await fetchQuestions(examId, examData).catch(() => []);
         setQuestions(Array.isArray(qs) ? qs : []);
 
         if (isExamEnded(examData)) {
@@ -459,8 +457,8 @@ export default function TakeExam() {
             </div>
           ) : (
             <>
-              <main className="min-w-0 flex-1 p-4 sm:p-6">
-                <div className="mx-auto h-full max-w-3xl">
+              <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="mx-auto w-full max-w-3xl">
                   {paperQuestions.length > 0 ? (
                     <QuestionCanvas
                       question={active}

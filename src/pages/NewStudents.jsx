@@ -2,8 +2,9 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { Ban, CheckCircle2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
-import { Button, Card, EmptyState } from '../components/ui';
+import { Badge, Button, Card, EmptyState } from '../components/ui';
 import { deleteStudentAccount, fetchGroups, fetchStudents, isPendingApproval, setStudentAccess, studentBelongsToTeacher } from '../lib/examApi';
+import { groupNeedsApproval } from '../lib/groupApproval';
 import { errorMessage, fullNameOf } from '../lib/utils';
 
 function groupKey(group) {
@@ -31,7 +32,11 @@ export default function NewStudents() {
       const [groupList, students] = await Promise.all([fetchGroups(), fetchStudents()]);
       setGroups(groupList);
       const mine = students.filter((s) => studentBelongsToTeacher(s, user?.id, groupList));
-      setPending(mine.filter(isPendingApproval));
+      setPending(mine.filter((s) => {
+        if (!isPendingApproval(s)) return false;
+        const openGroup = groupList.some((g) => !groupNeedsApproval(g) && belongsToGroup(s, g));
+        return !openGroup;
+      }));
     } catch (err) {
       setError(errorMessage(err, 'Yeni şagirdlər yüklənmədi.'));
     } finally {
@@ -86,7 +91,7 @@ export default function NewStudents() {
         <div className="space-y-8">
           {sections.map((section) => (
             <div key={section.key}>
-              <h2 className="mb-3 text-lg font-bold">{section.title}</h2>
+              <div className="mb-3"><Badge tone="accent">Qrup: {section.title}</Badge></div>
               <div className="space-y-3">
                 {section.students.map((s) => (
                   <Card key={s.id} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -100,7 +105,7 @@ export default function NewStudents() {
                       <Button variant="success" disabled={busyId === s.id} onClick={() => decide(s, true)}>
                         <CheckCircle2 size={16} /> İcazə ver
                       </Button>
-                      <Button variant="danger" disabled={busyId === s.id} onClick={() => decide(s, false)}>
+                      <Button variant="danger-soft" disabled={busyId === s.id} onClick={() => decide(s, false)}>
                         <Ban size={16} /> İcazə vermə
                       </Button>
                     </div>

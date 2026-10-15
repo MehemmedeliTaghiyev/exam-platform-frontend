@@ -52,7 +52,7 @@ export default function PublicExamZone({ embedded = false }) {
 
   const filters = (
     <div className="mb-6 space-y-4">
-      <p className="text-sm text-gray-500 dark:text-indigo-100/70">
+      <p className="on-public text-sm text-gray-500 dark:text-indigo-100/70">
         Müəllimlərin açıq dərc etdiyi imtahanlar fənnə və tarixə görə burada görünür. Bu gün, dünən və ya seçdiyiniz günü süzgəcdən keçirin.
       </p>
       <div className="flex flex-wrap gap-2">
@@ -156,11 +156,11 @@ export default function PublicExamZone({ embedded = false }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-white">
+    <div className="min-h-screen bg-[#161616] text-[#d4d4d4]">
       <PublicNav darkOnNavy />
-      <div className="mx-auto max-w-5xl px-4 py-10">
-        <h1 className="text-3xl font-black">Açıq imtahanlar</h1>
-        <div className="mt-6 [&_p]:text-indigo-100/75">
+      <div className="mx-auto max-w-5xl px-5 py-10 [&_.on-public]:text-[#c8c8c8] [&_label>span]:text-[#c8c8c8]">
+        <h1 className="text-[1.65rem] font-semibold tracking-tight text-[#f2f2f2]">Açıq imtahanlar</h1>
+        <div className="mt-6">
           {filters}
           {body}
           {user ? (

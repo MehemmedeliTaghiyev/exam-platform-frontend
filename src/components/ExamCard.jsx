@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles, Lock } from 'lucide-react';
-import { Badge, Card } from './ui';
+import { Badge, Card, ConfirmDialog } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
 import { examVisibility } from '../lib/examVisibility';
 import { isAiExam } from '../lib/questionDifficulty';
@@ -25,9 +26,10 @@ export default function ExamCard({
   entered = false,
   resultText = '',
 }) {
+  const [confirm, setConfirm] = useState(false);
   const status = resolveExamStatus(exam);
   const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
-  const label = status === 'Live' ? 'Live' : status === 'Finished' ? 'Finished' : status === 'Draft' ? 'Qaralama' : 'Scheduled';
+  const label = status === 'Live' ? 'Canlı' : status === 'Finished' ? 'Bitib' : status === 'Draft' ? 'Qaralama' : 'Planlanıb';
   const topic = visibleExamTitle(exam);
   const subject = exam.subjectName || exam.subject;
   const ai = isAiExam(exam);
@@ -35,14 +37,14 @@ export default function ExamCard({
   return (
     <Card
       onClick={onOpen}
-      className={`flex h-full flex-col ${ai ? 'ring-2 ring-violet-400/80 dark:ring-violet-500/70' : ''}`}
+      className={`ep-lift flex h-full flex-col ${ai ? 'border-transparent bg-[linear-gradient(var(--card),var(--card))_padding-box,linear-gradient(135deg,#5b4cf5,#22d3ee)_border-box] [border-width:1.5px]' : ''}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Mövzu</p>
-          <h3 className="mt-0.5 text-base font-bold text-ink dark:text-white">{topic}</h3>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[var(--muted)]">Mövzu</p>
+          <h3 className="mt-0.5 text-lg font-extrabold">{topic}</h3>
           {subject ? (
-            <p className="mt-1 text-sm font-medium text-brand-600">{subject}</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--accent)]">{subject}</p>
           ) : null}
           {teacherName ? (
             <p className="mt-1 text-xs text-gray-500">{teacherName}</p>
@@ -93,8 +95,8 @@ export default function ExamCard({
           <Users size={14} /> {exam.submissionsCount ?? 0} iştirakçı
         </span>
       </div>
-      <div className="mt-5 flex items-center justify-between gap-2">
-        <div className={`text-sm font-medium ${locked ? 'text-amber-600' : 'text-brand-600'}`}>
+      <div className="mt-5 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-4">
+        <div className={`text-sm font-semibold ${locked ? 'text-[var(--warning-text)]' : 'text-[var(--accent)]'}`}>
           {locked ? (
             <span className="inline-flex items-center gap-1.5"><Lock size={14} /> {actionLabel}</span>
           ) : (
@@ -104,16 +106,25 @@ export default function ExamCard({
         {onDelete ? (
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+            className="ep-focus inline-flex min-h-11 items-center gap-1 rounded-[14px] px-2 text-sm font-semibold text-[var(--danger-text)]"
             onClick={(e) => {
               e.stopPropagation();
-              onDelete(exam);
+              setConfirm(true);
             }}
           >
             <Trash2 size={14} /> Sil
           </button>
         ) : null}
       </div>
+      <ConfirmDialog
+        open={confirm}
+        text="Bu imtahan silinəcək."
+        onCancel={() => setConfirm(false)}
+        onConfirm={() => {
+          setConfirm(false);
+          onDelete(exam);
+        }}
+      />
     </Card>
   );
 }

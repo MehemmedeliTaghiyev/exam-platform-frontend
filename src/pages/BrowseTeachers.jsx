@@ -123,7 +123,7 @@ export default function BrowseTeachers({ embedded = false }) {
       <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
         <button type="button" className={chip(dir === 'desc')} onClick={() => setDir('desc')}>DESC</button>
         <button type="button" className={chip(dir === 'asc')} onClick={() => setDir('asc')}>ASC</button>
-        <p className="text-xs text-gray-500">Standart: bu həftə keçirilən imtahan sayı, sonra orta nəticə.</p>
+        <p className="on-public text-xs text-gray-500">Standart: bu həftə keçirilən imtahan sayı, sonra orta nəticə.</p>
       </div>
     </div>
   );
@@ -132,7 +132,7 @@ export default function BrowseTeachers({ embedded = false }) {
     <>
       <Button variant="ghost" onClick={() => navigate(listPath)}>← Müəllim tap</Button>
       <h2 className="mt-4 text-xl font-bold">{selected?.fullName || 'Müəllim'}</h2>
-      <p className="mt-1 text-sm text-gray-500 dark:text-indigo-100/70">
+      <p className="on-public mt-1 text-sm text-gray-500 dark:text-indigo-100/70">
         {selected?.position || 'Bölgə göstərilməyib'}
         {selected?.subjects?.length ? ` · ${selected.subjects.join(', ')}` : ''}
         {' · '}bu həftə {selected?.weeklyExamCount ?? 0} imtahan
@@ -166,7 +166,7 @@ export default function BrowseTeachers({ embedded = false }) {
 
   const list = (
     <>
-      <p className="mb-4 text-sm text-gray-500 dark:text-indigo-100/70">
+      <p className="on-public mb-4 text-sm text-gray-500 dark:text-indigo-100/70">
         Müəllimləri bölgə və fənnə görə süzün. Sıra standart olaraq həftəlik imtahan sayı və orta nəticəyə görədir.
         Özəl imtahanlar kilidli görünür — giriş ödənişlidir; yüksək nəticə şəxsi endirim bileti qazandırır.
       </p>
@@ -222,11 +222,11 @@ export default function BrowseTeachers({ embedded = false }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b1220] text-white">
+    <div className="min-h-screen bg-[#161616] text-[#d4d4d4]">
       <PublicNav darkOnNavy />
-      <div className="mx-auto max-w-5xl px-4 py-10">
-        <h1 className="text-3xl font-black">{id ? 'Müəllimin imtahanları' : 'Müəllim tap'}</h1>
-        <div className="mt-6 [&_p]:text-indigo-100/75">{body}</div>
+      <div className="mx-auto max-w-5xl px-5 py-10 [&_.on-public]:text-[#c8c8c8] [&_label>span]:text-[#c8c8c8]">
+        <h1 className="text-[1.65rem] font-semibold tracking-tight text-[#f2f2f2]">{id ? 'Müəllimin imtahanları' : 'Müəllim tap'}</h1>
+        <div className="mt-6">{body}</div>
         {user ? (
           <Button variant="secondary" className="mt-8" onClick={() => navigate('/student')}>
             Kabinetə qayıt

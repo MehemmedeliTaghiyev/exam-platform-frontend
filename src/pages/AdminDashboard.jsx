@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, BookOpen, GraduationCap, UserCheck, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import { Badge, Card, Skeleton, StatCard } from '../components/ui';
+import { Badge, Card, ConfirmDialog, Skeleton, StatCard } from '../components/ui';
 import { deleteExam, fetchExams } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
 import { errorMessage, formatDate } from '../lib/utils';
@@ -22,6 +22,7 @@ export default function AdminDashboard() {
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingExam, setPendingExam] = useState(null);
 
   useEffect(() => {
     const run = async () => {
@@ -46,7 +47,6 @@ export default function AdminDashboard() {
   const activeStudents = students.filter(isActiveStudent);
 
   const handleDelete = async (exam) => {
-    if (!window.confirm(`“${exam.title}” imtahanını silmək istəyirsiniz?`)) return;
     try {
       await deleteExam(exam.id);
       setExams((prev) => prev.filter((e) => String(e.id) !== String(exam.id)));
@@ -55,8 +55,27 @@ export default function AdminDashboard() {
     }
   };
 
+  const statusLabel = (status) => {
+    const s = String(status || '').toLowerCase();
+    if (s === 'finished' || s === '3') return 'Bitib';
+    if (s === 'live' || s === '2') return 'Canlı';
+    if (s === 'scheduled' || s === '1') return 'Planlanıb';
+    if (s === 'draft' || s === '0') return 'Qaralama';
+    return status || 'Aktiv';
+  };
+
   return (
     <AppShell title="Admin paneli">
+      <ConfirmDialog
+        open={Boolean(pendingExam)}
+        text={pendingExam ? `“${pendingExam.title}” imtahanı silinəcək.` : ''}
+        onCancel={() => setPendingExam(null)}
+        onConfirm={() => {
+          const exam = pendingExam;
+          setPendingExam(null);
+          if (exam) handleDelete(exam);
+        }}
+      />
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Skeleton className="h-28" />
@@ -103,7 +122,7 @@ export default function AdminDashboard() {
                     <td className="px-5 py-3">{exam.subjectName || '—'}</td>
                     <td className="px-5 py-3 text-gray-500">{formatDate(exam.createdAt)}</td>
                     <td className="px-5 py-3">
-                      <Badge tone="brand">{exam.status || 'Aktiv'}</Badge>
+                      <Badge tone="brand">{statusLabel(exam.status)}</Badge>
                     </td>
                     <td className="px-5 py-3">
                       <button
@@ -111,7 +130,7 @@ export default function AdminDashboard() {
                         className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDelete(exam);
+                          setPendingExam(exam);
                         }}
                       >
                         <Trash2 size={14} /> Sil

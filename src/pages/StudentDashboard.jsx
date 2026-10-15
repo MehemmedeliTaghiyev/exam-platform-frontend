@@ -2,6 +2,8 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
+import DreamUniversityCard from '../components/DreamUniversityCard';
+import DuelSection from '../components/DuelSection';
 import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
 import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
@@ -172,6 +174,9 @@ export default function StudentDashboard() {
   return (
     <AppShell title="Tələbə paneli">
       <p className="mb-8 text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Tələbə'}</p>
+
+      <DreamUniversityCard user={user} />
+      <DuelSection user={user} />
 
       <WeeklyRanking variant="student" />
 

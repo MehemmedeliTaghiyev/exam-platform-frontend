@@ -2,7 +2,8 @@ import { useContext, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Button, FormError, Input } from '../components/ui';
-import AuthShell from '../components/AuthShell';
+import Header from '../components/home/Header';
+import '../components/home/home.css';
 import { errorMessage, rememberedTrialEnded, TRIAL_ENDED_MESSAGE } from '../lib/utils';
 
 export default function Login() {
@@ -40,14 +41,22 @@ export default function Login() {
   };
 
   return (
-    <AuthShell>
-      <p className="mb-4 text-center text-sm text-slate-500">
-        <Link to="/" className="font-medium text-indigo-600 hover:text-indigo-500">
-          ← Məşq səhifəsinə qayıt
-        </Link>
-      </p>
-      <h1 className="text-2xl font-bold text-slate-900">Daxil ol</h1>
-      <p className="mt-1 text-sm text-slate-500">
+    <div className="home-page min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <Header />
+      <main className="mx-auto grid max-w-6xl items-center gap-8 px-4 py-10 min-[900px]:grid-cols-2">
+        <section className="hidden min-h-[460px] rounded-[28px] bg-[linear-gradient(160deg,#4a3df0,#22b8e0)] p-10 text-white min-[900px]:block" aria-hidden="true">
+          <h2 className="text-3xl font-extrabold">Nəticələrin sənə nə deyir?</h2>
+          <p className="mt-3 max-w-sm text-white/85">Hər imtahandan sonra güclü və zəif mövzularını gör.</p>
+          <ul className="mt-8 space-y-3 text-sm font-semibold">
+            {['Müəllimin imtahanını həll et', 'Mövzu üzrə təhlilə bax', 'İrəliləyişini izlə'].map((row) => (
+              <li key={row} className="rounded-2xl bg-white/15 px-4 py-3">{row}</li>
+            ))}
+          </ul>
+        </section>
+        <section className="mx-auto w-full max-w-[480px] rounded-[24px] border border-[var(--line)] bg-[var(--card)] p-9 shadow-[0_18px_50px_var(--glow)]">
+          <Link to="/" className="text-sm font-semibold text-[var(--accent)]">← Məşq səhifəsinə qayıt</Link>
+          <h1 className="mt-4 text-3xl font-extrabold">Daxil ol</h1>
+      <p className="mt-2 text-sm text-[var(--muted)]">
         Müəllimin verdiyi e-poçt ilə daxil olun. Repetitorunuz varsa, o sizə giriş açmalıdır. Yoxdursa, qeydiyyatdan keçib bölgə müəllimlərini görün.
       </p>
       {error ? <div className="mt-4"><FormError message={error} /></div> : null}
@@ -58,12 +67,11 @@ export default function Login() {
           {isSubmitting ? 'Daxil olunur...' : 'Daxil ol'}
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-slate-500">
-        Hesabınız yoxdur?{' '}
-        <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-          Qeydiyyat
-        </Link>
+      <p className="mt-6 text-sm text-[var(--muted)]">
+        Hesabınız yoxdur? <Link to="/register" className="font-extrabold text-[var(--accent)]">Qeydiyyat</Link>
       </p>
-    </AuthShell>
+        </section>
+      </main>
+    </div>
   );
 }

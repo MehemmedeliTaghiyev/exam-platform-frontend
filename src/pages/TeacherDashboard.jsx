@@ -7,7 +7,7 @@ import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, EmptyState, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
-import { errorMessage, isExamDraft } from '../lib/utils';
+import { errorMessage, isExamDraft, resolveExamStatus } from '../lib/utils';
 import AccessPeriodBanner from '../components/AccessPeriodBanner';
 import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
 
@@ -47,6 +47,7 @@ export default function TeacherDashboard() {
   const [driveFileLink, setDriveFileLink] = useState('');
   const [folderUrl, setFolderUrl] = useState('');
   const [visibility, setVisibility] = useState('private');
+  const [examFilter, setExamFilter] = useState('all');
 
   formRef.current = {
     title,
@@ -291,7 +292,6 @@ export default function TeacherDashboard() {
   };
 
   const handleDelete = async (exam) => {
-    if (!window.confirm(`“${exam.title}” imtahanını silmək istəyirsiniz?`)) return;
     try {
       await deleteExam(exam.id);
       setExams((prev) => prev.filter((e) => String(e.id) !== String(exam.id)));
@@ -300,22 +300,41 @@ export default function TeacherDashboard() {
     }
   };
 
+  const visibleExams = exams.filter((exam) => {
+    if (examFilter === 'draft') return isExamDraft(exam);
+    if (examFilter === 'finished') return resolveExamStatus(exam) === 'Finished';
+    return true;
+  });
+
   return (
-    <AppShell title="İmtahanlar">
-      <AccessPeriodBanner user={periodUser || user} />
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Müəllim'}</p>
-          <p className="mt-1 text-2xl font-bold">Yaradılmış imtahanlar</p>
-        </div>
-        <Button
-          onClick={() => {
-            skipDraftRef.current = false;
-            setShowModal(true);
-          }}
-        >
-          <Plus size={16} /> Yeni imtahan
+    <AppShell
+      title="İmtahanlar"
+      action={(
+        <Button onClick={() => setShowModal(true)}>
+          <Plus size={16} /> <span className="max-[860px]:sr-only">Yeni imtahan</span>
         </Button>
+      )}
+    >
+      <AccessPeriodBanner user={periodUser || user} />
+      <div className="mb-6 flex flex-wrap gap-2">
+        {[
+          ['all', 'Hamısı'],
+          ['draft', 'Qaralama'],
+          ['finished', 'Bitmiş'],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setExamFilter(key)}
+            className={`ep-focus min-h-11 rounded-full px-4 text-sm font-extrabold ${
+              examFilter === key
+                ? 'bg-[linear-gradient(135deg,#5b4cf5,#7c5cff)] text-white'
+                : 'border border-[var(--line)] bg-[var(--card)] text-[var(--muted)]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {notice && (
@@ -343,12 +362,12 @@ export default function TeacherDashboard() {
           }
         />
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {exams.map((exam) => (
+        <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
+          {visibleExams.map((exam) => (
             <ExamCard
               key={exam.id}
               exam={exam}
-              actionLabel={isExamDraft(exam) ? 'Davam et' : 'Statistika'}
+              actionLabel={isExamDraft(exam) ? 'Davam et →' : 'Statistika →'}
               onOpen={() =>
                 navigate(isExamDraft(exam) ? `/teacher/exams/${exam.id}` : `/teacher/exams/${exam.id}/stats`)
               }
@@ -460,7 +479,7 @@ export default function TeacherDashboard() {
           </div>
           <p className="text-sm text-gray-800 dark:text-gray-200">
             “Yarat” düyməsinə basmadan səhifədən çıxsanız imtahan qaralama kimi saxlanılacaq. Gələcək tarix
-            seçsəniz imtahan Scheduled olacaq.
+            seçsəniz imtahan planlanmış olacaq.
           </p>
           {folderUrl ? (
             <a className="block text-sm font-medium text-brand-700 underline dark:text-brand-300" href={folderUrl} target="_blank" rel="noreferrer">

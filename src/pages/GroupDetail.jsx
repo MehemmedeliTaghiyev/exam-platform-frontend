@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Ban, CheckCircle2, Copy, Link2, Pencil, Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
-import { Button, Card, EmptyState, Input, Modal, Badge } from '../components/ui';
+import { Button, Card, ConfirmDialog, EmptyState, Input, Modal, Badge } from '../components/ui';
 import { createStudentAccount, deleteGroup, deleteStudentAccount, ensureGroupOnServer, fetchGroup, fetchStudents, groupInviteSlug, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { groupNeedsApproval } from '../lib/groupApproval';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
@@ -36,6 +36,8 @@ export default function GroupDetail() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [group, setGroup] = useState(null);
+  const [ask, setAsk] = useState(null);
+  const askConfirm = (text, note) => new Promise((resolve) => setAsk({ text, note, resolve }));
   const [students, setStudents] = useState([]);
   const [all, setAll] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +136,7 @@ export default function GroupDetail() {
     e.preventDefault();
     e.stopPropagation();
     if (removingId) return;
-    if (!window.confirm(`${fullNameOf(student)} qrupdan silinsin? Bu əməliyyat bir dəfəlikdir.`)) return;
+    if (!(await askConfirm(`${fullNameOf(student)} qrupdan silinsin?`, 'Bu əməliyyat bir dəfəlikdir.'))) return;
     setRemovingId(student.id);
     setError('');
     try {
@@ -180,7 +182,7 @@ export default function GroupDetail() {
   const removeGroup = async () => {
     if (deletingGroup || saving) return;
     const label = groupLabel || 'qrup';
-    if (!window.confirm(`${label} silinsin? Tələbələr silinməyəcək, qrup siyahıdan çıxacaq.`)) return;
+    if (!(await askConfirm(`${label} silinsin?`, 'Tələbələr silinməyəcək, qrup siyahıdan çıxacaq.'))) return;
     setDeletingGroup(true);
     setError('');
     try {
@@ -227,6 +229,13 @@ export default function GroupDetail() {
 
   return (
     <AppShell title={`${groupLabel}${group.name && group.number && group.name !== group.number ? ` · ${group.name}` : ''}`}>
+      <ConfirmDialog
+        open={Boolean(ask)}
+        text={ask?.text}
+        note={ask?.note}
+        onCancel={() => { ask?.resolve(false); setAsk(null); }}
+        onConfirm={() => { ask?.resolve(true); setAsk(null); }}
+      />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Button variant="ghost" onClick={() => navigate('/teacher/cabinet')}>

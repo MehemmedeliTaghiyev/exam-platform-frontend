@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Users, Percent, TrendingUp, HelpCircle } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import ProgressChart from '../components/ProgressChart';
-import { Button, Card, Skeleton, StatCard, Badge } from '../components/ui';
+import { Button, Card, ConfirmDialog, Skeleton, StatCard, Badge } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { examOwnerId, fetchExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, fetchQuestionDifficulty, fetchQuestions, deleteExam } from '../lib/examApi';
 import { buildExamStats, splitExamLeaderboards } from '../lib/stats';
@@ -19,6 +19,7 @@ export default function ExamStats() {
   const { user } = useContext(AuthContext);
   const aiOn = isAiEnabled(user) || localDb.getTeacherAi(user?.id);
   const [exam, setExam] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [difficultyRows, setDifficultyRows] = useState([]);
@@ -85,8 +86,16 @@ export default function ExamStats() {
           </Button>
           <Button
             variant="danger"
-            onClick={async () => {
-              if (!window.confirm('Bu imtahanı silmək istəyirsiniz?')) return;
+            onClick={() => setConfirmDelete(true)}
+          >
+            İmtahanı sil
+          </Button>
+          <ConfirmDialog
+            open={confirmDelete}
+            text="Bu imtahan silinəcək."
+            onCancel={() => setConfirmDelete(false)}
+            onConfirm={async () => {
+              setConfirmDelete(false);
               try {
                 await deleteExam(id);
                 navigate('/teacher');
@@ -94,9 +103,7 @@ export default function ExamStats() {
                 alert(errorMessage(err, 'İmtahan silinmədi.'));
               }
             }}
-          >
-            Sil
-          </Button>
+          />
         </div>
       </div>
 

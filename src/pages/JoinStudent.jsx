@@ -8,6 +8,7 @@ import { fetchGroupInvite, registerStudentInvite } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
 import { buildStudentEmail, STUDENT_EMAIL_HINT, STUDENT_EMAIL_RE } from '../lib/studentEmail';
+import { localDb } from '../lib/localDb';
 
 export default function JoinStudent() {
   const { code } = useParams();
@@ -32,6 +33,8 @@ export default function JoinStudent() {
     phone: '',
     email: '',
     password: '',
+    dreamUniversity: '',
+    dreamMajor: '',
   });
   const suggestedEmail = buildStudentEmail(form.firstName, form.lastName, form.fatherName);
 
@@ -89,6 +92,13 @@ export default function JoinStudent() {
     }
     setSaving(true);
     try {
+      if (form.dreamUniversity.trim() || form.dreamMajor.trim()) {
+        localDb.saveDreamPending(email, {
+          university: form.dreamUniversity.trim(),
+          major: form.dreamMajor.trim(),
+          image: '',
+        });
+      }
       const result = await registerStudentInvite({
         inviteCode: code,
         firstName: form.firstName.trim(),
@@ -209,6 +219,24 @@ export default function JoinStudent() {
                       ? `Giriş ünvanı: ${suggestedEmail}`
                       : 'Ad, soyad və ata adı yazın. Ünvan belə yaranır: nigar.eliyeva_veli@gmail.com'}
                   </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Dream university"
+                    name="dreamUniversity"
+                    value={form.dreamUniversity}
+                    onChange={onChange}
+                    placeholder="Arzu etdiyiniz universitet"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Input
+                    label="İxtisas"
+                    name="dreamMajor"
+                    value={form.dreamMajor}
+                    onChange={onChange}
+                    placeholder="Arzu etdiyiniz ixtisas"
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <Input

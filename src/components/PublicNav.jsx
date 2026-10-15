@@ -4,10 +4,10 @@ import { GraduationCap, Menu, Moon, Sun, X } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 const LINKS = [
-  { to: '/#features', label: 'İmkanlar' },
+  { to: '/#imkanlar', label: 'İmkanlar' },
   { to: '/teachers', label: 'Müəllim tap' },
   { to: '/exams', label: 'Açıq imtahanlar' },
-  { to: '/#contact', label: 'Əlaqə' },
+  { to: '/#elaqe', label: 'Əlaqə' },
 ];
 
 export default function PublicNav({ darkOnNavy = false, appearance }) {
@@ -21,28 +21,30 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
   }, [location.pathname, location.hash]);
 
   const bar = navy
-    ? 'border-white/10 bg-[#0b1220] text-white'
+    ? 'border-[#2a2a2a] bg-[#161616] text-[#e8e8e8]'
     : 'border-indigo-100 bg-white text-slate-900';
   const ghost = navy
-    ? 'rounded-xl px-3 py-2 text-sm font-medium text-indigo-100 hover:bg-white/10'
+    ? 'rounded-md px-2.5 py-1.5 text-sm text-[#c8c8c8] hover:bg-white/5 hover:text-white'
     : 'rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-indigo-50';
   const primary = navy
-    ? 'rounded-xl bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-400'
+    ? 'rounded-md bg-[#3a2428] px-2.5 py-1.5 font-mono text-[13px] text-[#e7a8a8] hover:bg-[#4a2c32]'
     : 'rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500';
   const iconBtn = navy
-    ? 'rounded-xl p-2 text-indigo-200 hover:bg-white/10'
+    ? 'rounded-md p-2 text-[#a3a3a3] hover:bg-white/5 hover:text-white'
     : 'rounded-xl p-2.5 text-slate-500 hover:bg-indigo-50';
 
   return (
     <header className={`sticky top-0 z-40 border-b backdrop-blur ${bar}`}>
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
         <Link to="/" className="flex min-w-0 items-center gap-2">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${navy ? 'bg-indigo-500' : 'bg-indigo-600'} text-white`}>
-            <GraduationCap size={20} />
-          </div>
+          {navy ? null : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+              <GraduationCap size={20} />
+            </div>
+          )}
           <div className="min-w-0">
-            <p className="text-lg font-bold leading-tight">ExamPulse</p>
-            <p className={`truncate text-xs ${navy ? 'text-indigo-200' : 'text-slate-500'}`}>İmtahan platforması</p>
+            <p className={`leading-tight ${navy ? 'text-[15px] font-semibold text-[#f2f2f2]' : 'text-lg font-bold'}`}>ExamPulse</p>
+            {navy ? null : <p className="truncate text-xs text-slate-500">İmtahan platforması</p>}
           </div>
         </Link>
 
@@ -76,7 +78,7 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
       </div>
 
       {open ? (
-        <div className={`border-t px-4 py-3 md:hidden ${navy ? 'border-white/10' : 'border-indigo-100'}`}>
+        <div className={`border-t px-4 py-3 md:hidden ${navy ? 'border-[#2a2a2a]' : 'border-indigo-100'}`}>
           <div className="flex flex-col gap-1">
             {LINKS.map((item) => (
               <Link key={item.to} to={item.to} className={ghost}>

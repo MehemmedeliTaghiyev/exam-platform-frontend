@@ -103,7 +103,15 @@ export function examDriveFileId(exam) {
 }
 
 export function isDriveMarkerQuestion(q) {
-  return /__DRIVE__|DRVFILE:/i.test(String(q?.text || ''));
+  const text = String(q?.text || q?.Text || q?.questionText || q?.QuestionText || '').trim();
+  if (!text) return false;
+  const rest = text
+    .replace(/^__DRIVE__\s*/i, '')
+    .replace(/DRVFILE:\S+\s*/gi, '')
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .trim();
+  const tagged = text.startsWith('__DRIVE__') || /^DRVFILE:/i.test(text);
+  return tagged && !rest;
 }
 
 export function driveIdFromQuestions(questions) {

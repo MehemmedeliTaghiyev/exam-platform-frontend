@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
-import { Badge, Button, Card, EmptyState, Input, Modal, Textarea } from '../components/ui';
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, Textarea } from '../components/ui';
 import {
   createGroup,
   deleteGroup,
@@ -31,6 +31,8 @@ export default function TeacherCabinet() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [groups, setGroups] = useState([]);
+  const [ask, setAsk] = useState(null);
+  const askConfirm = (text, note) => new Promise((resolve) => setAsk({ text, note, resolve }));
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -122,7 +124,7 @@ export default function TeacherCabinet() {
     e.stopPropagation();
     if (deletingId) return;
     const label = group.number || group.name || 'qrup';
-    if (!window.confirm(`${label} silinsin? Tələbələr silinməyəcək, qrup siyahıdan çıxacaq.`)) return;
+    if (!(await askConfirm(`${label} silinsin?`, 'Tələbələr silinməyəcək, qrup siyahıdan çıxacaq.'))) return;
     setDeletingId(group.id);
     setError('');
     try {
@@ -165,6 +167,13 @@ export default function TeacherCabinet() {
 
   return (
     <AppShell title="Müəllim kabineti">
+      <ConfirmDialog
+        open={Boolean(ask)}
+        text={ask?.text}
+        note={ask?.note}
+        onCancel={() => { ask?.resolve(false); setAsk(null); }}
+        onConfirm={() => { ask?.resolve(true); setAsk(null); }}
+      />
       <AccessPeriodBanner user={periodUser || user} />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

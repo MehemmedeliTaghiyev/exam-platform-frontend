@@ -9,7 +9,7 @@ export default function AccessPeriodBanner({ user }) {
   return (
     <Card className="mb-6 border-indigo-100 bg-indigo-50/80 dark:border-indigo-900/40 dark:bg-indigo-950/30">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+        <div className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[16px] bg-[linear-gradient(135deg,#5b4cf5,#22d3ee)] text-white">
           <Clock size={18} />
         </div>
         <div>

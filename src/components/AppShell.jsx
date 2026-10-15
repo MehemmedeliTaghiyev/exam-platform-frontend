@@ -1,14 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect } from 'react';
 import {
   BookOpen,
   Users,
   LogOut,
   Moon,
   Sun,
-  Menu,
-  X,
-  GraduationCap,
+  Zap,
   Shield,
   KeyRound,
   Mail,
@@ -47,14 +45,20 @@ const navByRole = {
   ],
 };
 
-export default function AppShell({ title, children, mainClassName = '' }) {
+function roleLabel(role) {
+  if (role === 'Teacher') return 'Müəllim';
+  if (role === 'Student') return 'Şagird';
+  if (role === 'Admin') return 'Admin';
+  return '';
+}
+
+export default function AppShell({ title, children, mainClassName = '', action = null }) {
   const { user, logout } = useContext(AuthContext);
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
   const role = normalizeRole(user?.role);
   useEffect(() => {
-    if (!user || user.practice || role !== 'Teacher') return;
+    if (!user || user.practice || (role !== 'Teacher' && role !== 'Admin')) return;
     releaseOpenGroupStudents().catch(() => {});
   }, [user, role]);
   const links = (navByRole[role] || navByRole.Student).filter((item) => {
@@ -70,23 +74,20 @@ export default function AppShell({ title, children, mainClassName = '' }) {
     navigate(user?.practice ? '/' : '/login');
   };
 
+  const initial = String(user?.fullName || user?.email || 'E').trim().charAt(0).toUpperCase();
+
   return (
-    <div className="min-h-screen bg-surface text-ink dark:bg-[#0b1220] dark:text-gray-100">
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-gray-200 bg-white p-5 transition-transform duration-200 dark:border-slate-800 dark:bg-slate-950 ${
-          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-      >
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[268px] flex-col border-r border-[var(--line)] bg-[var(--card)] p-5 min-[860px]:flex">
         <div className="mb-8 flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <GraduationCap size={18} />
+          <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[linear-gradient(135deg,#5b4cf5,#22d3ee)] text-white">
+            <Zap size={18} fill="currentColor" aria-hidden="true" />
           </div>
           <div>
-            <p className="text-sm font-bold tracking-tight">ExamPulse</p>
-            <p className="text-xs text-gray-400">İnkişaf izləmə</p>
+            <p className="font-extrabold leading-tight">ExamPulse</p>
+            <p className="text-xs text-[var(--muted)]">İnkişaf izləmə</p>
           </div>
         </div>
-
         <nav className="space-y-1">
           {links.map((item) => {
             const Icon = item.icon;
@@ -95,12 +96,11 @@ export default function AppShell({ title, children, mainClassName = '' }) {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                onClick={() => setOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                  `ep-focus flex h-[46px] items-center gap-3 rounded-[14px] px-3 text-sm font-semibold ${
                     isActive
-                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-600/15 dark:text-brand-300'
-                      : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-slate-900'
+                      ? 'bg-[linear-gradient(135deg,#5b4cf5,#7c5cff)] text-white shadow-[0_10px_24px_var(--glow)]'
+                      : 'text-[var(--muted)] hover:bg-[var(--accent-soft)]'
                   }`
                 }
               >
@@ -110,52 +110,64 @@ export default function AppShell({ title, children, mainClassName = '' }) {
             );
           })}
         </nav>
-
-        <div className="absolute bottom-5 left-5 right-5">
-          <p className="truncate text-sm font-medium">{user?.fullName || user?.email}</p>
-          <p className="text-xs text-gray-400">{role}</p>
+        <div className="mt-auto flex items-center gap-3 pt-6">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--accent-soft)] font-extrabold text-[var(--accent)]">{initial}</span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-extrabold">{user?.fullName || user?.email}</p>
+            <p className="text-xs text-[var(--muted)]">{roleLabel(role)}</p>
+          </div>
         </div>
       </aside>
 
-      {open && (
-        <div className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden" onClick={() => setOpen(false)} />
-      )}
-
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80 sm:px-8">
-          <div className="flex items-center gap-3">
-            <button
-              className="rounded-lg p-2 text-gray-500 transition-colors duration-200 hover:bg-gray-100 lg:hidden dark:hover:bg-slate-800"
-              onClick={() => setOpen((v) => !v)}
-            >
-              {open ? <X size={18} /> : <Menu size={18} />}
-            </button>
-            <h1 className="text-lg font-bold">{title}</h1>
+      <div className="min-[860px]:pl-[268px]">
+        <header
+          className="sticky top-0 z-20 flex h-[72px] items-center justify-between gap-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg)_82%,transparent)] px-4 backdrop-blur min-[860px]:px-8"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="truncate text-[22px] font-extrabold">{title}</h1>
             {user?.practice ? (
-              <span className="hidden rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 sm:inline dark:bg-amber-950/50 dark:text-amber-200">
-                Məşq rejimi
-              </span>
+              <span className="rounded-full bg-[var(--warning-bg)] px-2.5 py-0.5 text-xs font-extrabold text-[var(--warning-text)]">Məşq rejimi</span>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggle}
-              className="rounded-xl p-2.5 text-gray-500 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-slate-800"
-              title="Tema"
-            >
+            {action}
+            <button type="button" onClick={toggle} className="ep-focus grid h-11 w-11 place-items-center rounded-[14px]" aria-label="Tema">
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button
-              onClick={handleLogout}
-              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-all duration-200 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800"
-            >
+            <button type="button" onClick={handleLogout} className="ep-focus inline-flex h-11 items-center gap-2 rounded-[14px] px-3 text-sm font-semibold">
               <LogOut size={16} />
-              <span className="hidden sm:inline">Çıxış</span>
+              <span className="max-[860px]:sr-only">Çıxış</span>
             </button>
           </div>
         </header>
-        <main className={classNames('mx-auto max-w-6xl px-4 py-8 sm:px-8', mainClassName)}>{children}</main>
+        <main className={classNames('mx-auto max-w-[1240px] px-4 py-7 pb-28 min-[860px]:px-8 min-[860px]:pb-7', mainClassName)}>{children}</main>
       </div>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 grid border-t border-[var(--line)] bg-[var(--card)] min-[860px]:hidden"
+        style={{ gridTemplateColumns: `repeat(${Math.max(links.length, 1)}, minmax(0, 1fr))`, paddingBottom: 'env(safe-area-inset-bottom)' }}
+        aria-label="Kabinet menyusu"
+      >
+        {links.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `ep-focus flex min-h-[52px] flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-semibold ${
+                  isActive ? 'text-[var(--accent)]' : 'text-[var(--muted)]'
+                }`
+              }
+            >
+              <Icon size={18} />
+              {item.label}
+            </NavLink>
+          );
+        })}
+      </nav>
     </div>
   );
 }

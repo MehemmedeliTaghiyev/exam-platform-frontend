@@ -5,6 +5,9 @@ const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' :
 const API = axios.create({
   baseURL: API_BASE,
   timeout: 20000,
+  headers: {
+    Accept: 'application/json; charset=utf-8',
+  },
 });
 
 API.interceptors.request.use((config) => {

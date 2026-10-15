@@ -242,6 +242,45 @@ export const localDb = {
     this.saveDiscountTickets(list);
     return ticket;
   },
+  getDream(studentId) {
+    const map = read('dream_university', {});
+    return map[String(studentId || '')] || null;
+  },
+  saveDream(studentId, dream) {
+    const map = read('dream_university', {});
+    map[String(studentId || '')] = dream;
+    write('dream_university', map);
+    return dream;
+  },
+  getDreamPending(email) {
+    const map = read('dream_university_pending', {});
+    return map[String(email || '').trim().toLowerCase()] || null;
+  },
+  saveDreamPending(email, dream) {
+    const key = String(email || '').trim().toLowerCase();
+    if (!key) return null;
+    const map = read('dream_university_pending', {});
+    map[key] = dream;
+    write('dream_university_pending', map);
+    return dream;
+  },
+  takeDreamPending(email) {
+    const key = String(email || '').trim().toLowerCase();
+    const map = read('dream_university_pending', {});
+    const dream = map[key] || null;
+    if (dream) {
+      delete map[key];
+      write('dream_university_pending', map);
+    }
+    return dream;
+  },
+  getDuels() {
+    const list = read('duels', []);
+    return Array.isArray(list) ? list : [];
+  },
+  saveDuels(list) {
+    write('duels', list);
+  },
   markTicketUsed(code) {
     const list = this.getDiscountTickets().map((t) => (
       t.code === code ? { ...t, usedAt: new Date().toISOString() } : t

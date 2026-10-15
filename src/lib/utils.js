@@ -174,9 +174,11 @@ export function accessPeriodInfo(user) {
 export function remainingUsageLabel(endsAt) {
   const n = daysUntil(endsAt);
   if (n == null) return { text: '—', className: 'text-gray-400', days: null };
-  if (n > 0) return { text: `Bitməsinə ${n} gün qalıb`, className: 'font-semibold text-emerald-600', days: n };
-  if (n === 0) return { text: 'Müddət bu gün bitir', className: 'font-semibold text-amber-600', days: 0 };
-  return { text: `Müddət bitib (${Math.abs(n)} gün əvvəl)`, className: 'font-semibold text-red-600', days: n };
+  if (n > 7) return { text: `Bitməsinə ${n} gün qalıb`, className: 'font-semibold text-[var(--success-text)]', days: n };
+  if (n >= 3) return { text: `Bitməsinə ${n} gün qalıb`, className: 'font-semibold text-[var(--warning-text)]', days: n };
+  if (n > 0) return { text: `Bitməsinə ${n} gün qalıb`, className: 'font-semibold text-[var(--danger-text)]', days: n };
+  if (n === 0) return { text: 'Müddət bu gün bitir', className: 'font-semibold text-[var(--danger-text)]', days: 0 };
+  return { text: `Müddət bitib (${Math.abs(n)} gün əvvəl)`, className: 'font-semibold text-[var(--danger-text)]', days: n };
 }
 
 export function isAiEnabled(user) {

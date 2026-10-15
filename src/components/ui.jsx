@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { classNames } from '../lib/utils';
 
 export function Button({
@@ -5,25 +7,28 @@ export function Button({
   variant = 'primary',
   className = '',
   type = 'button',
+  size = 'md',
   ...props
 }) {
   const styles = {
-    primary:
-      'bg-brand-600 text-white hover:bg-brand-500 shadow-sm',
-    secondary:
-      'bg-white text-ink border border-gray-200 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-100 dark:border-slate-700 dark:hover:bg-slate-700',
-    ghost:
-      'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800',
-    danger: 'bg-red-600 text-white hover:bg-red-500',
-    success: 'bg-emerald-600 text-white hover:bg-emerald-500',
+    primary: 'text-white shadow-[0_10px_28px_var(--glow)]',
+    secondary: 'border border-[var(--line)] bg-[var(--card)] text-[var(--text)]',
+    ghost: 'bg-transparent text-[var(--muted)]',
+    danger: 'bg-[#e11d48] text-white',
+    'danger-soft': 'bg-[rgba(225,29,72,0.12)] text-[var(--danger-text)]',
+    'text-danger': 'bg-transparent text-[var(--danger-text)]',
+    success: 'bg-[#16a34a] text-white',
   };
+  const sizeClass = size === 'sm' ? 'min-h-10 px-3 text-sm' : 'min-h-12 px-4 text-sm';
 
   return (
     <button
       type={type}
       className={classNames(
-        'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.96] active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
-        styles[variant],
+        'ep-focus ep-lift inline-flex items-center justify-center gap-2 rounded-[14px] font-semibold disabled:cursor-not-allowed disabled:opacity-50',
+        sizeClass,
+        styles[variant] || styles.primary,
+        variant === 'primary' ? 'bg-[linear-gradient(135deg,#5b4cf5,#7c5cff)]' : '',
         className,
       )}
       {...props}
@@ -38,7 +43,7 @@ export function Card({ children, className = '', onClick }) {
     <div
       onClick={onClick}
       className={classNames(
-        'rounded-2xl border border-gray-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)] dark:border-slate-800 dark:bg-slate-900/80',
+        'rounded-[22px] border border-[var(--line)] bg-[var(--card)] p-6 text-[var(--text)]',
         onClick && 'cursor-pointer hover:border-brand-200 active:scale-[0.98] active:brightness-95 dark:hover:border-brand-700 transition-all duration-150',
         className,
       )}
@@ -48,19 +53,34 @@ export function Card({ children, className = '', onClick }) {
   );
 }
 
-export function Input({ label, className = '', ...props }) {
+export function Input({ label, className = '', type = 'text', ...props }) {
+  const [show, setShow] = useState(false);
+  const secret = type === 'password';
+  const field = classNames(
+    'ep-focus h-[52px] w-full rounded-[14px] border border-[var(--line)] bg-[var(--bg)] px-3.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]',
+    secret && 'pr-12',
+    className,
+  );
   return (
     <label className="block space-y-1.5">
       {label && (
-        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{label}</span>
+        <span className="text-sm font-semibold text-[var(--text)]">{label}</span>
       )}
-      <input
-        className={classNames(
-          'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-all duration-200 placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100 dark:focus:ring-brand-900/40',
-          className,
-        )}
-        {...props}
-      />
+      {secret ? (
+        <span className="relative block">
+          <input type={show ? 'text' : 'password'} className={field} {...props} />
+          <button
+            type="button"
+            className="ep-focus absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-[10px] text-[var(--muted)]"
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
+          >
+            {show ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </span>
+      ) : (
+        <input type={type} className={field} {...props} />
+      )}
     </label>
   );
 }
@@ -69,11 +89,11 @@ export function Select({ label, children, className = '', ...props }) {
   return (
     <label className="block space-y-1.5">
       {label && (
-        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{label}</span>
+        <span className="text-sm font-semibold text-[var(--text)]">{label}</span>
       )}
       <select
         className={classNames(
-          'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-all duration-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100',
+          'ep-focus h-[52px] w-full rounded-[14px] border border-[var(--line)] bg-[var(--bg)] px-3.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]',
           className,
         )}
         {...props}
@@ -88,11 +108,11 @@ export function Textarea({ label, className = '', ...props }) {
   return (
     <label className="block space-y-1.5">
       {label && (
-        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{label}</span>
+        <span className="text-sm font-semibold text-[var(--text)]">{label}</span>
       )}
       <textarea
         className={classNames(
-          'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-all duration-200 placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-50 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100',
+          'ep-focus w-full rounded-[14px] border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]',
           className,
         )}
         {...props}
@@ -181,15 +201,34 @@ export function FormError({ message }) {
 
 export function Badge({ children, tone = 'neutral' }) {
   const tones = {
-    neutral: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-300',
-    brand: 'bg-brand-50 text-brand-700 dark:bg-brand-600/20 dark:text-brand-300',
-    success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    warning: 'bg-amber-50 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-    danger: 'bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    neutral: 'bg-[var(--line)] text-[var(--muted)]',
+    brand: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+    accent: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+    success: 'bg-[rgba(22,163,74,0.12)] text-[var(--success-text)]',
+    warning: 'bg-[var(--warning-bg)] text-[var(--warning-text)]',
+    danger: 'bg-[rgba(225,29,72,0.12)] text-[var(--danger-text)]',
   };
   return (
-    <span className={classNames('inline-flex rounded-full px-2.5 py-1 text-xs font-medium', tones[tone])}>
+    <span className={classNames('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold', tones[tone] || tones.neutral)}>
       {children}
     </span>
+  );
+}
+
+export function ConfirmDialog({ open, text, note, onCancel, onConfirm }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+      <button type="button" className="absolute inset-0 bg-[#0a0e1f]/50" aria-label="Ləğv et" onClick={onCancel} />
+      <div className="relative w-full max-w-sm rounded-[22px] border border-[var(--line)] bg-[var(--card)] p-6 text-[var(--text)]">
+        <h3 className="text-lg font-extrabold">Əminsiniz?</h3>
+        {text ? <p className="mt-2 text-sm text-[var(--muted)]">{text}</p> : null}
+        {note ? <p className="mt-2 text-sm text-[var(--muted)]">{note}</p> : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onCancel}>Ləğv et</Button>
+          <Button variant="danger" size="sm" onClick={onConfirm}>Sil</Button>
+        </div>
+      </div>
+    </div>
   );
 }

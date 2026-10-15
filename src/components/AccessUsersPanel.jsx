@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { Ban, CheckCircle2, RotateCcw, Trash2, Users } from 'lucide-react';
 import AppShell from './AppShell';
-import { Badge, Button, Card, EmptyState, Skeleton } from './ui';
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Skeleton } from './ui';
 import { AuthContext } from '../context/AuthContext';
 import API from '../api/axios';
 import { errorMessage, formatDate, unwrapList } from '../lib/utils';
@@ -29,6 +29,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null);
   const showGroup = tab === 'Student';
 
   const load = async (role = tab) => {
@@ -65,6 +66,31 @@ export default function AccessUsersPanel({ title, description, roles }) {
 
   const currentLabel = roles.find((r) => r.id === tab)?.label || 'İstifadəçilər';
 
+  const actionsFor = (u) => (
+    <div className="flex flex-wrap gap-2">
+      {!u.isDeleted && Number(u.id) > 0 && (
+        <Button
+          size="sm"
+          variant={u.isAccessEnabled ? 'danger-soft' : 'success'}
+          disabled={busyId === u.id}
+          onClick={() => run(u.id, () => API.patch(`/Users/${u.id}/access`, { enabled: !u.isAccessEnabled }))}
+        >
+          {u.isAccessEnabled ? <Ban size={14} /> : <CheckCircle2 size={14} />}
+          {u.isAccessEnabled ? 'Pəncərəni bağla' : 'Giriş ver'}
+        </Button>
+      )}
+      {u.isDeleted ? (
+        <Button size="sm" variant="secondary" disabled={busyId === u.id} onClick={() => run(u.id, () => API.post(`/Users/${u.id}/restore`))}>
+          <RotateCcw size={14} /> Bərpa et
+        </Button>
+      ) : Number(u.id) > 0 ? (
+        <Button size="sm" variant="text-danger" disabled={busyId === u.id} onClick={() => setPendingDelete(u)}>
+          <Trash2 size={14} /> Sil
+        </Button>
+      ) : null}
+    </div>
+  );
+
   return (
     <AppShell title={title}>
       <p className="mb-6 text-sm text-gray-500">{description}</p>
@@ -99,7 +125,21 @@ export default function AccessUsersPanel({ title, description, roles }) {
               <Users size={18} /> {currentLabel}
             </h3>
           </div>
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <div className="space-y-3 p-4 min-[860px]:hidden">
+            {users.map((u) => (
+              <div key={u.id} className="rounded-[16px] border border-[var(--line)] p-4">
+                <p className="text-lg font-extrabold">{u.fullName}</p>
+                <p className="text-sm text-[var(--muted)]">{u.email}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {showGroup ? <Badge tone="accent">Qrup: {u.groupName || '—'}</Badge> : null}
+                  <span className="whitespace-nowrap text-sm text-[var(--muted)]">{formatDate(u.createdAt)}</span>
+                  {u.isDeleted ? <Badge>Silinib</Badge> : u.isAccessEnabled ? <Badge tone="success">Giriş açıq</Badge> : <Badge tone="danger">Pəncərə bağlı</Badge>}
+                </div>
+                <div className="mt-3">{actionsFor(u)}</div>
+              </div>
+            ))}
+          </div>
+          <table className="hidden w-full text-left text-sm min-[860px]:table">
             <thead>
               <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
                 <th className="px-5 py-3 font-medium">Ad</th>
@@ -117,7 +157,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
                   <td className="px-5 py-3 text-gray-500">{u.email}</td>
                   {showGroup && (
                     <td className="px-5 py-3">
-                      <Badge tone="brand">{u.groupName || '—'}</Badge>
+                      <Badge tone="accent">Qrup: {u.groupName || '—'}</Badge>
                     </td>
                   )}
                   <td className="px-5 py-3 text-gray-500">{formatDate(u.createdAt)}</td>
@@ -154,12 +194,10 @@ export default function AccessUsersPanel({ title, description, roles }) {
                         </Button>
                       ) : Number(u.id) > 0 ? (
                         <Button
-                          variant="ghost"
+                          variant="text-danger"
+                          size="sm"
                           disabled={busyId === u.id}
-                          onClick={() => {
-                            if (!window.confirm(`${u.fullName} silinsin? (soft delete)`)) return;
-                            run(u.id, () => API.delete(`/Users/${u.id}`));
-                          }}
+                          onClick={() => setPendingDelete(u)}
                         >
                           <Trash2 size={14} /> Sil
                         </Button>
@@ -172,6 +210,17 @@ export default function AccessUsersPanel({ title, description, roles }) {
           </table>
         </Card>
       )}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        text={pendingDelete ? `${pendingDelete.fullName} silinəcək.` : ''}
+        note="Bu yumşaq silmədir. Qeyd sonra bərpa edilə bilər."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const target = pendingDelete;
+          setPendingDelete(null);
+          if (target) run(target.id, () => API.delete(`/Users/${target.id}`));
+        }}
+      />
     </AppShell>
   );
 }

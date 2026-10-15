@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import DualExamRanking from '../components/DualExamRanking';
-import { Badge, Button, Skeleton } from '../components/ui';
+import { Badge, Button, ConfirmDialog, Skeleton } from '../components/ui';
 import { examOwnerId, fetchExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, deleteExam } from '../lib/examApi';
 import { errorMessage, formatDate } from '../lib/utils';
 import { buildExamStats, splitExamLeaderboards } from '../lib/stats';
@@ -12,6 +12,7 @@ export default function AdminExamDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [exam, setExam] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [rows, setRows] = useState([]);
   const [ownIds, setOwnIds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,8 +62,16 @@ export default function AdminExamDetail() {
             <Badge>Orta uğur {stats.avg}%</Badge>
             <Button
               variant="danger"
-              onClick={async () => {
-                if (!window.confirm('Bu imtahanı silmək istəyirsiniz?')) return;
+              onClick={() => setConfirmDelete(true)}
+            >
+              İmtahanı sil
+            </Button>
+            <ConfirmDialog
+              open={confirmDelete}
+              text="Bu imtahan silinəcək."
+              onCancel={() => setConfirmDelete(false)}
+              onConfirm={async () => {
+                setConfirmDelete(false);
                 try {
                   await deleteExam(id);
                   navigate('/admin');
@@ -70,9 +79,7 @@ export default function AdminExamDetail() {
                   alert(errorMessage(err, 'İmtahan silinmədi.'));
                 }
               }}
-            >
-              İmtahanı sil
-            </Button>
+            />
           </div>
 
           <DualExamRanking ownRows={boards.own} generalRows={boards.general} />

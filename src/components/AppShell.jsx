@@ -75,93 +75,76 @@ export default function AppShell({ title, children, mainClassName = '', action =
   };
 
   const initial = String(user?.fullName || user?.email || 'E').trim().charAt(0).toUpperCase();
+  const fullLabel = String(user?.fullName || user?.email || 'istifadəçi').trim();
+  const welcomeName = fullLabel.length <= 28 ? fullLabel : fullLabel.split(/\s+/)[0];
+
+  const itemClass = ({ isActive }) => classNames('ep-focus shell-link', isActive && 'shell-link-active');
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[268px] flex-col border-r border-[var(--line)] bg-[var(--card)] p-5 min-[860px]:flex">
-        <div className="mb-8 flex items-center gap-2.5">
-          <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[linear-gradient(135deg,#5b4cf5,#22d3ee)] text-white">
-            <Zap size={18} fill="currentColor" aria-hidden="true" />
+    <div className="shell-page">
+      <div className="shell-frame">
+        <aside className="shell-side">
+          <div className="shell-logo">
+            <span className="shell-mark">
+              <Zap size={18} fill="currentColor" aria-hidden="true" />
+            </span>
+            <p className="text-base font-extrabold leading-tight">ExamPulse</p>
           </div>
-          <div>
-            <p className="font-extrabold leading-tight">ExamPulse</p>
-            <p className="text-xs text-[var(--muted)]">İnkişaf izləmə</p>
+          <nav className="shell-nav" aria-label="Kabinet menyusu">
+            {links.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink key={item.to} to={item.to} end={item.end} className={itemClass}>
+                  <Icon size={18} />
+                  {item.label}
+                </NavLink>
+              );
+            })}
+          </nav>
+          <div className="shell-user">
+            <span className="shell-avatar">{initial}</span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-extrabold">{user?.fullName || user?.email}</p>
+              <p className="text-xs text-white/70">{roleLabel(role)}</p>
+            </div>
           </div>
-        </div>
-        <nav className="space-y-1">
-          {links.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `ep-focus flex h-[46px] items-center gap-3 rounded-[14px] px-3 text-sm font-semibold ${
-                    isActive
-                      ? 'bg-[linear-gradient(135deg,#5b4cf5,#7c5cff)] text-white shadow-[0_10px_24px_var(--glow)]'
-                      : 'text-[var(--muted)] hover:bg-[var(--accent-soft)]'
-                  }`
-                }
-              >
-                <Icon size={18} />
-                {item.label}
-              </NavLink>
-            );
-          })}
-        </nav>
-        <div className="mt-auto flex items-center gap-3 pt-6">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--accent-soft)] font-extrabold text-[var(--accent)]">{initial}</span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-extrabold">{user?.fullName || user?.email}</p>
-            <p className="text-xs text-[var(--muted)]">{roleLabel(role)}</p>
-          </div>
-        </div>
-      </aside>
+        </aside>
 
-      <div className="min-[860px]:pl-[268px]">
-        <header
-          className="sticky top-0 z-20 flex h-[72px] items-center justify-between gap-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--bg)_82%,transparent)] px-4 backdrop-blur min-[860px]:px-8"
-          style={{ paddingTop: 'env(safe-area-inset-top)' }}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <h1 className="truncate text-[22px] font-extrabold">{title}</h1>
-            {user?.practice ? (
-              <span className="rounded-full bg-[var(--warning-bg)] px-2.5 py-0.5 text-xs font-extrabold text-[var(--warning-text)]">Məşq rejimi</span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            {action}
-            <button type="button" onClick={toggle} className="ep-focus grid h-11 w-11 place-items-center rounded-[14px]" aria-label="Tema">
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-            <button type="button" onClick={handleLogout} className="ep-focus inline-flex h-11 items-center gap-2 rounded-[14px] px-3 text-sm font-semibold">
-              <LogOut size={16} />
-              <span className="max-[860px]:sr-only">Çıxış</span>
-            </button>
-          </div>
-        </header>
-        <main className={classNames('mx-auto max-w-[1240px] px-4 py-7 pb-28 min-[860px]:px-8 min-[860px]:pb-7', mainClassName)}>{children}</main>
+        <div className="shell-main">
+          <header className="shell-top" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="shell-welcome">Xoş gəldiniz, {welcomeName}</p>
+              {user?.practice ? <span className="rounded-full bg-[var(--warning-bg)] px-2 py-0.5 text-[11px] font-extrabold text-[var(--warning-text)]">Məşq</span> : null}
+            </div>
+            <div className="flex min-w-0 items-center gap-2">
+              {action}
+              <p className="shell-identity hidden min-[980px]:flex">
+                <span className="max-w-[180px] truncate">{user?.email || user?.fullName}</span>
+                <span className="shell-avatar">{initial}</span>
+              </p>
+              <button type="button" onClick={toggle} className="ep-focus shell-icon-btn" aria-label="Tema">
+                {dark ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
+              <button type="button" onClick={handleLogout} className="ep-focus shell-logout">
+                <LogOut size={15} />
+                <span className="max-[860px]:sr-only">Çıxış</span>
+              </button>
+            </div>
+          </header>
+          <h1 className="shell-title">{title}</h1>
+          <main className={classNames('shell-content', mainClassName)}>{children}</main>
+        </div>
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid border-t border-[var(--line)] bg-[var(--card)] min-[860px]:hidden"
-        style={{ gridTemplateColumns: `repeat(${Math.max(links.length, 1)}, minmax(0, 1fr))`, paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="shell-bottom"
+        style={{ gridTemplateColumns: `repeat(${Math.max(links.length, 1)}, minmax(0, 1fr))` }}
         aria-label="Kabinet menyusu"
       >
         {links.map((item) => {
           const Icon = item.icon;
           return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `ep-focus flex min-h-[52px] flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-semibold ${
-                  isActive ? 'text-[var(--accent)]' : 'text-[var(--muted)]'
-                }`
-              }
-            >
+            <NavLink key={`m-${item.to}`} to={item.to} end={item.end} className={itemClass}>
               <Icon size={18} />
               {item.label}
             </NavLink>

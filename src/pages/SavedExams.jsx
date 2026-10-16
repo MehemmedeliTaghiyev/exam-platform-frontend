@@ -6,7 +6,7 @@ import { EmptyState, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams, fetchExams } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
-import { isExamScheduled } from '../lib/utils';
+import { examRetakeReady, isExamEnded, isExamScheduled } from '../lib/utils';
 import { examMatchesSearch } from '../lib/publicExams';
 import ExamSearchBar from '../components/ExamSearchBar';
 
@@ -48,7 +48,16 @@ export default function SavedExams() {
 
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
+    if (isExamEnded(exam)) {
+      navigate(`/student/exams/${exam.id}/review`);
+      return;
+    }
     navigate(`/student/exams/${exam.id}`);
+  };
+
+  const retakeExam = (exam) => {
+    if (!examRetakeReady(exam)) return;
+    navigate(`/student/exams/${exam.id}?yeniden=1`);
   };
 
   const visible = saved.filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }));
@@ -71,7 +80,8 @@ export default function SavedExams() {
               exam={exam}
               saved
               onToggleSave={toggle}
-              actionLabel="İmtahana bax"
+              onRetake={examRetakeReady(exam) ? retakeExam : undefined}
+              actionLabel={isExamEnded(exam) ? 'Nəticələrə bax' : 'İmtahana bax'}
               onOpen={() => openExam(exam)}
             />
           ))}

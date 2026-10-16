@@ -290,6 +290,13 @@ export function examCanEdit(exam) {
   return Date.now() - created.getTime() >= WEEK_MS;
 }
 
+export function examRetakeReady(exam) {
+  if (!exam || !isExamEnded(exam)) return false;
+  const end = parseExamDate(exam.endTime || exam.EndTime || exam.createdAt || exam.CreatedAt);
+  if (!end) return false;
+  return Date.now() - end.getTime() >= WEEK_MS;
+}
+
 export function percent(part, total) {
   if (!total) return 0;
   return Math.round((part / total) * 100);

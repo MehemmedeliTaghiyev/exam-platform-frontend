@@ -8,7 +8,8 @@ import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions
 import { splitExamLeaderboards } from '../lib/stats';
 import { AuthContext } from '../context/AuthContext';
 import { Award, CheckCircle2, Percent, Ticket, XCircle } from 'lucide-react';
-import { durationSecondsBetween, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
+import { durationSecondsBetween, examRetakeReady, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
+import { localDb } from '../lib/localDb';
 import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
 import { examTeacherId, maybeAwardDiscountTicket } from '../lib/teacherAccess';
@@ -57,6 +58,7 @@ export default function ExamResult() {
   const [error, setError] = useState('');
   const [ticket, setTicket] = useState(null);
   const [boards, setBoards] = useState({ own: [], general: [] });
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     const run = async () => {
@@ -162,6 +164,11 @@ export default function ExamResult() {
     };
   }, [examMeta, examId, review]);
 
+  useEffect(() => {
+    const target = examId || review?.result?.examId || examMeta?.id;
+    setSaved(Boolean(user?.id && target) && localDb.isExamSaved(user.id, target));
+  }, [examId, examMeta?.id, review, user?.id]);
+
   if (loading) {
     return (
       <AppShell title="Nəticə">
@@ -255,6 +262,26 @@ export default function ExamResult() {
                 Çətinlik balı: <span className="font-semibold text-ink dark:text-white">{weightedEarned} / {weightedMax}</span>
                 {' '}(asan 1 · orta 2 · çətin 3). Orta faiz bu ballara görə hesablanıb.
               </p>
+            ) : null}
+            {(user?.role === 'Student' || user?.practice) ? (
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const target = examMeta || { id: result?.examId || examId, title: result?.examTitle };
+                    if (!user?.id || target.id == null) return;
+                    const next = localDb.toggleSavedExam(user.id, target);
+                    setSaved(next.some((item) => String(item.id) === String(target.id)));
+                  }}
+                >
+                  {saved ? 'Saxlanıldı' : 'Saxla'}
+                </Button>
+                {examRetakeReady(examMeta) ? (
+                  <Button onClick={() => navigate(`/student/exams/${result?.examId || examId}?yeniden=1`)}>
+                    Yenidən həll et
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </Card>
         )}

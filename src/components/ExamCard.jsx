@@ -27,6 +27,7 @@ export default function ExamCard({
   resultText = '',
   saved = false,
   onToggleSave,
+  onRetake,
 }) {
   const [confirm, setConfirm] = useState(false);
   const status = resolveExamStatus(exam);
@@ -97,6 +98,18 @@ export default function ExamCard({
           <Users size={14} /> {exam.submissionsCount ?? 0} iştirakçı
         </span>
       </div>
+      {onRetake ? (
+        <button
+          type="button"
+          className="ep-focus mt-4 inline-flex min-h-11 items-center rounded-[14px] bg-[var(--accent-soft)] px-3 text-sm font-extrabold text-[var(--accent)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetake(exam);
+          }}
+        >
+          Yenidən həll et
+        </button>
+      ) : null}
       <div className="mt-5 flex items-center justify-between gap-2 border-t border-[var(--line)] pt-4">
         <div className={`text-sm font-semibold ${locked ? 'text-[var(--warning-text)]' : 'text-[var(--accent)]'}`}>
           {locked ? (

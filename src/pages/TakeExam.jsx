@@ -1,11 +1,12 @@
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Flag } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Bookmark, Flag } from 'lucide-react';
 import QuestionCard, { visibleStudentOptions } from '../components/QuestionCard';
 import { Button, Card } from '../components/ui';
 import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
+import { localDb } from '../lib/localDb';
 import { AuthContext } from '../context/AuthContext';
-import { formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate } from '../lib/utils';
+import { examRetakeReady, formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate } from '../lib/utils';
 import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
 import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
 import DrivePreview from '../components/DrivePreview';
@@ -212,6 +213,8 @@ function ExamSkeleton() {
 
 export default function TakeExam() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const wantsRetry = searchParams.get('yeniden') === '1';
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const [exam, setExam] = useState(null);
@@ -224,6 +227,7 @@ export default function TakeExam() {
   const [secondsBudget, setSecondsBudget] = useState(0);
   const [studentExamId, setStudentExamId] = useState(null);
   const [flash, setFlash] = useState({ id: null, n: 0 });
+  const [saved, setSaved] = useState(false);
   const submittedRef = useRef(false);
   const answersRef = useRef({});
   const sessionRef = useRef(null);
@@ -267,14 +271,15 @@ export default function TakeExam() {
         const qs = await fetchQuestions(examId, examData).catch(() => []);
         setQuestions(Array.isArray(qs) ? qs : []);
 
-        if (isExamEnded(examData)) {
+        const retry = wantsRetry && examRetakeReady(examData);
+        if (isExamEnded(examData) && !retry) {
           navigate(`/student/exams/${examId}/review`, { replace: true });
           return;
         }
 
         const endAt = parseExamDate(examData?.endTime);
         let remainingMs = endAt ? endAt.getTime() - Date.now() : NaN;
-        if (user?.practice) {
+        if (user?.practice || retry) {
           remainingMs = (examData?.durationMinutes || 30) * 60 * 1000;
         } else if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
           remainingMs = (examData?.durationMinutes || 30) * 60 * 1000;
@@ -283,21 +288,28 @@ export default function TakeExam() {
 
         startExam({ examId, studentId: user?.id })
           .then((started) => {
-            const sessionId = started.studentExamId || started.id;
-            if (started.alreadySubmitted) {
+            if (started.alreadySubmitted && !retry) {
               navigate(`/student/exams/${examId}/review`, { replace: true });
               return;
             }
+            const sessionId = started.alreadySubmitted
+              ? `retry-${examId}-${Date.now()}`
+              : (started.studentExamId || started.id);
             sessionRef.current = sessionId;
             setStudentExamId(sessionId);
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!retry) return;
+            const sessionId = `retry-${examId}-${Date.now()}`;
+            sessionRef.current = sessionId;
+            setStudentExamId(sessionId);
+          });
       } finally {
         setLoading(false);
       }
     };
     run();
-  }, [id, user?.id, navigate]);
+  }, [id, navigate, user?.id, user?.practice, wantsRetry]);
 
   useEffect(() => {
     answersRef.current = answers;
@@ -313,6 +325,16 @@ export default function TakeExam() {
     }, 400);
     return () => clearTimeout(timer);
   }, [answers, id, studentExamId, submitting, user?.id]);
+
+  useEffect(() => {
+    setSaved(Boolean(user?.id) && localDb.isExamSaved(user.id, id));
+  }, [id, user?.id]);
+
+  const toggleSave = () => {
+    if (!user?.id || !exam) return;
+    const next = localDb.toggleSavedExam(user.id, exam);
+    setSaved(next.some((item) => String(item.id) === String(exam.id)));
+  };
 
   const handleSubmit = useCallback(async () => {
     if (submitting || submittedRef.current) return;
@@ -432,9 +454,17 @@ export default function TakeExam() {
         {!loading && !scheduled ? (
           <ExamTimer initialSeconds={secondsBudget} running={timerRunning} onExpire={onExpire} />
         ) : <span className="text-lg font-bold tabular-nums text-[#6B7280]">--:--</span>}
-        <Button onClick={handleSubmit} disabled={submitting || loading || scheduled} className="shrink-0">
-          {submitting ? 'Göndərilir...' : 'İmtahanı bitir'}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {user?.id && exam ? (
+            <Button variant="secondary" size="sm" onClick={toggleSave}>
+              <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
+              {saved ? 'Saxlanıldı' : 'Saxla'}
+            </Button>
+          ) : null}
+          <Button onClick={handleSubmit} disabled={submitting || loading || scheduled} className="shrink-0">
+            {submitting ? 'Göndərilir...' : 'İmtahanı bitir'}
+          </Button>
+        </div>
       </header>
 
       {loading ? (

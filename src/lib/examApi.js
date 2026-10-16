@@ -1033,7 +1033,8 @@ export async function fetchExam(id) {
     : (withCounts([remote || local].filter(Boolean))[0] || local || remote);
   if (!merged) return merged;
   const remoteOk = Boolean(remote && (remote.id || remote.Id || remote.title || remote.Title || remote.pdfFilePath || remote.PdfFilePath));
-  if (currentUserSnapshot().role === 'Student' || !remoteOk) {
+  const openToStudents = examVisibility(merged) === 'public';
+  if ((currentUserSnapshot().role === 'Student' || !remoteOk) && !openToStudents) {
     const allowed = visibleForCurrentUser([merged]);
     if (!allowed.length) return null;
   }

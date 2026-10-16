@@ -8,7 +8,7 @@ import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { filterPublicExams, groupBySubject, uniqueSubjects } from '../lib/publicExams';
-import { isExamScheduled } from '../lib/utils';
+import { examRetakeReady, isExamEnded, isExamScheduled } from '../lib/utils';
 
 export default function PublicExamZone({ embedded = false }) {
   const { user } = useContext(AuthContext);
@@ -48,13 +48,33 @@ export default function PublicExamZone({ embedded = false }) {
   );
   const grouped = useMemo(() => groupBySubject(filtered), [filtered]);
 
+  const student = user?.role === 'Student' || user?.practice;
+
+  const rememberExam = (exam) => {
+    if (!student || !user?.id) return;
+    const owner = exam.teacherId ?? exam.TeacherId;
+    if (owner) localDb.followTeacher(user.id, owner);
+    if (exam?.id != null) localDb.setExamVisibility(exam.id, 'public');
+  };
+
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
-    if (user?.role === 'Student' || user?.practice) {
-      navigate(`/student/exams/${exam.id}`);
+    if (!student) {
+      navigate('/login');
       return;
     }
-    navigate('/login');
+    rememberExam(exam);
+    if (isExamEnded(exam)) {
+      navigate(`/student/exams/${exam.id}/review`);
+      return;
+    }
+    navigate(`/student/exams/${exam.id}`);
+  };
+
+  const retakeExam = (exam) => {
+    if (!student || !examRetakeReady(exam)) return;
+    rememberExam(exam);
+    navigate(`/student/exams/${exam.id}?yeniden=1`);
   };
 
   const filters = (
@@ -149,7 +169,14 @@ export default function PublicExamZone({ embedded = false }) {
                   const next = localDb.toggleSavedExam(user.id, item);
                   setSavedIds(next.map((row) => String(row.id)));
                 } : undefined}
-                actionLabel={user?.role === 'Student' || user?.practice ? 'İmtahana bax' : 'Daxil olub bax'}
+                actionLabel={
+                  !student
+                    ? 'Daxil olub bax'
+                    : isExamEnded(exam)
+                      ? 'Nəticələrə bax'
+                      : 'İmtahana bax'
+                }
+                onRetake={student && examRetakeReady(exam) ? retakeExam : undefined}
                 onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
               />
             ))}

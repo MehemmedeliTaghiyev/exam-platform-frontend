@@ -11,7 +11,7 @@ import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/exa
 import { localDb } from '../lib/localDb';
 import { examMatchesSearch, examSubject, subjectProgress } from '../lib/publicExams';
 import ExamSearchBar from '../components/ExamSearchBar';
-import { formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
+import { examRetakeReady, formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
 
 function resultLabel(item) {
   if (!item || item.percent == null || item.percent === '') return '';
@@ -76,6 +76,11 @@ export default function StudentDashboard() {
   const toggleSave = (exam) => {
     const next = localDb.toggleSavedExam(user?.id, exam);
     setSavedIds(next.map((item) => String(item.id)));
+  };
+
+  const retakeExam = (exam) => {
+    if (!examRetakeReady(exam)) return;
+    navigate(`/student/exams/${exam.id}?yeniden=1`);
   };
 
   const openExam = (exam) => {
@@ -248,6 +253,7 @@ export default function StudentDashboard() {
                     actionLabel="Nəticələrə bax"
                     saved={savedIds.includes(String(exam.id))}
                     onToggleSave={toggleSave}
+                    onRetake={examRetakeReady(exam) ? retakeExam : undefined}
                     onOpen={() => openExam(exam)}
                   />
                 );
@@ -299,6 +305,7 @@ export default function StudentDashboard() {
                       }
                       saved={savedIds.includes(String(exam.id))}
                       onToggleSave={toggleSave}
+                      onRetake={examRetakeReady(exam) ? retakeExam : undefined}
                       onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
                     />
                   );

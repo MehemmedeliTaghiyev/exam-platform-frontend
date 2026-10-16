@@ -12,7 +12,7 @@ import { examVisibility } from '../lib/examVisibility';
 import { localDb } from '../lib/localDb';
 import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
 import { filterSortTeachers, uniqueRegions, uniqueTeacherSubjects } from '../lib/teacherMarketplace';
-import { isExamScheduled } from '../lib/utils';
+import { examRetakeReady, isExamEnded, isExamScheduled } from '../lib/utils';
 
 export default function BrowseTeachers({ embedded = false }) {
   const { id } = useParams();
@@ -82,6 +82,10 @@ export default function BrowseTeachers({ embedded = false }) {
       return;
     }
     if (user?.role === 'Student' || user?.practice) {
+      if (isExamEnded(exam)) {
+        navigate(`/student/exams/${exam.id}/review`);
+        return;
+      }
       navigate(`/student/exams/${exam.id}`);
       return;
     }
@@ -165,6 +169,11 @@ export default function BrowseTeachers({ embedded = false }) {
                   const next = localDb.toggleSavedExam(user.id, item);
                   setSavedIds(next.map((row) => String(row.id)));
                 } : undefined}
+                onRetake={
+                  (user?.role === 'Student' || user?.practice) && examRetakeReady(exam) && canEnterExam(user, exam)
+                    ? () => navigate(`/student/exams/${exam.id}?yeniden=1`)
+                    : undefined
+                }
                 onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
               />
             );

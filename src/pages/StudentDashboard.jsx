@@ -9,7 +9,8 @@ import WeeklyRanking from '../components/WeeklyRanking';
 import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
-import { examSubject, subjectProgress } from '../lib/publicExams';
+import { examMatchesSearch, examSubject, subjectProgress } from '../lib/publicExams';
+import ExamSearchBar from '../components/ExamSearchBar';
 import { formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
 
 function resultLabel(item) {
@@ -40,6 +41,8 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [showAllExams, setShowAllExams] = useState(false);
   const [savedIds, setSavedIds] = useState([]);
+  const [nameQuery, setNameQuery] = useState('');
+  const [dateQuery, setDateQuery] = useState('');
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -128,11 +131,15 @@ export default function StudentDashboard() {
   }, [exams, attemptByExam]);
 
   const sortedExams = useMemo(
-    () => [...exams].sort((a, b) => examSortTime(b) - examSortTime(a)),
-    [exams],
+    () => [...exams]
+      .filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }))
+      .sort((a, b) => examSortTime(b) - examSortTime(a)),
+    [exams, nameQuery, dateQuery],
   );
-  const visibleExams = showAllExams ? sortedExams : sortedExams.slice(0, 3);
+  const searching = Boolean(nameQuery.trim() || dateQuery);
+  const visibleExams = showAllExams || searching ? sortedExams : sortedExams.slice(0, 3);
   const hiddenExamCount = Math.max(0, sortedExams.length - visibleExams.length);
+  const shownMine = myExams.filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }));
 
   const fenStats = useMemo(() => {
     const followed = new Set(localDb.followedTeacherIds(user?.id).map(String));
@@ -222,12 +229,15 @@ export default function StudentDashboard() {
         </div>
       ) : (
         <>
+          <ExamSearchBar name={nameQuery} date={dateQuery} onName={setNameQuery} onDate={setDateQuery} />
           <h2 className="mb-4 text-lg font-bold">İmtahanlarım</h2>
-          {myExams.length === 0 ? (
-            <Card className="mb-10 text-sm text-gray-500">Hələ daxil olduğunuz imtahan yoxdur.</Card>
+          {shownMine.length === 0 ? (
+            <Card className="mb-10 text-sm text-gray-500">
+              {searching ? 'Bu ad və tarixə uyğun imtahan yoxdur.' : 'Hələ daxil olduğunuz imtahan yoxdur.'}
+            </Card>
           ) : (
             <div className="mb-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {myExams.map((exam) => {
+              {shownMine.map((exam) => {
                 const attempt = attemptByExam.get(String(exam.id));
                 return (
                   <ExamCard
@@ -246,11 +256,13 @@ export default function StudentDashboard() {
           )}
 
           <h2 className="mb-4 text-lg font-bold">Mövcud imtahanlar</h2>
-          {exams.length === 0 ? (
+          {visibleExams.length === 0 ? (
             <EmptyState
-              title="Aktiv imtahan yoxdur"
+              title={searching ? 'Uyğun imtahan yoxdur' : 'Aktiv imtahan yoxdur'}
               text={
-                user?.teacherId
+                searching
+                  ? 'Adı və ya tarixi dəyişin.'
+                  : user?.teacherId
                   ? 'Müəlliminiz imtahan dərc edəndə burada görünəcək.'
                   : 'Repetitorunuz varsa onunla əlaqə saxlayın. Yoxdursa bölgələrdəki müəllimlərin açıq imtahanlarına baxın.'
               }

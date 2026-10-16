@@ -2,7 +2,9 @@ import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, BookOpen, GraduationCap, UserCheck, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import { Badge, Card, ConfirmDialog, Input, Skeleton, StatCard } from '../components/ui';
+import { Badge, Card, ConfirmDialog, Skeleton, StatCard } from '../components/ui';
+import ExamSearchBar from '../components/ExamSearchBar';
+import { examMatchesSearch } from '../lib/publicExams';
 import { deleteExam, fetchExams } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
 import { errorMessage, formatDate } from '../lib/utils';
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [pendingExam, setPendingExam] = useState(null);
   const [nameQuery, setNameQuery] = useState('');
+  const [dateQuery, setDateQuery] = useState('');
 
   useEffect(() => {
     const run = async () => {
@@ -47,11 +50,7 @@ export default function AdminDashboard() {
 
   const activeStudents = students.filter(isActiveStudent);
   const activeTeachers = teachers.filter((t) => (t.isAccessEnabled ?? t.IsAccessEnabled) !== false);
-  const q = nameQuery.trim().toLowerCase();
-  const visibleExams = exams.filter((exam) => {
-    if (!q) return true;
-    return `${exam.title || ''} ${exam.teacherName || exam.TeacherName || ''} ${exam.subjectName || ''}`.toLowerCase().includes(q);
-  });
+  const visibleExams = exams.filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }));
 
   const handleDelete = async (exam) => {
     try {
@@ -102,8 +101,8 @@ export default function AdminDashboard() {
             Aktiv tələbə: silinməyib və girişi açıqdır. Rolunuz: {user?.fullName ? `${user.fullName} · ` : ''}Admin
           </p>
 
-          <div className="mt-8 max-w-md">
-            <Input label="İmtahan axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Ad, müəllim və ya fənn" />
+          <div className="mt-8">
+            <ExamSearchBar name={nameQuery} date={dateQuery} onName={setNameQuery} onDate={setDateQuery} />
           </div>
           <Card className="mt-4 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">

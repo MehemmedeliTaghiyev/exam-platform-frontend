@@ -9,6 +9,8 @@ import { Button, EmptyState, FormError, Input, Modal, Select, Skeleton, Textarea
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, examCanEdit, isExamDraft, resolveExamStatus } from '../lib/utils';
 import AccessPeriodBanner from '../components/AccessPeriodBanner';
+import ExamSearchBar from '../components/ExamSearchBar';
+import { examMatchesSearch } from '../lib/publicExams';
 import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
 
 function toDatetimeLocalValue(date) {
@@ -49,6 +51,7 @@ export default function TeacherDashboard() {
   const [visibility, setVisibility] = useState('private');
   const [examFilter, setExamFilter] = useState('all');
   const [nameQuery, setNameQuery] = useState('');
+  const [dateQuery, setDateQuery] = useState('');
 
   formRef.current = {
     title,
@@ -304,9 +307,7 @@ export default function TeacherDashboard() {
   const visibleExams = exams.filter((exam) => {
     if (examFilter === 'draft' && !isExamDraft(exam)) return false;
     if (examFilter === 'finished' && resolveExamStatus(exam) !== 'Finished') return false;
-    const q = nameQuery.trim().toLowerCase();
-    if (!q) return true;
-    return `${exam.title || ''} ${exam.subjectName || exam.subject || ''}`.toLowerCase().includes(q);
+    return examMatchesSearch(exam, { name: nameQuery, date: dateQuery });
   });
 
   return (
@@ -319,9 +320,7 @@ export default function TeacherDashboard() {
       )}
     >
       <AccessPeriodBanner user={periodUser || user} />
-      <div className="mb-4 max-w-md">
-        <Input label="İmtahan axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Ad və ya fənn" />
-      </div>
+      <ExamSearchBar name={nameQuery} date={dateQuery} onName={setNameQuery} onDate={setDateQuery} />
       <div className="mb-6 flex flex-wrap gap-2">
         {[
           ['all', 'Hamısı'],
@@ -367,6 +366,8 @@ export default function TeacherDashboard() {
             </Button>
           }
         />
+      ) : visibleExams.length === 0 ? (
+        <EmptyState title="Uyğun imtahan yoxdur" text="Adı və ya tarixi dəyişin." />
       ) : (
         <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
           {visibleExams.map((exam) => (

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import PublicNav from '../components/PublicNav';
-import { Button, EmptyState, Skeleton } from '../components/ui';
+import { Button, EmptyState, Input, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
@@ -19,6 +19,7 @@ export default function PublicExamZone({ embedded = false }) {
   const [pickDate, setPickDate] = useState('');
   const [subject, setSubject] = useState('all');
   const [savedIds, setSavedIds] = useState([]);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     setSavedIds(localDb.getSavedExams(user?.id).map((exam) => String(exam.id)));
@@ -42,8 +43,8 @@ export default function PublicExamZone({ embedded = false }) {
 
   const subjects = useMemo(() => uniqueSubjects(exams), [exams]);
   const filtered = useMemo(
-    () => filterPublicExams(exams, { dateMode, pickDate, subject }),
-    [exams, dateMode, pickDate, subject],
+    () => filterPublicExams(exams, { dateMode, pickDate, subject, query }),
+    [exams, dateMode, pickDate, subject, query],
   );
   const grouped = useMemo(() => groupBySubject(filtered), [filtered]);
 
@@ -61,6 +62,7 @@ export default function PublicExamZone({ embedded = false }) {
       <p className="on-public text-sm text-gray-500 dark:text-indigo-100/70">
         Müəllimlərin açıq dərc etdiyi imtahanlar fənnə və tarixə görə burada görünür. Bu gün, dünən və ya seçdiyiniz günü süzgəcdən keçirin.
       </p>
+      <Input label="Ad" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="İmtahanın adı" />
       <div className="flex flex-wrap gap-2">
         {[
           ['all', 'Hamısı'],

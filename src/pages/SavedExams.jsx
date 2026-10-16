@@ -7,12 +7,16 @@ import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams, fetchExams } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { isExamScheduled } from '../lib/utils';
+import { examMatchesSearch } from '../lib/publicExams';
+import ExamSearchBar from '../components/ExamSearchBar';
 
 export default function SavedExams() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [saved, setSaved] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [nameQuery, setNameQuery] = useState('');
+  const [dateQuery, setDateQuery] = useState('');
 
   const load = async () => {
     const stored = localDb.getSavedExams(user?.id);
@@ -47,16 +51,21 @@ export default function SavedExams() {
     navigate(`/student/exams/${exam.id}`);
   };
 
+  const visible = saved.filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }));
+
   return (
     <AppShell title="Saxlanılan imtahanlar">
       <p className="mb-6 text-sm text-[var(--muted)]">Saxladığınız imtahanlar bu cihazda qalır və buradan yenidən açıla bilər.</p>
+      <ExamSearchBar name={nameQuery} date={dateQuery} onName={setNameQuery} onDate={setDateQuery} />
       {loading ? (
         <Skeleton className="h-40" />
       ) : saved.length === 0 ? (
         <EmptyState title="Saxlanılan imtahan yoxdur" text="İmtahan kartında «Saxla» basın." />
+      ) : visible.length === 0 ? (
+        <EmptyState title="Uyğun imtahan yoxdur" text="Adı və ya tarixi dəyişin." />
       ) : (
         <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
-          {saved.map((exam) => (
+          {visible.map((exam) => (
             <ExamCard
               key={exam.id}
               exam={exam}

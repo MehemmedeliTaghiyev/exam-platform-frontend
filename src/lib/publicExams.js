@@ -16,7 +16,47 @@ export function dayStamp(value) {
   return toDateInput(d);
 }
 
-export function filterPublicExams(exams, { dateMode = 'all', pickDate = '', subject = 'all' } = {}) {
+export function examDateKeys(exam) {
+  const keys = new Set();
+  [
+    exam?.startTime,
+    exam?.StartTime,
+    exam?.createdAt,
+    exam?.CreatedAt,
+    exam?.endTime,
+    exam?.EndTime,
+    exam?.submittedAt,
+    exam?.SubmittedAt,
+  ].forEach((value) => {
+    const raw = String(value || '');
+    const prefix = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (prefix) keys.add(prefix[1]);
+    const parsed = parseExamDate(value);
+    if (parsed) keys.add(toDateInput(parsed));
+  });
+  return keys;
+}
+
+export function examSearchBlob(exam) {
+  const desc = String(exam?.description || exam?.Description || '')
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .replace(/DRVFILE:\S+\s*/gi, '');
+  const title = String(exam?.title || exam?.Title || exam?.examTitle || '')
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .replace(/DRVFILE:\S+\s*/gi, '');
+  return `${title} ${desc} ${exam?.subjectName || exam?.subject || exam?.SubjectName || ''} ${exam?.teacherName || exam?.TeacherName || ''}`
+    .toLocaleLowerCase('az');
+}
+
+export function examMatchesSearch(exam, { name = '', date = '' } = {}) {
+  const q = String(name || '').trim().toLocaleLowerCase('az');
+  if (q && !examSearchBlob(exam).includes(q)) return false;
+  const day = String(date || '').trim();
+  if (day && !examDateKeys(exam).has(day)) return false;
+  return true;
+}
+
+export function filterPublicExams(exams, { dateMode = 'all', pickDate = '', subject = 'all', query = '' } = {}) {
   const today = new Date();
   const todayKey = dayStamp(today);
   const y = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -26,11 +66,12 @@ export function filterPublicExams(exams, { dateMode = 'all', pickDate = '', subj
 
   return (exams || []).filter((exam) => {
     if (sub !== 'all' && examSubject(exam) !== sub) return false;
+    if (!examMatchesSearch(exam, { name: query })) return false;
     if (dateMode === 'all') return true;
-    const key = dayStamp(examMoment(exam));
-    if (dateMode === 'today') return key === todayKey;
-    if (dateMode === 'yesterday') return key === yesterdayKey;
-    if (dateMode === 'pick') return Boolean(pickDate) && key === pickDate;
+    const keys = examDateKeys(exam);
+    if (dateMode === 'today') return keys.has(todayKey);
+    if (dateMode === 'yesterday') return keys.has(yesterdayKey);
+    if (dateMode === 'pick') return Boolean(pickDate) && keys.has(pickDate);
     return true;
   });
 }

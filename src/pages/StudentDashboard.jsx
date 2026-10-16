@@ -39,6 +39,7 @@ export default function StudentDashboard() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllExams, setShowAllExams] = useState(false);
+  const [savedIds, setSavedIds] = useState([]);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -64,6 +65,15 @@ export default function StudentDashboard() {
     };
     if (user) run();
   }, [user]);
+
+  useEffect(() => {
+    setSavedIds(localDb.getSavedExams(user?.id).map((exam) => String(exam.id)));
+  }, [user?.id]);
+
+  const toggleSave = (exam) => {
+    const next = localDb.toggleSavedExam(user?.id, exam);
+    setSavedIds(next.map((item) => String(item.id)));
+  };
 
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
@@ -226,6 +236,8 @@ export default function StudentDashboard() {
                     entered
                     resultText={resultLabel(attempt)}
                     actionLabel="Nəticələrə bax"
+                    saved={savedIds.includes(String(exam.id))}
+                    onToggleSave={toggleSave}
                     onOpen={() => openExam(exam)}
                   />
                 );
@@ -273,6 +285,8 @@ export default function StudentDashboard() {
                               ? 'Nəticələrə bax'
                               : 'Gözləyin'
                       }
+                      saved={savedIds.includes(String(exam.id))}
+                      onToggleSave={toggleSave}
                       onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
                     />
                   );

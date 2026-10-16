@@ -281,6 +281,32 @@ export const localDb = {
   saveDuels(list) {
     write('duels', list);
   },
+  getSavedExams(userId) {
+    const map = read('saved_exams', {});
+    const list = map[String(userId || '')];
+    return Array.isArray(list) ? list : [];
+  },
+  isExamSaved(userId, examId) {
+    return this.getSavedExams(userId).some((exam) => String(exam.id) === String(examId));
+  },
+  toggleSavedExam(userId, exam) {
+    const key = String(userId || '');
+    if (!key || exam?.id == null) return this.getSavedExams(userId);
+    const map = read('saved_exams', {});
+    const list = Array.isArray(map[key]) ? map[key] : [];
+    const exists = list.some((item) => String(item.id) === String(exam.id));
+    map[key] = exists
+      ? list.filter((item) => String(item.id) !== String(exam.id))
+      : [{
+        id: exam.id,
+        title: exam.title || exam.Title || 'İmtahan',
+        subjectName: exam.subjectName || exam.subject || '',
+        teacherName: exam.teacherName || '',
+        savedAt: new Date().toISOString(),
+      }, ...list];
+    write('saved_exams', map);
+    return map[key];
+  },
   markTicketUsed(code) {
     const list = this.getDiscountTickets().map((t) => (
       t.code === code ? { ...t, usedAt: new Date().toISOString() } : t

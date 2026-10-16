@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, BookOpen, GraduationCap, UserCheck, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import { Badge, Card, ConfirmDialog, Skeleton, StatCard } from '../components/ui';
+import { Badge, Card, ConfirmDialog, Input, Skeleton, StatCard } from '../components/ui';
 import { deleteExam, fetchExams } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
 import { errorMessage, formatDate } from '../lib/utils';
@@ -23,6 +23,7 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingExam, setPendingExam] = useState(null);
+  const [nameQuery, setNameQuery] = useState('');
 
   useEffect(() => {
     const run = async () => {
@@ -45,6 +46,12 @@ export default function AdminDashboard() {
   }, []);
 
   const activeStudents = students.filter(isActiveStudent);
+  const activeTeachers = teachers.filter((t) => (t.isAccessEnabled ?? t.IsAccessEnabled) !== false);
+  const q = nameQuery.trim().toLowerCase();
+  const visibleExams = exams.filter((exam) => {
+    if (!q) return true;
+    return `${exam.title || ''} ${exam.teacherName || exam.TeacherName || ''} ${exam.subjectName || ''}`.toLowerCase().includes(q);
+  });
 
   const handleDelete = async (exam) => {
     try {
@@ -87,7 +94,7 @@ export default function AdminDashboard() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard icon={BookOpen} label="İmtahanlar" value={exams.length} />
-            <StatCard icon={GraduationCap} label="Müəllimlər" value={teachers.length} />
+            <StatCard icon={GraduationCap} label="Müəllimlər" value={activeTeachers.length} />
             <StatCard icon={UserCheck} label="Aktiv tələbələr" value={activeStudents.length} />
             <StatCard icon={Users} label="Bütün tələbələr" value={students.length} />
           </div>
@@ -95,7 +102,10 @@ export default function AdminDashboard() {
             Aktiv tələbə: silinməyib və girişi açıqdır. Rolunuz: {user?.fullName ? `${user.fullName} · ` : ''}Admin
           </p>
 
-          <Card className="mt-8 overflow-x-auto p-0">
+          <div className="mt-8 max-w-md">
+            <Input label="İmtahan axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Ad, müəllim və ya fənn" />
+          </div>
+          <Card className="mt-4 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
               <h3 className="font-bold">Bütün imtahanlar</h3>
             </div>
@@ -111,7 +121,7 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {exams.map((exam) => (
+                {visibleExams.map((exam) => (
                   <tr
                     key={exam.id}
                     className="cursor-pointer border-b border-gray-100 last:border-0 hover:bg-gray-50 dark:border-slate-800 dark:hover:bg-slate-800/60"

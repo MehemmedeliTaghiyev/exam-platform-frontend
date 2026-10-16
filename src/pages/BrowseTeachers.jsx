@@ -29,6 +29,7 @@ export default function BrowseTeachers({ embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [payExam, setPayExam] = useState(null);
   const [payOpen, setPayOpen] = useState(false);
+  const [savedIds, setSavedIds] = useState([]);
   const followed = user?.id ? localDb.followedTeacherIds(user.id) : [];
   const listPath = embedded ? '/student/teachers' : '/teachers';
 
@@ -51,6 +52,10 @@ export default function BrowseTeachers({ embedded = false }) {
   useEffect(() => {
     load();
   }, [user?.id, id]);
+
+  useEffect(() => {
+    setSavedIds(localDb.getSavedExams(user?.id).map((exam) => String(exam.id)));
+  }, [user?.id]);
 
   useEffect(() => {
     if (searchParams.get('pay') === '1' && exams.length) {
@@ -121,8 +126,8 @@ export default function BrowseTeachers({ embedded = false }) {
         <option value="name">Ad</option>
       </Select>
       <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
-        <button type="button" className={chip(dir === 'desc')} onClick={() => setDir('desc')}>DESC</button>
-        <button type="button" className={chip(dir === 'asc')} onClick={() => setDir('asc')}>ASC</button>
+        <button type="button" className={chip(dir === 'desc')} onClick={() => setDir('desc')}>Azalan</button>
+        <button type="button" className={chip(dir === 'asc')} onClick={() => setDir('asc')}>Artan</button>
         <p className="on-public text-xs text-gray-500">Standart: bu həftə keçirilən imtahan sayı, sonra orta nəticə.</p>
       </div>
     </div>
@@ -155,6 +160,11 @@ export default function BrowseTeachers({ embedded = false }) {
                     ? 'Ödənişlə aç'
                     : (user?.role === 'Student' || user?.practice ? 'İmtahana başla' : 'Daxil olub bax')
                 }
+                saved={savedIds.includes(String(exam.id))}
+                onToggleSave={user?.role === 'Student' || user?.practice ? (item) => {
+                  const next = localDb.toggleSavedExam(user.id, item);
+                  setSavedIds(next.map((row) => String(row.id)));
+                } : undefined}
                 onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
               />
             );

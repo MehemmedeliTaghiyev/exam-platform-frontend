@@ -280,6 +280,16 @@ export function isExamDraft(exam) {
   return resolveExamStatus(exam) === 'Draft';
 }
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function examCanEdit(exam) {
+  if (!exam) return false;
+  if (isExamDraft(exam)) return true;
+  const created = parseExamDate(exam.createdAt || exam.CreatedAt);
+  if (!created) return false;
+  return Date.now() - created.getTime() >= WEEK_MS;
+}
+
 export function percent(part, total) {
   if (!total) return 0;
   return Math.round((part / total) * 100);

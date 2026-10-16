@@ -5,6 +5,7 @@ import { isAiEnabled, normalizeRole, TRIAL_ENDED_MESSAGE, trialHasEnded } from '
 import { teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
 import { clearPractice, practiceUser, setPracticeRole } from '../lib/practice';
+import { claimDeviceSession, watchDeviceSession } from '../lib/deviceSession';
 import { Button } from '../components/ui';
 
 export const AuthContext = createContext();
@@ -46,6 +47,7 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   const logout = () => {
+    sessionStorage.removeItem('exampulse_live_session');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('userId');
@@ -105,6 +107,17 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener('access-closed', onClosed);
     return () => window.removeEventListener('access-closed', onClosed);
   }, []);
+
+  useEffect(() => watchDeviceSession(() => {
+    setAccessNote('Bu hesab başqa pəncərədə açıldı. Eyni anda yalnız bir giriş qalır.');
+    setAccessClosed(true);
+    logout();
+  }), []);
+
+  useEffect(() => {
+    if (!user?.id || user.practice) return;
+    claimDeviceSession(user.id);
+  }, [user?.id, user?.practice]);
 
   const login = async (credentials) => {
     clearPractice();

@@ -183,6 +183,7 @@ const emptyForm = {
 export default function AdminTeachers() {
   const [teachers, setTeachers] = useState([]);
   const [sortDir, setSortDir] = useState('desc');
+  const [nameQuery, setNameQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -223,14 +224,20 @@ export default function AdminTeachers() {
   }, []);
 
   const sorted = useMemo(() => {
-    const list = [...teachers];
+    const q = nameQuery.trim().toLowerCase();
+    const list = teachers.filter((t) => {
+      if ((t.isAccessEnabled ?? t.IsAccessEnabled) === false) return false;
+      if (!q) return true;
+      const name = `${t.fullName || ''} ${t.firstName || ''} ${t.lastName || ''}`.toLowerCase();
+      return name.includes(q);
+    });
     list.sort((a, b) => {
       const ta = new Date(a.createdAt).getTime() || 0;
       const tb = new Date(b.createdAt).getTime() || 0;
       return sortDir === 'desc' ? tb - ta : ta - tb;
     });
     return list;
-  }, [teachers, sortDir]);
+  }, [teachers, sortDir, nameQuery]);
 
   const openCreate = () => {
     setForm({ ...emptyForm, startDate: todayInput() });
@@ -360,6 +367,9 @@ export default function AdminTeachers() {
         Hər müəllim üçün Google Drive qovluq linkini bura yazın. Müəllim PDF-i o qovluğa yükləyir, imtahana isə həmin
         faylın öz linkini bağlayır — qovluqda 10 imtahan olsa belə qarışıqlıq olmur. AI hazırda heç kimə açıq deyil.
       </p>
+      <div className="mb-4 max-w-md">
+        <Input label="Ad ilə axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Müəllimin adı" />
+      </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
           <Button variant={sortDir === 'desc' ? 'primary' : 'secondary'} onClick={() => setSortDir('desc')}>

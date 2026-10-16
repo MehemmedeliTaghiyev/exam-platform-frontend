@@ -14,6 +14,7 @@ import {
   UserPlus,
   MapPin,
   LayoutGrid,
+  Bookmark,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +32,7 @@ const navByRole = {
   ],
   Student: [
     { to: '/student', label: 'İmtahanlarım', icon: BookOpen, end: true },
+    { to: '/student/saved', label: 'Saxlanılanlar', icon: Bookmark },
     { to: '/student/public', label: 'Ümumi zona', icon: LayoutGrid },
     { to: '/student/teachers', label: 'Müəllim tap', icon: MapPin },
   ],
@@ -64,7 +66,7 @@ export default function AppShell({ title, children, mainClassName = '', action =
   const links = (navByRole[role] || navByRole.Student).filter((item) => {
     if (!AI_FEATURE_OPEN && item.to === '/teacher/ai') return false;
     if (user?.practice) {
-      return item.to === '/teacher' || item.to === '/student' || item.to === '/student/public' || item.to === '/student/teachers';
+      return item.to === '/teacher' || item.to === '/student' || item.to === '/student/saved' || item.to === '/student/public' || item.to === '/student/teachers';
     }
     return true;
   });

@@ -4,7 +4,7 @@ import { localDb } from './localDb';
 import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
-import { isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
+import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher } from './teacherMarketplace';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
@@ -247,6 +247,8 @@ export async function registerStudentInvite(payload) {
     Independent: independent,
     isAccessEnabled: independent ? true : undefined,
     IsAccessEnabled: independent ? true : undefined,
+    closeAccess: independent ? false : undefined,
+    CloseAccess: independent ? false : undefined,
   };
   const res = await API.post('/Auth/register-student', body);
   return unwrapItem(res.data) || res.data;
@@ -397,15 +399,22 @@ export async function releaseOpenGroupStudents() {
   const snap = currentUserSnapshot();
   const admin = snap.role === 'Admin';
   if (snap.role !== 'Teacher' && !admin) return;
-  const groups = (await fetchGroups()).filter((g) => (
-    admin
-      ? (isPublicGroupName(g.name) || isPublicGroupName(g.number))
-      : !groupNeedsApproval(g)
-  ));
-  if (!groups.length) return;
-  const waiting = (await fetchStudents()).filter(
-    (student) => isPendingApproval(student) && groups.some((group) => studentMatchesGroup(student, group)),
-  );
+  let groups = [];
+  try {
+    groups = (await fetchGroups()).filter((g) => (
+      admin
+        ? (isPublicGroupName(g.name) || isPublicGroupName(g.number) || isPublicGroupCode(g.number) || isPublicGroupCode(g.inviteCode))
+        : !groupNeedsApproval(g)
+    ));
+  } catch {
+    groups = [];
+  }
+  const waiting = (await fetchStudents()).filter((student) => {
+    if (!isPendingApproval(student)) return false;
+    const label = student.groupName;
+    if (isPublicGroupName(label) || isPublicGroupCode(label)) return true;
+    return groups.some((group) => studentMatchesGroup(student, group));
+  });
   for (const student of waiting) {
     try {
       await setStudentAccess(student.id, true);
@@ -1639,6 +1648,7 @@ export async function fetchTeacherDirectory() {
   [...fromLocal, ...remote].forEach((t) => {
     const id = t?.id;
     if (id == null) return;
+    if ((t.isAccessEnabled ?? t.IsAccessEnabled) === false) return;
     const prev = map.get(String(id));
     map.set(String(id), {
       id,

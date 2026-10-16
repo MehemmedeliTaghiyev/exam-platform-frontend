@@ -6,7 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Button, FormError, Input } from '../components/ui';
 import { fetchGroupInvite, registerStudentInvite } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
-import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
+import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
 import { buildStudentEmail, STUDENT_EMAIL_HINT, STUDENT_EMAIL_RE } from '../lib/studentEmail';
 import { localDb } from '../lib/localDb';
 
@@ -16,6 +16,7 @@ export default function JoinStudent() {
   const namedGroup = String(params.get('group') || '').trim();
   const icaze = String(params.get('icaze') || '').trim().toLowerCase();
   const publicGroup = isPublicGroupCode(code) || isPublicGroupName(namedGroup);
+  const inviteCode = publicGroup ? PUBLIC_GROUP_CODE : String(code || '').trim();
   const openJoin = publicGroup || icaze === 'yox' || icaze === '0';
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export default function JoinStudent() {
       });
       setLoading(false);
       try {
-        const data = await fetchGroupInvite(code);
+        const data = await fetchGroupInvite(inviteCode);
         if (!cancelled && data?.groupName) {
           setPreview({ ...data, groupName: data.groupName || namedGroup || (publicGroup ? PUBLIC_GROUP_NAME : 'Qrup') });
         }
@@ -61,7 +62,7 @@ export default function JoinStudent() {
     return () => {
       cancelled = true;
     };
-  }, [code, namedGroup, publicGroup]);
+  }, [code, namedGroup, publicGroup, inviteCode]);
 
   const onChange = (e) => {
     const { name, value } = e.target;
@@ -100,7 +101,7 @@ export default function JoinStudent() {
         });
       }
       const result = await registerStudentInvite({
-        inviteCode: code,
+        inviteCode,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         fatherName: form.fatherName.trim(),

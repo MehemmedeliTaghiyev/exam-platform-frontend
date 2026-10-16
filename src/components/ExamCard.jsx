@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles, Lock } from 'lucide-react';
+import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles, Lock, Bookmark } from 'lucide-react';
 import { Badge, Card, ConfirmDialog } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
 import { examVisibility } from '../lib/examVisibility';
@@ -25,6 +25,8 @@ export default function ExamCard({
   locked = false,
   entered = false,
   resultText = '',
+  saved = false,
+  onToggleSave,
 }) {
   const [confirm, setConfirm] = useState(false);
   const status = resolveExamStatus(exam);
@@ -103,6 +105,18 @@ export default function ExamCard({
             <>{actionLabel} →</>
           )}
         </div>
+        {onToggleSave ? (
+          <button
+            type="button"
+            className={`ep-focus inline-flex min-h-11 items-center gap-1 rounded-[14px] px-2 text-sm font-semibold ${saved ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSave(exam);
+            }}
+          >
+            <Bookmark size={14} fill={saved ? 'currentColor' : 'none'} /> {saved ? 'Saxlanıldı' : 'Saxla'}
+          </button>
+        ) : null}
         {onDelete ? (
           <button
             type="button"

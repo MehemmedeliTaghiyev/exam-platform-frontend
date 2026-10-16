@@ -6,6 +6,7 @@ import PublicNav from '../components/PublicNav';
 import { Button, EmptyState, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams } from '../lib/examApi';
+import { localDb } from '../lib/localDb';
 import { filterPublicExams, groupBySubject, uniqueSubjects } from '../lib/publicExams';
 import { isExamScheduled } from '../lib/utils';
 
@@ -17,6 +18,11 @@ export default function PublicExamZone({ embedded = false }) {
   const [dateMode, setDateMode] = useState('all');
   const [pickDate, setPickDate] = useState('');
   const [subject, setSubject] = useState('all');
+  const [savedIds, setSavedIds] = useState([]);
+
+  useEffect(() => {
+    setSavedIds(localDb.getSavedExams(user?.id).map((exam) => String(exam.id)));
+  }, [user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +142,11 @@ export default function PublicExamZone({ embedded = false }) {
                 exam={exam}
                 showTimes
                 teacherName={exam.teacherName}
+                saved={savedIds.includes(String(exam.id))}
+                onToggleSave={user?.role === 'Student' || user?.practice ? (item) => {
+                  const next = localDb.toggleSavedExam(user.id, item);
+                  setSavedIds(next.map((row) => String(row.id)));
+                } : undefined}
                 actionLabel={user?.role === 'Student' || user?.practice ? 'İmtahana bax' : 'Daxil olub bax'}
                 onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
               />

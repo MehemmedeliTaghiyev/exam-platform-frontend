@@ -7,7 +7,7 @@ import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, EmptyState, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
-import { errorMessage, isExamDraft, resolveExamStatus } from '../lib/utils';
+import { errorMessage, examCanEdit, isExamDraft, resolveExamStatus } from '../lib/utils';
 import AccessPeriodBanner from '../components/AccessPeriodBanner';
 import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
 
@@ -48,6 +48,7 @@ export default function TeacherDashboard() {
   const [folderUrl, setFolderUrl] = useState('');
   const [visibility, setVisibility] = useState('private');
   const [examFilter, setExamFilter] = useState('all');
+  const [nameQuery, setNameQuery] = useState('');
 
   formRef.current = {
     title,
@@ -301,9 +302,11 @@ export default function TeacherDashboard() {
   };
 
   const visibleExams = exams.filter((exam) => {
-    if (examFilter === 'draft') return isExamDraft(exam);
-    if (examFilter === 'finished') return resolveExamStatus(exam) === 'Finished';
-    return true;
+    if (examFilter === 'draft' && !isExamDraft(exam)) return false;
+    if (examFilter === 'finished' && resolveExamStatus(exam) !== 'Finished') return false;
+    const q = nameQuery.trim().toLowerCase();
+    if (!q) return true;
+    return `${exam.title || ''} ${exam.subjectName || exam.subject || ''}`.toLowerCase().includes(q);
   });
 
   return (
@@ -316,6 +319,9 @@ export default function TeacherDashboard() {
       )}
     >
       <AccessPeriodBanner user={periodUser || user} />
+      <div className="mb-4 max-w-md">
+        <Input label="İmtahan axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Ad və ya fənn" />
+      </div>
       <div className="mb-6 flex flex-wrap gap-2">
         {[
           ['all', 'Hamısı'],
@@ -367,9 +373,9 @@ export default function TeacherDashboard() {
             <ExamCard
               key={exam.id}
               exam={exam}
-              actionLabel={isExamDraft(exam) ? 'Davam et →' : 'Statistika →'}
+              actionLabel={examCanEdit(exam) ? (isExamDraft(exam) ? 'Davam et →' : 'Redaktə et →') : 'Statistika →'}
               onOpen={() =>
-                navigate(isExamDraft(exam) ? `/teacher/exams/${exam.id}` : `/teacher/exams/${exam.id}/stats`)
+                navigate(examCanEdit(exam) ? `/teacher/exams/${exam.id}` : `/teacher/exams/${exam.id}/stats`)
               }
               onDelete={handleDelete}
             />

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { Ban, CheckCircle2, RotateCcw, Trash2, Users } from 'lucide-react';
 import AppShell from './AppShell';
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Skeleton } from './ui';
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton } from './ui';
 import { AuthContext } from '../context/AuthContext';
 import API from '../api/axios';
 import { errorMessage, formatDate, unwrapList } from '../lib/utils';
@@ -30,6 +30,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [nameQuery, setNameQuery] = useState('');
   const showGroup = tab === 'Student';
 
   const load = async (role = tab) => {
@@ -65,6 +66,11 @@ export default function AccessUsersPanel({ title, description, roles }) {
   };
 
   const currentLabel = roles.find((r) => r.id === tab)?.label || 'İstifadəçilər';
+  const q = nameQuery.trim().toLowerCase();
+  const visibleUsers = users.filter((u) => {
+    if (!q) return true;
+    return `${u.fullName || ''}`.toLowerCase().includes(q);
+  });
 
   const actionsFor = (u) => (
     <div className="flex flex-wrap gap-2">
@@ -113,11 +119,16 @@ export default function AccessUsersPanel({ title, description, roles }) {
       )}
 
       {error && <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+      <div className="mb-4 max-w-md">
+        <Input label="Ad ilə axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Ad" />
+      </div>
 
       {loading ? (
         <Skeleton className="h-64" />
       ) : users.length === 0 ? (
         <EmptyState title={`${currentLabel} yoxdur`} text="Qeydiyyatdan keçən istifadəçilər burada görünəcək." />
+      ) : visibleUsers.length === 0 ? (
+        <EmptyState title="Uyğun ad yoxdur" text="Axtarışı dəyişin." />
       ) : (
         <Card className="overflow-x-auto p-0">
           <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">
@@ -126,7 +137,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
             </h3>
           </div>
           <div className="space-y-3 p-4 min-[860px]:hidden">
-            {users.map((u) => (
+            {visibleUsers.map((u) => (
               <div key={u.id} className="rounded-[16px] border border-[var(--line)] p-4">
                 <p className="text-lg font-extrabold">{u.fullName}</p>
                 <p className="text-sm text-[var(--muted)]">{u.email}</p>
@@ -151,7 +162,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {visibleUsers.map((u) => (
                 <tr key={u.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
                   <td className="px-5 py-3 font-medium">{u.fullName}</td>
                   <td className="px-5 py-3 text-gray-500">{u.email}</td>

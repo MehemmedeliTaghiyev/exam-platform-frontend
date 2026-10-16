@@ -24,6 +24,7 @@ import PromoAd from './pages/PromoAd';
 import Home from './pages/Home';
 import BrowseTeachers from './pages/BrowseTeachers';
 import PublicExamZone from './pages/PublicExamZone';
+import SavedExams from './pages/SavedExams';
 
 function App() {
   return (
@@ -166,6 +167,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <StudentDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/saved"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <SavedExams />
           </ProtectedRoute>
         }
       />

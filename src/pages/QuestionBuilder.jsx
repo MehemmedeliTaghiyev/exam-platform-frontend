@@ -9,7 +9,7 @@ import QuestionCard, { splitQuestionOptions } from '../components/QuestionCard';
 import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
 import { addQuestion, applyAiAnswers, extractDrivePdfText, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
-import { errorMessage, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
+import { errorMessage, examCanEdit, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
 import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
@@ -110,8 +110,15 @@ export default function QuestionBuilder() {
     if (cached) setPdfFile(cached);
   }, [id]);
 
+  const refuseEdit = () => {
+    if (!exam || examCanEdit(exam)) return false;
+    setMessage('Bu imtahan yaradılandan 7 gün sonra yenidən redaktə üçün açılır.');
+    return true;
+  };
+
   const handleAddQuestion = async (e) => {
     e.preventDefault();
+    if (refuseEdit()) return;
     setSubmitting(true);
     try {
       if (questionKind === 'choice') {
@@ -157,6 +164,10 @@ export default function QuestionBuilder() {
   };
 
   const handleSaveDrive = async (e) => {
+    if (refuseEdit()) {
+      e?.preventDefault?.();
+      return;
+    }
     e.preventDefault();
     const fileId = parseDriveFileId(driveLink);
     if (!fileId) {
@@ -191,6 +202,7 @@ export default function QuestionBuilder() {
   };
 
   const handleDriveAi = async () => {
+    if (refuseEdit()) return;
     const fileId = parseDriveFileId(driveLink) || examDriveFileId(exam);
     if (!fileId) {
       setMessage('Əvvəl Drive fayl linkini bağlayın.');
@@ -244,6 +256,7 @@ export default function QuestionBuilder() {
 
   const handlePdfUpload = async (e) => {
     e.preventDefault();
+    if (refuseEdit()) return;
     if (!pdfFile) {
       setMessage('PDF seçin.');
       return;
@@ -312,6 +325,7 @@ export default function QuestionBuilder() {
   };
 
   const handleMarkCorrect = async (question, letter) => {
+    if (refuseEdit()) return;
     const nextKey = { ...answerKey, [question.id]: letter };
     setAnswerKey(nextKey);
     try {
@@ -322,6 +336,7 @@ export default function QuestionBuilder() {
   };
 
   const handleSaveCard = async (question, payload) => {
+    if (refuseEdit()) return;
     setEditBusy(true);
     setMessage('');
     try {
@@ -345,6 +360,7 @@ export default function QuestionBuilder() {
   };
 
   const handleQuestionImage = async (question, dataUrl) => {
+    if (refuseEdit()) return;
     setEditBusy(true);
     setMessage('');
     try {
@@ -371,6 +387,7 @@ export default function QuestionBuilder() {
   };
 
   const publishDraft = async (visibility = 'private') => {
+    if (refuseEdit()) return;
     if (!exam) return;
     try {
       const start = exam.startTime || new Date().toISOString();
@@ -471,6 +488,12 @@ export default function QuestionBuilder() {
       <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100">
         AI lazım deyil. Faylı bağlayın və ya sual yazın, sonra yuxarıdan <strong>Özəl dərc et</strong> və ya <strong>Açıq dərc et</strong> seçin.
       </div>
+
+      {exam && !examCanEdit(exam) ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Bu imtahan yaradılandan 7 gün sonra yenidən redaktə üçün açılır.
+        </p>
+      ) : null}
 
       {message && (
         <p className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100">

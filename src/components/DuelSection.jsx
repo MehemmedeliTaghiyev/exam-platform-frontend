@@ -69,12 +69,12 @@ export default function DuelSection({ user }) {
   const outgoing = duels.filter((duel) => String(duel.fromId) === mine);
 
   return (
-    <div className="mb-10">
-      <h2 className="mb-4 text-lg font-bold">Duello</h2>
-      <Card>
-        <p className="text-sm text-gray-500">Eyni qrupdakı şagirdə duello göndərin. Qəbul və ya rədd kabinetdə görünür.</p>
+    <div className="duel-board mb-10">
+      <h2 className="mb-2 text-lg font-extrabold">Sinif yoldaşlarına meydan oxu! ⚔️</h2>
+      <p className="mb-4 text-sm text-[#5c564e]">Eyni qrupda olduğun şagirdlərə duello dəvəti göndərərək biliklərini yarışdıra bilərsən. Göndərdiyin dəvətlərin vəziyyətini şəxsi kabinetindən izlə.</p>
+      <Card className="duel-board-card">
         {mates.length === 0 ? (
-          <p className="mt-4 text-sm text-gray-500">Bu qrupda başqa şagird görünmür.</p>
+          <p className="text-sm text-[#5c564e]">(Hazırda qrupunda aktiv başqa şagird tapılmadı).</p>
         ) : (
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">

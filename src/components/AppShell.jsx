@@ -83,7 +83,7 @@ export default function AppShell({ title, children, mainClassName = '', action =
   const itemClass = ({ isActive }) => classNames('ep-focus shell-link', isActive && 'shell-link-active');
 
   return (
-    <div className="shell-page">
+    <div className={classNames('shell-page', role === 'Student' && 'shell-student')}>
       <div className="shell-frame">
         <aside className="shell-side">
           <div className="shell-logo">

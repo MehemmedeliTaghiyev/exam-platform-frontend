@@ -2,7 +2,8 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
-import PublicNav from '../components/PublicNav';
+import Header from '../components/home/Header';
+import '../components/home/home.css';
 import { Button, EmptyState, Input, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams } from '../lib/examApi';
@@ -196,10 +197,10 @@ export default function PublicExamZone({ embedded = false }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#161616] text-[#d4d4d4]">
-      <PublicNav darkOnNavy />
-      <div className="mx-auto max-w-5xl px-5 py-10 [&_.on-public]:text-[#c8c8c8] [&_label>span]:text-[#c8c8c8]">
-        <h1 className="text-[1.65rem] font-semibold tracking-tight text-[#f2f2f2]">Açıq imtahanlar</h1>
+    <div className="home-page min-h-screen">
+      <Header />
+      <div className="mx-auto max-w-5xl px-5 py-10">
+        <h1 className="hp-h2">Açıq imtahanlar</h1>
         <div className="mt-6">
           {filters}
           {body}

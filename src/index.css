@@ -407,6 +407,82 @@ html[data-theme="dark"] .shell-avatar {
   color: #3a2d86;
 }
 
+.shell-student {
+  --bg: #FDFBF7;
+  --card: #ffffff;
+  --text: #1d2430;
+  --muted: #6d655c;
+  --line: #eadfce;
+  --success-text: #15803d;
+  --danger-text: #e11d48;
+  --warning-text: #b45309;
+  background: #FDFBF7;
+  color: #1d2430;
+}
+
+.shell-student .shell-frame,
+.shell-student .shell-bottom {
+  background: #3A6061;
+}
+
+.shell-student .shell-mark,
+.shell-student .shell-avatar {
+  color: #3A6061;
+}
+
+.shell-student .shell-main {
+  background: #FDFBF7;
+}
+
+.dream-card {
+  border-radius: 16px;
+  border-color: #dce8df;
+  background: #f3f7f4;
+}
+
+.dream-change {
+  background: #FABD2F !important;
+  background-image: none !important;
+  color: #3a2a00 !important;
+  box-shadow: none !important;
+}
+
+.duel-board-card {
+  border-radius: 20px;
+  border-color: #e3ece4;
+  background: #eef5f0;
+}
+
+.weekly-board {
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid #eadfce;
+  background: linear-gradient(145deg, #f8efe6, #f4e7f3);
+  padding: 20px 22px 24px;
+  color: #1d2430;
+}
+
+html[data-theme="dark"] .shell-student {
+  background: #FDFBF7;
+  color: #1f2437;
+}
+
+html[data-theme="dark"] .shell-student .shell-frame,
+html[data-theme="dark"] .shell-student .shell-bottom {
+  background: #3A6061;
+}
+
+html[data-theme="dark"] .shell-student .shell-main {
+  background: #FDFBF7;
+  color: #1f2437;
+}
+
+html[data-theme="dark"] .shell-student .shell-mark,
+html[data-theme="dark"] .shell-student .shell-avatar {
+  background: #f4f7f2;
+  color: #3A6061;
+}
+
 @media (max-width: 859px) {
   html[data-theme="dark"] .shell-main {
     background: #0c1024;

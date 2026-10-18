@@ -9,6 +9,7 @@ import { errorMessage } from '../lib/utils';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
 import { buildStudentEmail, STUDENT_EMAIL_HINT, STUDENT_EMAIL_RE } from '../lib/studentEmail';
 import { localDb } from '../lib/localDb';
+import '../components/home/home.css';
 
 export default function JoinStudent() {
   const { code } = useParams();
@@ -81,7 +82,7 @@ export default function JoinStudent() {
       problems.push('Ad, soyad və ata adını yazın.');
     }
     if (!/^\+?\d[\d\s()-]{6,}$/.test(form.phone.trim())) {
-      problems.push('Əlaqə nömrəsini rəqəmlə yazın. Məsələn: 0501234567.');
+      problems.push('Valideynin WhatsApp nömrəsini rəqəmlə yazın. Məsələn: 0501234567.');
     }
     if (!STUDENT_EMAIL_RE.test(email)) {
       problems.push(`E-poçt ${STUDENT_EMAIL_HINT} olmalıdır. Ad, soyad və ata adı yazılanda ünvan özü yaranır. Adi Gmail qəbul olunmur.`);
@@ -140,7 +141,7 @@ export default function JoinStudent() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-10 dark:bg-[#0b1220]">
+    <div className="home-page flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-lg">
         <div className="mb-4 flex justify-end">
           <button
@@ -153,10 +154,10 @@ export default function JoinStudent() {
           </button>
         </div>
         <div className="mb-8 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e7f6ea] text-[#1f7a3a]">
             <GraduationCap size={20} />
           </div>
-          <span className="text-lg font-bold text-ink dark:text-white">ExamPulse</span>
+          <span className="text-lg font-extrabold text-[#1f7a3a]">ExamPulse</span>
         </div>
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
           {loading ? (
@@ -201,7 +202,8 @@ export default function JoinStudent() {
                   <Input label="Ata adı" name="fatherName" required value={form.fatherName} onChange={onChange} />
                 </div>
                 <div className="sm:col-span-2">
-                  <Input label="Əlaqə nömrəsi" name="phone" required value={form.phone} onChange={onChange} />
+                  <Input label="Valideynin WhatsApp nömrəsi" name="phone" required value={form.phone} onChange={onChange} placeholder="0501234567" />
+                  <p className="mt-1.5 text-xs text-gray-500">İmtahan bitəndə ətraflı nəticə bu nömrəyə açılır.</p>
                 </div>
                 <div className="sm:col-span-2">
                   <Input

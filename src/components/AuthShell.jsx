@@ -1,11 +1,12 @@
-import PublicNav from './PublicNav';
+import Header from './home/Header';
+import './home/home.css';
 
 export default function AuthShell({ children, wide = false }) {
   return (
-    <div className="min-h-screen bg-[#161616] text-[#d4d4d4]">
-      <PublicNav darkOnNavy />
+    <div className="home-page min-h-screen">
+      <Header />
       <div className={`mx-auto px-5 py-12 ${wide ? 'max-w-lg' : 'max-w-md'}`}>
-        <div className="[&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:text-[#f2f2f2] [&_input]:border-[#333] [&_input]:bg-[#1f1f1f] [&_input]:text-[#f3f3f3] [&_label>span]:text-[#c8c8c8] [&_p]:text-[#bdbdbd]">
+        <div className="hp-card p-6 sm:p-8">
           {children}
         </div>
       </div>

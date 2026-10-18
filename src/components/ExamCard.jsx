@@ -101,7 +101,7 @@ export default function ExamCard({
       {onRetake ? (
         <button
           type="button"
-          className="ep-focus mt-4 inline-flex min-h-11 items-center rounded-[14px] bg-[var(--accent-soft)] px-3 text-sm font-extrabold text-[var(--accent)]"
+          className="ep-focus mt-4 inline-flex min-h-11 items-center rounded-[14px] bg-[#FABD2F] px-3 text-sm font-extrabold text-[#3a2a00]"
           onClick={(e) => {
             e.stopPropagation();
             onRetake(exam);

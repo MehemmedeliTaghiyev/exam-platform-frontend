@@ -21,6 +21,7 @@ const emptyForm = {
   photo: '',
   contractPhoto: '',
   closeAccess: false,
+  phone: '',
 };
 
 function belongsToGroup(student, group) {
@@ -121,6 +122,7 @@ export default function GroupDetail() {
         photo: form.photo || null,
         contractPhoto: form.contractPhoto || null,
         closeAccess: form.closeAccess,
+        phone: form.phone.trim(),
       });
       setOpen(false);
       setForm(emptyForm);
@@ -160,6 +162,7 @@ export default function GroupDetail() {
       firstName: student.firstName || '',
       lastName: student.lastName || '',
       fatherName: student.fatherName || '',
+      phone: student.phone || '',
     });
   };
 
@@ -337,6 +340,7 @@ export default function GroupDetail() {
                   <p className="font-bold">{fullNameOf(s)}</p>
                   <p className="text-xs text-gray-500">Qrup: {s.groupName || groupLabel}</p>
                   <p className="text-xs text-gray-500">Doğum: {formatDate(s.birthDate)}</p>
+                  {s.phone ? <p className="text-xs text-gray-500">WhatsApp: {s.phone}</p> : null}
                   {s.isAccessEnabled === false ? (
                     <Badge tone="danger">Pəncərə bağlı</Badge>
                   ) : (
@@ -378,6 +382,7 @@ export default function GroupDetail() {
           <Input label="Ad" required value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
           <Input label="Soyad" required value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
           <Input label="Ata adı" value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} />
+          <Input label="Valideynin WhatsApp nömrəsi" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0501234567" />
           <Input label="E-poçt" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="İstifadəçi adı" required value={form.userName} onChange={(e) => setForm({ ...form, userName: e.target.value })} />
           <Input label="Şifrə" type="password" required minLength={4} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
@@ -440,6 +445,12 @@ export default function GroupDetail() {
             label="Ata adı"
             value={editForm.fatherName}
             onChange={(e) => setEditForm({ ...editForm, fatherName: e.target.value })}
+          />
+          <Input
+            label="Valideynin WhatsApp nömrəsi"
+            value={editForm.phone || ''}
+            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+            placeholder="0501234567"
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">

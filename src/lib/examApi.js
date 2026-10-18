@@ -95,13 +95,28 @@ export async function createStudentAccount(payload) {
     photo: payload.photo || null,
     contractPhoto: payload.contractPhoto || null,
     closeAccess: Boolean(payload.closeAccess),
+    phone: payload.phone || '',
   };
   const paths = ['/Users/students', '/Users/create-student', '/Users'];
   let lastError;
   for (const path of paths) {
     try {
-      const res = await API.post(path, body);
-      return unwrapItem(res.data) || res.data;
+      let res;
+      try {
+        res = await API.post(path, body);
+      } catch (err) {
+        if (err?.response?.status === 400 && body.phone) {
+          const withoutPhone = { ...body };
+          delete withoutPhone.phone;
+          res = await API.post(path, withoutPhone);
+        } else {
+          throw err;
+        }
+      }
+      const created = unwrapItem(res.data) || res.data;
+      const createdId = created?.id ?? created?.Id;
+      if (body.phone && createdId != null) localDb.setParentPhone(createdId, body.phone);
+      return created;
     } catch (err) {
       lastError = err;
       const status = err?.response?.status;
@@ -175,7 +190,7 @@ export function mapStudent(u) {
     isAccessEnabled: (u.isAccessEnabled ?? u.IsAccessEnabled) !== false,
     createdAt: u.createdAt || u.CreatedAt,
     position: u.position || u.Position || '',
-    phone: u.phone || u.Phone || '',
+    phone: u.phone || u.Phone || localDb.getParentPhone(u.id ?? u.Id) || '',
     teacherId: u.teacherId ?? u.TeacherId ?? null,
     role: u.role || u.Role,
     trialMessage: u.trialMessage || u.TrialMessage || '',
@@ -543,14 +558,36 @@ export async function updateStudentProfile(id, payload) {
     lastName: payload.lastName,
     fatherName: payload.fatherName ?? '',
   };
+  if (payload.phone != null) {
+    body.phone = String(payload.phone).trim();
+    body.Phone = body.phone;
+  }
+  const send = async (data) => {
+    try {
+      const res = await API.patch(`/Users/${id}/profile`, data);
+      return mapStudent(unwrapItem(res.data) || res.data);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status !== 404 && status !== 405) throw err;
+      const res = await API.put(`/Users/${id}/profile`, data);
+      return mapStudent(unwrapItem(res.data) || res.data);
+    }
+  };
   try {
-    const res = await API.patch(`/Users/${id}/profile`, body);
-    return mapStudent(unwrapItem(res.data) || res.data);
+    const saved = await send(body);
+    if (payload.phone != null) localDb.setParentPhone(id, payload.phone);
+    return saved;
   } catch (err) {
-    const status = err?.response?.status;
-    if (status !== 404 && status !== 405) throw err;
-    const res = await API.put(`/Users/${id}/profile`, body);
-    return mapStudent(unwrapItem(res.data) || res.data);
+    if (err?.response?.status === 400 && body.phone != null) {
+      const saved = await send({
+        firstName: body.firstName,
+        lastName: body.lastName,
+        fatherName: body.fatherName,
+      });
+      localDb.setParentPhone(id, payload.phone);
+      return saved;
+    }
+    throw err;
   }
 }
 

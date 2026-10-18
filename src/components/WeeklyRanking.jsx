@@ -87,23 +87,29 @@ function RankingBars({ rows = [], highlightId, onRowClick }) {
   );
 }
 
-function ChampionCard({ week, emptyText }) {
+function ChampionCard({ week, emptyText, soft = false }) {
   if (!week?.champion) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/30 bg-white/10 px-5 py-8 text-center text-sm text-white/80">
+      <div className={soft
+        ? 'rounded-[20px] border border-dashed border-[#e4d5c4] bg-white/80 px-5 py-8 text-center text-sm text-[#6d655c]'
+        : 'rounded-2xl border border-dashed border-white/30 bg-white/10 px-5 py-8 text-center text-sm text-white/80'}
+      >
         {emptyText}
       </div>
     );
   }
   const star = week.champion;
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-white/15 p-5 text-white shadow-inner ring-1 ring-white/20">
-      <Sparkles className="absolute right-4 top-4 text-amber-200 opacity-80" size={22} />
-      <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Həftənin ulduzu</p>
-      <p className="mt-1 text-sm text-white/80">{week.label}</p>
+    <div className={soft
+      ? 'relative overflow-hidden rounded-[20px] bg-white p-5 text-[#1d2430] shadow-sm ring-1 ring-[#eadfce]'
+      : 'relative overflow-hidden rounded-2xl bg-white/15 p-5 text-white shadow-inner ring-1 ring-white/20'}
+    >
+      <Sparkles className={`absolute right-4 top-4 opacity-80 ${soft ? 'text-[#c4841a]' : 'text-amber-200'}`} size={22} />
+      <p className={`text-xs font-semibold uppercase tracking-wider ${soft ? 'text-[#a16207]' : 'text-amber-100'}`}>Həftənin ulduzu</p>
+      <p className={`mt-1 text-sm ${soft ? 'text-[#6d655c]' : 'text-white/80'}`}>{week.label}</p>
       <p className="mt-4 text-2xl font-black tracking-tight">{star.studentName}</p>
-      <p className="mt-2 text-sm text-white/85">
-        Orta nəticə <span className="font-bold text-amber-200">{Math.round(star.percent)}%</span>
+      <p className={`mt-2 text-sm ${soft ? 'text-[#5c564e]' : 'text-white/85'}`}>
+        Orta nəticə <span className={`font-bold ${soft ? 'text-[#a16207]' : 'text-amber-200'}`}>{Math.round(star.percent)}%</span>
         {' · '}
         {star.examCount} imtahan
       </p>
@@ -238,18 +244,21 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
 
   return (
     <section className="mb-10">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-brand-600 to-violet-700 p-5 shadow-lg sm:p-7">
+      <div className={isTeacher
+        ? 'overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-brand-600 to-violet-700 p-5 text-white shadow-lg sm:p-7'
+        : 'weekly-board'}
+      >
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 text-white">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400 text-amber-950 shadow-md">
+          <div className={`flex items-center gap-3 ${isTeacher ? 'text-white' : 'text-[#1d2430]'}`}>
+            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md ${isTeacher ? 'bg-amber-400 text-amber-950' : 'bg-[#FABD2F] text-[#3a2a00]'}`}>
               <Trophy size={24} />
             </div>
             <div>
-              <h2 className="text-lg font-black sm:text-xl">Həftəlik sıralama</h2>
-              <p className="text-sm text-white/80">
+              <h2 className="text-lg font-black sm:text-xl">{isTeacher ? 'Həftəlik sıralama' : 'Həftəlik Liderlər Lövhəsi 🏆'}</h2>
+              <p className={`text-sm ${isTeacher ? 'text-white/80' : 'text-[#5c564e]'}`}>
                 {isTeacher
                   ? 'Keçən həftənin qalibi ön plandadır. Açıq yaşıl — sizin öz şagirdlərinizdir.'
-                  : 'Yalnız keçən həftənin nəticələri — qalib, sənin yerin və qrafik.'}
+                  : 'Bu bölmədə yalnız keçən həftənin ən yaxşı nəticələri, həftənin qalibi və sənin ümumi sıralamadakı yerin göstərilir.'}
               </p>
             </div>
           </div>
@@ -274,25 +283,26 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
         <div className={`grid gap-4 ${isTeacher ? 'lg:grid-cols-2' : ''}`}>
           <ChampionCard
             week={previousWeek}
+            soft={!isTeacher}
             emptyText="Keçən həftə imtahan nəticəsi yoxdur. Növbəti həftə burada ulduz görünəcək!"
           />
 
           {!isTeacher && (
-            <div className="rounded-2xl bg-white/15 p-5 text-white ring-1 ring-white/20">
-              <p className="text-xs font-semibold uppercase tracking-wider text-amber-100">Sənin yerin</p>
+            <div className="rounded-[20px] bg-white p-5 text-[#1d2430] ring-1 ring-[#eadfce]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#a16207]">Sənin yerin</p>
               {myRow ? (
                 <>
                   <p className="mt-3 text-4xl font-black">#{myRow.rank}</p>
-                  <p className="mt-1 text-sm text-white/80">{Math.round(myRow.percent)}% orta nəticə</p>
+                  <p className="mt-1 text-sm text-[#5c564e]">{Math.round(myRow.percent)}% orta nəticə</p>
                   <div className="mt-3 flex items-center gap-2">
-                    <span className="text-sm text-white/70">Sıralamada dəyişiklik:</span>
-                    <span className="inline-flex rounded-full bg-white px-2.5 py-1">
+                    <span className="text-sm text-[#6d655c]">Sıralamada dəyişiklik:</span>
+                    <span className="inline-flex rounded-full bg-[#FDFBF7] px-2.5 py-1 ring-1 ring-[#eadfce]">
                       <RankDelta change={myRow.rankChange} isNew={myRow.isNew} />
                     </span>
                   </div>
                 </>
               ) : (
-                <p className="mt-3 text-sm text-white/80">Keçən həftə imtahanda iştirakın yoxdur. Bu həftə qoşul, yerin burada yanacaq!</p>
+                <p className="mt-3 text-sm leading-6 text-[#5c564e]">Keçən həftə hər hansı bir imtahanda iştirak etməmisən. Eybi yox! Bu həftə sınaqlara qoşul və adını liderlər lövhəsində yuxarılara yazdır! 🔥</p>
               )}
             </div>
           )}

@@ -45,8 +45,8 @@ export default function Home() {
       ) : null}
       <main>
         <Hero onPractice={() => practice('Student')} />
+        <Features onPractice={() => practice('Student')} />
         <RoleCards onTeacher={() => practice('Teacher')} onStudent={() => practice('Student')} />
-        <Features />
         <Steps />
         <CtaBand />
       </main>

@@ -1,24 +1,62 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, UserRound } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
-import { Button, FormError, Input } from '../components/ui';
-import Header from '../components/home/Header';
-import '../components/home/home.css';
+import { FormError } from '../components/ui';
+import { CONTACT_MAILTO } from '../lib/contact';
 import { errorMessage, rememberedTrialEnded, TRIAL_ENDED_MESSAGE } from '../lib/utils';
+import './login.css';
+
+const REMEMBER_KEY = 'exampulse_remember_login';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const savedEmail = localStorage.getItem(REMEMBER_KEY) || '';
+  const [email, setEmail] = useState(savedEmail);
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(Boolean(savedEmail));
+  const [showPassword, setShowPassword] = useState(false);
   const location = useLocation();
   const [error, setError] = useState(location.state?.notice || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const sceneRef = useRef(null);
+  const artRef = useRef(null);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const art = artRef.current;
+    const img = art?.querySelector('img');
+    if (!scene || !art || !img) return undefined;
+    const place = () => {
+      const nw = img.naturalWidth;
+      const nh = img.naturalHeight;
+      const { width, height } = scene.getBoundingClientRect();
+      if (!nw || !nh || !width || !height) return;
+      const scale = Math.max(width / nw, height / nh);
+      const w = nw * scale;
+      const h = nh * scale;
+      art.style.width = `${w}px`;
+      art.style.height = `${h}px`;
+      art.style.left = `${(width - w) / 2}px`;
+      art.style.top = `${(height - h) * 0.4}px`;
+    };
+    img.addEventListener('load', place);
+    const observer = new ResizeObserver(place);
+    observer.observe(scene);
+    place();
+    return () => {
+      img.removeEventListener('load', place);
+      observer.disconnect();
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsSubmitting(true);
+    if (remember) localStorage.setItem(REMEMBER_KEY, email.trim());
+    else localStorage.removeItem(REMEMBER_KEY);
     try {
       const userData = await login({ email, password });
       if (userData?.role === 'Admin') navigate('/admin');
@@ -41,37 +79,99 @@ export default function Login() {
   };
 
   return (
-    <div className="home-page min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <Header />
-      <main className="mx-auto grid max-w-6xl items-center gap-8 px-4 py-10 min-[900px]:grid-cols-2">
-        <section className="hidden min-h-[460px] rounded-[28px] bg-[linear-gradient(160deg,#4a3df0,#22b8e0)] p-10 text-white min-[900px]:block" aria-hidden="true">
-          <h2 className="text-3xl font-extrabold">Nəticələrin sənə nə deyir?</h2>
-          <p className="mt-3 max-w-sm text-white/85">Hər imtahandan sonra güclü və zəif mövzularını gör.</p>
-          <ul className="mt-8 space-y-3 text-sm font-semibold">
-            {['Müəllimin imtahanını həll et', 'Mövzu üzrə təhlilə bax', 'İrəliləyişini izlə'].map((row) => (
-              <li key={row} className="rounded-2xl bg-white/15 px-4 py-3">{row}</li>
-            ))}
-          </ul>
-        </section>
-        <section className="mx-auto w-full max-w-[480px] rounded-[24px] border border-[var(--line)] bg-[var(--card)] p-9 shadow-[0_18px_50px_var(--glow)]">
-          <Link to="/" className="text-sm font-semibold text-[var(--accent)]">← Məşq səhifəsinə qayıt</Link>
-          <h1 className="mt-4 text-3xl font-extrabold">Daxil ol</h1>
-      <p className="mt-2 text-sm text-[var(--muted)]">
-        Müəllimin verdiyi e-poçt ilə daxil olun. Repetitorunuz varsa, o sizə giriş açmalıdır. Yoxdursa, qeydiyyatdan keçib bölgə müəllimlərini görün.
-      </p>
-      {error ? <div className="mt-4"><FormError message={error} /></div> : null}
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <Input label="E-poçt və ya istifadəçi adı" type="text" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <Input label="Şifrə" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? 'Daxil olunur...' : 'Daxil ol'}
-        </Button>
-      </form>
-      <p className="mt-6 text-sm text-[var(--muted)]">
-        Hesabınız yoxdur? <Link to="/register" className="font-extrabold text-[var(--accent)]">Qeydiyyat</Link>
-      </p>
-        </section>
-      </main>
+    <div className="login-page">
+      <section className="login-scene" ref={sceneRef}>
+        <div className="login-art" ref={artRef}>
+          <img src="/login-scene.jpg" alt="Gecə vaxtı dərs hazırlayan şagird" />
+          <div className="login-curtain login-curtain-a" aria-hidden="true" />
+          <div className="login-curtain login-curtain-b" aria-hidden="true" />
+          <div className="login-tea" aria-hidden="true">
+            <i />
+            <span />
+            <span />
+          </div>
+          <div className="login-hello">
+            <p className="login-hello-title">Xoş gəldin!</p>
+            <p>Bu gün yeni nəsə öyrənmək üçün əla gündür.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="login-form">
+        <div className="login-card">
+          <Link to="/" className="login-brand">
+            <GraduationCap size={42} aria-hidden="true" />
+            <span>
+              <strong>ExamPulse</strong>
+              Daha yaxşı nəticələr üçün
+            </span>
+          </Link>
+
+          <h1 className="mt-8 text-[28px] font-extrabold tracking-tight">Hesabınıza daxil olun</h1>
+          <p className="mt-1 text-sm text-[#64748b]">Davam etmək üçün öz hesabınıza daxil olun.</p>
+
+          {error ? <div className="mt-4"><FormError message={error} /></div> : null}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <label className="login-field">
+              <Mail size={18} className="text-[#94a3b8]" aria-hidden="true" />
+              <input
+                type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email və ya istifadəçi adı"
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label className="login-field">
+              <Lock size={18} className="text-[#94a3b8]" aria-hidden="true" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Şifrə"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="grid h-9 w-9 place-items-center text-[#94a3b8]"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </label>
+
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <label className="inline-flex items-center gap-2 font-semibold">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                Məni xatırla
+              </label>
+              <a className="font-semibold text-[#64748b]" href={`${CONTACT_MAILTO}?subject=${encodeURIComponent('Şifrəni unutdum')}`}>
+                Şifrəni unutdunuz?
+              </a>
+            </div>
+
+            <button type="submit" className="login-submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Daxil olunur...' : 'Daxil ol'}
+              <ArrowRight size={18} aria-hidden="true" />
+            </button>
+          </form>
+
+          <div className="my-5 flex items-center gap-3 text-sm text-[#94a3b8]">
+            <span className="h-px flex-1 bg-[#e6e8ee]" />
+            və ya
+            <span className="h-px flex-1 bg-[#e6e8ee]" />
+          </div>
+
+          <Link to="/register" className="login-create">
+            <UserRound size={18} aria-hidden="true" />
+            Hesab yarat
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

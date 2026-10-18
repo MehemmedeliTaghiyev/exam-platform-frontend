@@ -349,7 +349,7 @@ export default function TakeExam() {
         studentName: user?.fullName,
         answers: serializeAnswers(answersRef.current, paperQuestionsOf(questionsRef.current)),
       });
-      navigate(`/student/exams/${examKey}/review`, { replace: true });
+      navigate(`/student/exams/${examKey}/review`, { replace: true, state: { notifyParent: true } });
     } catch {
       alert('İmtahanı təhvil verərkən xəta baş verdi.');
       submittedRef.current = false;

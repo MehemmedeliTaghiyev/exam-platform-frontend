@@ -220,7 +220,7 @@ export default function StudentDashboard() {
                 <p className="mt-3 text-2xl font-black text-brand-600">
                   {row.entered} / {row.total}
                 </p>
-                <p className="mt-1 text-sm text-gray-500">açıq imtahana daxil olub</p>
+                <p className="mt-1 text-sm text-gray-500">Aktiv açıq imtahanlar</p>
               </Card>
             ))}
           </div>
@@ -238,7 +238,7 @@ export default function StudentDashboard() {
           <h2 className="mb-4 text-lg font-bold">İmtahanlarım</h2>
           {shownMine.length === 0 ? (
             <Card className="mb-10 text-sm text-gray-500">
-              {searching ? 'Bu ad və tarixə uyğun imtahan yoxdur.' : 'Hələ daxil olduğunuz imtahan yoxdur.'}
+              {searching ? 'Bu ad və tarixə uyğun imtahan yoxdur.' : 'Hələ ki qoşulduğun aktiv imtahan tapılmadı. Aşağıdakı siyahıdan sınaq seçib başlaya bilərsən! 👇'}
             </Card>
           ) : (
             <div className="mb-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -353,7 +353,7 @@ export default function StudentDashboard() {
                               : ''}
                           </Badge>
                         ) : (
-                          <span className="text-gray-400">İştirak yoxdur</span>
+                          <span className="text-gray-400">{item.participated ? 'Nəticə gözlənilir' : 'İştirak edilməyib'}</span>
                         )}
                       </td>
                       <td className="px-5 py-3 text-right">

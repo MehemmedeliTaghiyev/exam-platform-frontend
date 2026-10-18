@@ -10,8 +10,8 @@ function Crest({ name, image }) {
   const hue = crestHue(name);
   return (
     <div
-      className="flex h-28 w-28 items-center justify-center rounded-2xl text-2xl font-semibold text-white shadow-sm"
-      style={{ background: `linear-gradient(145deg, hsl(${hue} 48% 42%), hsl(${(hue + 28) % 360} 42% 24%))` }}
+      className="flex h-28 w-28 items-center justify-center rounded-2xl text-2xl font-semibold shadow-sm"
+      style={{ background: `linear-gradient(145deg, hsl(${hue} 42% 82%), hsl(${(hue + 18) % 360} 36% 70%))`, color: '#1d3b32' }}
     >
       {crestInitials(name)}
     </div>
@@ -58,7 +58,7 @@ export default function DreamUniversityCard({ user }) {
   };
 
   return (
-    <Card className="mb-8">
+    <Card className="dream-card mb-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
         <Crest name={dream?.university || university} image={editing ? image : dream?.image} />
         <div className="min-w-0 flex-1">
@@ -81,7 +81,7 @@ export default function DreamUniversityCard({ user }) {
             <>
               <p className="mt-1 text-xl font-bold">{dream?.university || 'Hələ qeyd olunmayıb'}</p>
               <p className="mt-1 text-sm text-gray-500">{dream?.major || 'İxtisası da buraya yazın.'}</p>
-              <Button className="mt-4" variant="secondary" onClick={() => setEditing(true)}>
+              <Button className="dream-change mt-4" onClick={() => setEditing(true)}>
                 {dream?.university ? 'Dəyiş' : 'Qeyd et'}
               </Button>
             </>

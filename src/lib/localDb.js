@@ -289,6 +289,20 @@ export const localDb = {
   isExamSaved(userId, examId) {
     return this.getSavedExams(userId).some((exam) => String(exam.id) === String(examId));
   },
+  getParentPhone(studentId) {
+    const map = read('parent_whatsapp', {});
+    return map[String(studentId || '')] || '';
+  },
+  setParentPhone(studentId, phone) {
+    const key = String(studentId || '');
+    if (!key) return '';
+    const map = read('parent_whatsapp', {});
+    const value = String(phone || '').trim();
+    if (value) map[key] = value;
+    else delete map[key];
+    write('parent_whatsapp', map);
+    return value;
+  },
   toggleSavedExam(userId, exam) {
     const key = String(userId || '');
     if (!key || exam?.id == null) return this.getSavedExams(userId);

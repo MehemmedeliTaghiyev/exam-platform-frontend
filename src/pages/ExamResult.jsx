@@ -1,10 +1,10 @@
-import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import DualExamRanking from '../components/DualExamRanking';
 import QuestionReviewList from '../components/QuestionReviewList';
 import { Button, Card, Skeleton, StatCard } from '../components/ui';
-import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, fetchQuestions } from '../lib/examApi';
+import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions, fetchOwnProfile, fetchOwnStudentIdsForTeacher, fetchQuestions, fetchUserById } from '../lib/examApi';
 import { splitExamLeaderboards } from '../lib/stats';
 import { AuthContext } from '../context/AuthContext';
 import { Award, CheckCircle2, Percent, Ticket, XCircle } from 'lucide-react';
@@ -13,6 +13,35 @@ import { localDb } from '../lib/localDb';
 import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
 import { examTeacherId, maybeAwardDiscountTicket } from '../lib/teacherAccess';
+import { buildExamResultMessage, openParentWhatsapp } from '../lib/whatsappResult';
+
+function messageFor({ review, paper, examMeta, rank, studentName }) {
+  const result = review?.result || review || {};
+  const questions = paper.length ? paper : toReviewQuestions(review?.questions || []);
+  const total = result.totalQuestions || questions.length || 1;
+  const blank = questions.filter((q) => q.unanswered).length;
+  const correct = questions.length
+    ? questions.filter((q) => q.isCorrect && !q.unanswered).length
+    : (result.correctAnswersCount ?? 0);
+  const wrong = questions.length
+    ? questions.filter((q) => !q.unanswered && q.isCorrect === false).length
+    : (result.wrongAnswersCount ?? Math.max(total - correct - blank, 0));
+  const score = Math.round(Number(result.percent ?? result.score ?? (total ? (correct / total) * 100 : 0)));
+  return buildExamResultMessage({
+    studentName: result.studentName || studentName,
+    examTitle: result.examTitle || examMeta?.title,
+    subjectName: examMeta?.subjectName || examMeta?.subject,
+    submittedAt: result.submittedAt ? formatDateTime(result.submittedAt) : '',
+    percent: score,
+    correct,
+    wrong,
+    blank,
+    total,
+    rank,
+    passed: score >= 50,
+    questions,
+  });
+}
 
 function toReviewQuestions(list = []) {
   return list.map((q, index) => {
@@ -23,8 +52,9 @@ function toReviewQuestions(list = []) {
       isSelected: Boolean(opt.isSelected),
     }));
     const selected = options.find((opt) => opt.isSelected);
-    const selectedText = q.selectedText || q.SelectedText || '';
-    const correctText = q.correctText || q.CorrectText || '';
+    const correctOpt = options.find((opt) => opt.isCorrect);
+    const selectedText = q.selectedText || q.SelectedText || selected?.text || '';
+    const correctText = q.correctText || q.CorrectText || correctOpt?.text || '';
     const unanswered = Boolean(q.unanswered) || (!selected && !String(selectedText).trim());
     const isCorrect = unanswered ? false : Boolean(q.isCorrect ?? selected?.isCorrect);
     return {
@@ -59,6 +89,11 @@ export default function ExamResult() {
   const [ticket, setTicket] = useState(null);
   const [boards, setBoards] = useState({ own: [], general: [] });
   const [saved, setSaved] = useState(false);
+  const location = useLocation();
+  const notifyOnce = useRef(false);
+  const [parentPhone, setParentPhone] = useState('');
+  const [phoneReady, setPhoneReady] = useState(false);
+  const [whatsappNote, setWhatsappNote] = useState('');
 
   useEffect(() => {
     const run = async () => {
@@ -169,6 +204,57 @@ export default function ExamResult() {
     setSaved(Boolean(user?.id && target) && localDb.isExamSaved(user.id, target));
   }, [examId, examMeta?.id, review, user?.id]);
 
+  useEffect(() => {
+    const studentId = (user?.role === 'Student' || user?.practice)
+      ? user?.id
+      : (review?.result?.studentId || review?.studentId || queryStudentId);
+    if (!studentId || loading) return undefined;
+    let cancelled = false;
+    setPhoneReady(false);
+    (async () => {
+      let phone = (user?.role === 'Student' || user?.practice) ? (user?.phone || '') : '';
+      if (!phone && !user?.practice) {
+        try {
+          const person = (user?.role === 'Student')
+            ? await fetchOwnProfile()
+            : await fetchUserById(studentId);
+          phone = person?.phone || person?.Phone || '';
+        } catch {
+          phone = '';
+        }
+      }
+      phone = phone || localDb.getParentPhone(studentId);
+      if (cancelled) return;
+      setParentPhone(phone);
+      setPhoneReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, queryStudentId, review, user]);
+
+  useEffect(() => {
+    if (!location.state?.notifyParent || notifyOnce.current || loading || !phoneReady || !review) return;
+    notifyOnce.current = true;
+    if (!parentPhone) {
+      setWhatsappNote('Valideynin WhatsApp nömrəsi yoxdur. Qeydiyyatda və ya şagird kartında yazın.');
+      return;
+    }
+    const resultRow = review?.result || review;
+    const studentId = resultRow?.studentId || user?.id;
+    const rank = boards.general.find((row) => String(row.studentId) === String(studentId))?.rank;
+    const opened = openParentWhatsapp(parentPhone, messageFor({
+      review,
+      paper,
+      examMeta,
+      rank,
+      studentName: resultRow?.studentName || user?.fullName,
+    }));
+    setWhatsappNote(opened
+      ? 'Ətraflı nəticə valideynin WhatsApp-ına açıldı. Mesajı orada göndərin.'
+      : 'WhatsApp nömrəsi tanınmadı. 0501234567 formatında yazın.');
+  }, [boards.general, examMeta, loading, location.state, paper, parentPhone, phoneReady, review, user]);
+
   if (loading) {
     return (
       <AppShell title="Nəticə">
@@ -263,8 +349,8 @@ export default function ExamResult() {
                 {' '}(asan 1 · orta 2 · çətin 3). Orta faiz bu ballara görə hesablanıb.
               </p>
             ) : null}
-            {(user?.role === 'Student' || user?.practice) ? (
-              <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              {(user?.role === 'Student' || user?.practice) ? (
                 <Button
                   variant="secondary"
                   onClick={() => {
@@ -276,13 +362,37 @@ export default function ExamResult() {
                 >
                   {saved ? 'Saxlanıldı' : 'Saxla'}
                 </Button>
-                {examRetakeReady(examMeta) ? (
-                  <Button onClick={() => navigate(`/student/exams/${result?.examId || examId}?yeniden=1`)}>
-                    Yenidən həll et
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
+              ) : null}
+              {examRetakeReady(examMeta) && (user?.role === 'Student' || user?.practice) ? (
+                <Button className="dream-change" onClick={() => navigate(`/student/exams/${result?.examId || examId}?yeniden=1`)}>
+                  Yenidən həll et
+                </Button>
+              ) : null}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (!parentPhone) {
+                    setWhatsappNote('Valideynin WhatsApp nömrəsi yoxdur. Qeydiyyatda və ya şagird kartında yazın.');
+                    return;
+                  }
+                  const targetId = result?.studentId || user?.id;
+                  const rank = boards.general.find((row) => String(row.studentId) === String(targetId))?.rank;
+                  const opened = openParentWhatsapp(parentPhone, messageFor({
+                    review,
+                    paper,
+                    examMeta,
+                    rank,
+                    studentName: result?.studentName || user?.fullName,
+                  }));
+                  setWhatsappNote(opened
+                    ? 'Ətraflı nəticə valideynin WhatsApp-ına açıldı. Mesajı orada göndərin.'
+                    : 'WhatsApp nömrəsi tanınmadı. 0501234567 formatında yazın.');
+                }}
+              >
+                Valideynə göndər
+              </Button>
+            </div>
+            {whatsappNote ? <p className="mt-3 text-sm text-gray-500">{whatsappNote}</p> : null}
           </Card>
         )}
 

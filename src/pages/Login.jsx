@@ -9,6 +9,67 @@ import './login.css';
 
 const REMEMBER_KEY = 'exampulse_remember_login';
 
+function Spark() {
+  return (
+    <svg className="login-spark" viewBox="0 0 36 36" aria-hidden="true">
+      <path d="M18 2v8M18 26v8M2 18h8M26 18h8M7 7l5 5M24 24l5 5M29 7l-5 5M12 24l-5 5" />
+    </svg>
+  );
+}
+
+function Leaf() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M5 19c8-1 13-8 14-15-7 1-14 6-14 15z" />
+      <path fill="none" stroke="currentColor" strokeWidth="1.6" d="M8 16c2-2 5-5 8-7" />
+    </svg>
+  );
+}
+
+function Flask() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M9 3h6v2l-1 1v5l5 8a3 3 0 0 1-2.5 4.5h-9A3 3 0 0 1 5 19l5-8V6L9 5V3z" />
+    </svg>
+  );
+}
+
+function Columns() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M3 20h18v2H3zm1-2h3V8H4zm6 0h4V8h-4zm7 0h3V8h-3zM2 6l10-4 10 4v2H2z" />
+    </svg>
+  );
+}
+
+function Dna() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="none" stroke="currentColor" strokeWidth="1.7" d="M7 3c6 4 6 6 0 9s-6 5 0 9M17 3c-6 4-6 6 0 9s6 5 0 9" />
+      <path fill="currentColor" d="M9 8h6M8.5 12h7M9 16h6" />
+    </svg>
+  );
+}
+
+function Flag() {
+  return (
+    <svg viewBox="0 0 24 16" aria-hidden="true">
+      <rect width="24" height="16" rx="2" fill="#1d4ed8" />
+      <path fill="#fff" d="M10 0h4v16h-4zM0 6h24v4H0z" />
+      <path fill="#dc2626" d="M11 0h2v16h-2zM0 7h24v2H0z" />
+    </svg>
+  );
+}
+
+const BOOKS = [
+  { name: 'Riyaziyyat', color: '#2a62d0', edge: '#1d4eaf', mark: <span className="book-pi">π ±</span> },
+  { name: 'Azərbaycan dili', color: '#1f9a45', edge: '#157a34', mark: <Leaf /> },
+  { name: 'İngilis dili', color: '#e23b3b', edge: '#b42323', mark: <Flag /> },
+  { name: 'Kimya', color: '#7a3ff0', edge: '#5b22c7', mark: <Flask /> },
+  { name: 'Biologiya', color: '#0e7a78', edge: '#0a5554', mark: <Dna /> },
+  { name: 'Tarix', color: '#8b5a34', edge: '#6a4122', mark: <Columns /> },
+];
+
 export default function Login() {
   const savedEmail = localStorage.getItem(REMEMBER_KEY) || '';
   const [email, setEmail] = useState(savedEmail);
@@ -39,7 +100,7 @@ export default function Login() {
       art.style.width = `${w}px`;
       art.style.height = `${h}px`;
       art.style.left = `${(width - w) / 2}px`;
-      art.style.top = `${(height - h) * 0.4}px`;
+      art.style.top = `${(height - h) * 0.52}px`;
     };
     img.addEventListener('load', place);
     const observer = new ResizeObserver(place);
@@ -83,16 +144,32 @@ export default function Login() {
       <section className="login-scene" ref={sceneRef}>
         <div className="login-art" ref={artRef}>
           <img src="/login-scene.jpg" alt="Gecə vaxtı dərs hazırlayan şagird" />
-          <div className="login-curtain login-curtain-a" aria-hidden="true" />
-          <div className="login-curtain login-curtain-b" aria-hidden="true" />
+          <div className="login-window-gap" aria-hidden="true" />
+          <div className="login-sash" aria-hidden="true" />
+          <div className="login-curtain" aria-hidden="true" />
           <div className="login-tea" aria-hidden="true">
             <i />
             <span />
             <span />
           </div>
           <div className="login-hello">
-            <p className="login-hello-title">Xoş gəldin!</p>
-            <p>Bu gün yeni nəsə öyrənmək üçün əla gündür.</p>
+            <p className="login-hello-title">
+              <Spark />
+              Xoş gəldin!
+              <Spark />
+            </p>
+            <p className="login-hello-sub">Bu gün yeni nəsə öyrənmək üçün əla gündür.</p>
+          </div>
+          <div className="book-stack" aria-hidden="true">
+            {BOOKS.map((book) => (
+              <div key={book.name} className="book" style={{ '--cover': book.color, '--edge': book.edge }}>
+                <span className="book-face">
+                  <span>{book.name}</span>
+                  {book.mark}
+                </span>
+                <span className="book-pages" />
+              </div>
+            ))}
           </div>
         </div>
       </section>

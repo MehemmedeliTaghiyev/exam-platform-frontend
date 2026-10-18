@@ -10,7 +10,7 @@ const LINKS = [
   { href: '/#elaqe', label: 'Əlaqə' },
 ];
 
-export default function Header() {
+export default function Header({ hideAuth = false }) {
   const { dark, toggle } = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -32,7 +32,7 @@ export default function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={toggle}
@@ -41,11 +41,15 @@ export default function Header() {
           >
             {dark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <Link to="/login" className="hidden text-sm font-extrabold text-[var(--hp-text)] min-[520px]:inline">Daxil ol</Link>
-          <Link to="/register" className="hp-btn hp-btn-sm hp-btn-gold hp-lift">
-            <UserRound size={16} aria-hidden="true" />
-            Qeydiyyat
-          </Link>
+          {hideAuth ? null : (
+            <div className="flex items-center gap-4">
+              <Link to="/login" className="hidden text-sm font-extrabold text-[var(--hp-text)] min-[520px]:inline">Daxil ol</Link>
+              <Link to="/register" className="hp-btn hp-btn-sm hp-btn-gold hp-lift">
+                <UserRound size={16} aria-hidden="true" />
+                Qeydiyyat
+              </Link>
+            </div>
+          )}
           <button
             type="button"
             className="grid h-11 w-11 place-items-center rounded-full min-[900px]:hidden"
@@ -64,7 +68,9 @@ export default function Header() {
               {item.label}
             </Link>
           ))}
-          <Link to="/login" className="rounded-2xl px-3 py-3 font-semibold min-[520px]:hidden" onClick={() => setOpen(false)}>Daxil ol</Link>
+          {hideAuth ? null : (
+            <Link to="/login" className="rounded-2xl px-3 py-3 font-semibold min-[520px]:hidden" onClick={() => setOpen(false)}>Daxil ol</Link>
+          )}
         </nav>
       ) : null}
     </header>

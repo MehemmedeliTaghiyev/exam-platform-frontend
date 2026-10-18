@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, Users } from 'lucide-react';
+import { BookOpen, Info, Users } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { Button, FormError, Input } from '../components/ui';
 import AuthShell from '../components/AuthShell';
@@ -111,8 +111,8 @@ function TeacherForm() {
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-[#f2f2f2]">Müəllim qeydiyyatı</h1>
-      <p className="mt-1 text-sm text-[#bdbdbd]">
+      <h1 className="text-2xl font-extrabold text-[#1d2430]">Müəllim qeydiyyatı</h1>
+      <p className="mt-1 text-sm font-semibold text-[#2f4a38]">
         Konum mütləqdir. Qeydiyyatdan sonra hesabınız dərhal açılır və {DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq başlayır — admin təsdiqi lazım deyil.
       </p>
       {error ? <div className="mt-4"><FormError message={error} /></div> : null}
@@ -133,7 +133,7 @@ function TeacherForm() {
             required
             placeholder={TEACHER_EMAIL_HINT}
           />
-          <p className="mt-1.5 text-xs text-[#a3a3a3]">
+          <p className="mt-1.5 text-xs font-semibold text-[#3e4654]">
             {suggestedEmail ? `Giriş ünvanı: ${suggestedEmail}` : 'Ad və soyad yazın. Ünvan belə yaranır: aysel_eliyeva@gmail.com'}
           </p>
         </div>
@@ -159,33 +159,38 @@ export default function Register() {
       {kind === 'teacher' ? <TeacherForm /> : null}
       {kind === 'hub' ? (
         <>
-          <h1 className="text-2xl font-semibold text-[#f2f2f2]">Hesab yarat</h1>
-          <p className="mt-2 text-sm text-[#bdbdbd]">Kim kimi qeydiyyatdan keçirsiniz?</p>
+          <h1 className="text-[28px] font-extrabold tracking-tight text-[#1d2430]">Hesab yarat</h1>
+          <p className="mt-2 text-base font-semibold text-[#1f7a3a]">Kim kimi qeydiyyatdan keçirsiniz?</p>
           <div className="mt-6 grid gap-4">
-            <Link to="/register/teacher" className="rounded-xl border border-[#2e2e2e] bg-[#1c1c1c] p-5 hover:border-[#5a353b]">
-              <Users className="text-[#e7a8a8]" size={22} />
-              <p className="mt-3 font-semibold text-[#f2f2f2]">Müəlliməm</p>
-              <p className="mt-1 text-sm text-[#bdbdbd]">20 günlük sınaqla dərhal daxil olun. Admin təsdiqi yoxdur.</p>
+            <Link to="/register/teacher" className="reg-choice">
+              <span className="reg-choice-icon"><Users size={22} aria-hidden="true" /></span>
+              <span>
+                <p className="font-extrabold text-[#1d2430]">Müəlliməm</p>
+                <p className="mt-1 text-sm font-medium text-[#3e4654]">20 günlük sınaqla dərhal daxil olun. Admin təsdiqi yoxdur.</p>
+              </span>
             </Link>
-            <Link to={publicJoinPath()} className="rounded-xl border border-[#2e2e2e] bg-[#1c1c1c] p-5 hover:border-[#5a353b]">
-              <BookOpen className="text-[#e7a8a8]" size={22} />
-              <p className="mt-3 font-semibold text-[#f2f2f2]">Şagirdəm, repetitorum yoxdur</p>
-              <p className="mt-1 text-sm text-[#bdbdbd]">Adminin Ümumi qrupuna yazılın, sonra müəllim tapın.</p>
+            <Link to={publicJoinPath()} className="reg-choice">
+              <span className="reg-choice-icon"><BookOpen size={22} aria-hidden="true" /></span>
+              <span>
+                <p className="font-extrabold text-[#1d2430]">Şagirdəm, repetitorum yoxdur</p>
+                <p className="mt-1 text-sm font-medium text-[#3e4654]">Adminin Ümumi qrupuna yazılın, sonra müəllim tapın.</p>
+              </span>
             </Link>
           </div>
-          <div className="mt-6 rounded-xl border border-[#5a4030] bg-[#2a221c] px-4 py-3 text-sm text-[#f0d0a8]">
-            Repetitorun ExamPulse istifadə edirsə, burada yazılma. Müəllimin qrup linkini aç — yeni şagird yalnız onun kabinetinə düşür.
+          <div className="reg-note" role="note">
+            <Info size={18} aria-hidden="true" />
+            <p>Repetitorun ExamPulse istifadə edirsə, burada yazılma. Müəllimin qrup linkini aç — yeni şagird yalnız onun kabinetinə düşür.</p>
           </div>
-          <p className="mt-6 text-center text-sm text-[#a3a3a3]">
+          <p className="mt-8 text-center text-sm font-semibold text-[#1d2430]">
             Hesabınız var?{' '}
-            <Link to="/login" className="font-medium text-[#e7a8a8] hover:text-[#f3c4c4]">
+            <Link to="/login" className="font-extrabold text-[#1f7a3a] underline decoration-2 underline-offset-4">
               Daxil olun
             </Link>
           </p>
         </>
       ) : (
-        <p className="mt-6 text-center text-sm text-[#a3a3a3]">
-          <Link to="/register" className="font-medium text-[#e7a8a8]">
+        <p className="mt-6 text-center text-sm">
+          <Link to="/register" className="font-extrabold text-[#1f7a3a] underline decoration-2 underline-offset-4">
             ← Geri
           </Link>
         </p>

@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, UserPlus } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { FormError } from '../components/ui';
 import { CONTACT_MAILTO } from '../lib/contact';
@@ -8,14 +8,6 @@ import { errorMessage, rememberedTrialEnded, TRIAL_ENDED_MESSAGE } from '../lib/
 import './login.css';
 
 const REMEMBER_KEY = 'exampulse_remember_login';
-
-function Spark() {
-  return (
-    <svg className="login-spark" viewBox="0 0 36 36" aria-hidden="true">
-      <path d="M18 2v8M18 26v8M2 18h8M26 18h8M7 7l5 5M24 24l5 5M29 7l-5 5M12 24l-5 5" />
-    </svg>
-  );
-}
 
 function Leaf() {
   return (
@@ -100,7 +92,7 @@ export default function Login() {
       art.style.width = `${w}px`;
       art.style.height = `${h}px`;
       art.style.left = `${(width - w) / 2}px`;
-      art.style.top = `${(height - h) * 0.52}px`;
+      art.style.top = `${(height - h) * 0.62}px`;
     };
     img.addEventListener('load', place);
     const observer = new ResizeObserver(place);
@@ -141,25 +133,9 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <section className="login-scene" ref={sceneRef}>
+      <section className="login-scene" ref={sceneRef} aria-label="Dərs otağı">
         <div className="login-art" ref={artRef}>
-          <img src="/login-scene.jpg" alt="Gecə vaxtı dərs hazırlayan şagird" />
-          <div className="login-window-gap" aria-hidden="true" />
-          <div className="login-sash" aria-hidden="true" />
-          <div className="login-curtain" aria-hidden="true" />
-          <div className="login-tea" aria-hidden="true">
-            <i />
-            <span />
-            <span />
-          </div>
-          <div className="login-hello">
-            <p className="login-hello-title">
-              <Spark />
-              Xoş gəldin!
-              <Spark />
-            </p>
-            <p className="login-hello-sub">Bu gün yeni nəsə öyrənmək üçün əla gündür.</p>
-          </div>
+          <img src="/login-scene.jpg" alt="Gecə vaxtı Bakıda dərs hazırlayan şagird" />
           <div className="book-stack" aria-hidden="true">
             {BOOKS.map((book) => (
               <div key={book.name} className="book" style={{ '--cover': book.color, '--edge': book.edge }}>
@@ -177,74 +153,88 @@ export default function Login() {
       <section className="login-form">
         <div className="login-card">
           <Link to="/" className="login-brand">
-            <GraduationCap size={42} aria-hidden="true" />
+            <span className="login-mark">
+              <GraduationCap size={26} aria-hidden="true" />
+            </span>
             <span>
               <strong>ExamPulse</strong>
               Daha yaxşı nəticələr üçün
             </span>
           </Link>
 
-          <h1 className="mt-8 text-[28px] font-extrabold tracking-tight">Hesabınıza daxil olun</h1>
-          <p className="mt-1 text-sm text-[#64748b]">Davam etmək üçün öz hesabınıza daxil olun.</p>
+          <h1>Xoş gəlmisən!</h1>
+          <p className="login-lead">Öyrənməyə və hədəflərinə bir addım daha yaxınlaşmağa davam et.</p>
 
-          {error ? <div className="mt-4"><FormError message={error} /></div> : null}
+          {error ? <div className="login-error"><FormError message={error} /></div> : null}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <label className="login-field">
-              <Mail size={18} className="text-[#94a3b8]" aria-hidden="true" />
-              <input
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email və ya istifadəçi adı"
-                autoComplete="username"
-                required
-              />
-            </label>
-            <label className="login-field">
-              <Lock size={18} className="text-[#94a3b8]" aria-hidden="true" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Şifrə"
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                className="grid h-9 w-9 place-items-center text-[#94a3b8]"
-                onClick={() => setShowPassword((value) => !value)}
-                aria-label={showPassword ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </label>
+          <form onSubmit={handleSubmit}>
+            <div className="login-group">
+              <label htmlFor="login-email">E-poçt və ya istifadəçi adı</label>
+              <div className="login-field">
+                <Mail size={18} aria-hidden="true" />
+                <input
+                  id="login-email"
+                  type="text"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="E-poçtunu və ya istifadəçi adını daxil et"
+                  autoComplete="username"
+                  required
+                />
+              </div>
+            </div>
+            <div className="login-group">
+              <label htmlFor="login-password">Şifrə</label>
+              <div className="login-field">
+                <Lock size={18} aria-hidden="true" />
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Şifrənizi daxil edin"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
 
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <label className="inline-flex items-center gap-2 font-semibold">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+            <div className="login-row">
+              <label htmlFor="login-remember">
+                <input
+                  id="login-remember"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
                 Məni xatırla
               </label>
-              <a className="font-semibold text-[#64748b]" href={`${CONTACT_MAILTO}?subject=${encodeURIComponent('Şifrəni unutdum')}`}>
-                Şifrəni unutdunuz?
+              <a href={`${CONTACT_MAILTO}?subject=${encodeURIComponent('Şifrəni unutdum')}`}>
+                Şifrəni unutmusunuz?
               </a>
             </div>
 
             <button type="submit" className="login-submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Daxil olunur...' : 'Daxil ol'}
+              <span>{isSubmitting ? 'Daxil olunur...' : 'Daxil ol'}</span>
               <ArrowRight size={18} aria-hidden="true" />
             </button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-sm text-[#94a3b8]">
-            <span className="h-px flex-1 bg-[#e6e8ee]" />
+          <div className="login-or" aria-hidden="true">
+            <span />
             və ya
-            <span className="h-px flex-1 bg-[#e6e8ee]" />
+            <span />
           </div>
 
           <Link to="/register" className="login-create">
-            <UserRound size={18} aria-hidden="true" />
+            <UserPlus size={18} aria-hidden="true" />
             Hesab yarat
           </Link>
         </div>

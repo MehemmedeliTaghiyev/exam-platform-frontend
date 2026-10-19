@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Menu, Moon, Sun, UserRound, X } from 'lucide-react';
+import { Menu, Moon, Sun, UserRound, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 const LINKS = [
@@ -10,17 +10,31 @@ const LINKS = [
   { href: '/#elaqe', label: 'Əlaqə' },
 ];
 
-export default function Header({ hideAuth = false }) {
+export default function Header({ hideAuth = false, overlay = false }) {
   const { dark, toggle } = useTheme();
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    if (!overlay) return undefined;
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [overlay]);
+
+  const bar = overlay && !scrolled ? 'hp-header-overlay' : '';
 
   return (
-    <header className="hp-header sticky top-0 z-40">
+    <header className={`hp-header sticky top-0 z-40 ${bar}`}>
       <div className="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between gap-3 px-4 min-[420px]:px-6">
         <Link to="/" className="hp-brand flex items-center gap-2.5 font-extrabold">
-          <span className="hp-logo-mark grid place-items-center">
-            <BookOpen size={20} aria-hidden="true" />
-          </span>
+          <svg className="hp-logo-svg" viewBox="0 0 36 36" width="34" height="34" aria-hidden="true">
+            <path d="M18 3.5 32 11.5 18 19.5 4 11.5Z" fill="#f0b429" />
+            <path d="M4 11.5V24.5L18 32.5V19.5Z" fill="#1f6f4a" />
+            <path d="M32 11.5V24.5L18 32.5V19.5Z" fill="#3eae72" />
+            <path d="M18 11.2 25.2 15.3 18 19.4 10.8 15.3Z" fill="#fff8e8" />
+          </svg>
           ExamPulse
         </Link>
 

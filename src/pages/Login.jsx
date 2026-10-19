@@ -59,7 +59,7 @@ export default function Login() {
 
       <section className="login-form">
         <svg className="login-wave login-wave-side" viewBox="0 0 1000 800" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M150 0C40 150 20 280 90 400C160 530 30 650 120 800H1000V0Z" />
+          <path d="M118 0C36 170 32 290 104 400C168 510 34 640 110 800H1000V0Z" />
         </svg>
         <div className="login-scroll">
         <div className="login-card">

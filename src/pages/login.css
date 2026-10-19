@@ -8,10 +8,8 @@
 
 .login-scene {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1b2438;
+  overflow: hidden;
+  background: #faf9f6;
 }
 
 .login-photo {
@@ -273,20 +271,24 @@
 @media (min-width: 960px) {
   .login-page {
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
-    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr);
+    grid-template-columns: auto minmax(400px, 1fr);
   }
 
   .login-scene {
+    width: min(calc(100vh * 3 / 4), calc(100vw - 400px));
+    width: min(calc(100dvh * 3 / 4), calc(100vw - 400px));
     height: 100vh;
+    height: 100dvh;
     min-height: 0;
   }
 
   .login-photo {
     width: 100%;
     height: 100%;
-    min-height: 0;
-    object-fit: contain;
+    object-fit: cover;
+    object-position: center;
   }
 
   .login-wave-bottom { display: none; }
@@ -294,6 +296,7 @@
   .login-form {
     z-index: 1;
     height: 100vh;
+    height: 100dvh;
     min-height: 0;
     margin-left: -120px;
     overflow: hidden;
@@ -305,7 +308,7 @@
     height: 100%;
     align-items: center;
     overflow: auto;
-    padding: 32px 36px 32px 108px;
+    padding: 32px 48px 32px 128px;
   }
 
   .login-wave-side {

@@ -31,7 +31,7 @@ export default function Home() {
 
   return (
     <div className="home-page">
-      <Header />
+      <Header overlay />
       {real ? (
         <div className="mx-auto max-w-[1120px] px-5 pt-6">
           <button

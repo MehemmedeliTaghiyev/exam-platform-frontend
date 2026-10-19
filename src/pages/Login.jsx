@@ -52,14 +52,14 @@ export default function Login() {
     <div className="login-page">
       <section className="login-scene" aria-label="Dərs otağı">
         <img className="login-photo" src="/login-scene.jpg" alt="Gecə vaxtı Bakıda dərs hazırlayan şagird" />
-        <svg className="login-wave login-wave-bottom" viewBox="0 0 800 70" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 36C140 70 260 4 400 28C540 52 660 0 800 32V70H0Z" />
+        <svg className="login-wave login-wave-bottom" viewBox="0 0 800 48" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 24C120 40 240 8 400 20C560 32 680 6 800 18V48H0Z" />
         </svg>
       </section>
 
       <section className="login-form">
         <svg className="login-wave login-wave-side" viewBox="0 0 1000 800" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M118 0C36 170 32 290 104 400C168 510 34 640 110 800H1000V0Z" />
+          <path d="M72 0C46 150 38 290 60 400C82 520 40 660 64 800H1000V0Z" />
         </svg>
         <div className="login-scroll">
         <div className="login-card">

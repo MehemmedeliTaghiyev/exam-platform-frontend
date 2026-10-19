@@ -15,15 +15,6 @@ const CHOICES = [
   ['E', '(0, 3)'],
 ];
 
-const HERO_BOOKS = [
-  { name: 'Riyaziyyat', color: '#2a62d0', mark: 'π ±' },
-  { name: 'Azərbaycan dili', color: '#1f9a45', mark: '🍃' },
-  { name: 'İngilis dili', color: '#e23b3b', mark: '🇬🇧' },
-  { name: 'Kimya', color: '#7a3ff0', mark: '⚗️' },
-  { name: 'Biologiya', color: '#0e7a78', mark: '🧬' },
-  { name: 'Tarix', color: '#8b5a34', mark: '🏛️' },
-];
-
 export default function Hero({ onPractice }) {
   return (
     <section className="relative overflow-hidden">
@@ -60,19 +51,8 @@ export default function Hero({ onPractice }) {
           <img
             src="/hero-study.jpg"
             alt="Şagird pəncərənin qarşısında dərs hazırlayır"
-            className="h-full w-full object-cover object-[84%_center]"
+            className="h-full w-full object-cover object-[62%_center]"
           />
-          <div className="pointer-events-none absolute bottom-0 left-4 w-[min(340px,calc(100%-270px))]" aria-hidden="true">
-            {HERO_BOOKS.map((book) => (
-              <div key={book.name} className="mb-1 flex h-6 items-stretch overflow-hidden rounded-sm shadow-[0_8px_16px_rgba(60,30,8,0.28)] last:mb-3 sm:h-7">
-                <span className="flex min-w-0 flex-1 items-center justify-between gap-1 px-2 text-[9px] font-extrabold text-white sm:text-[11px]" style={{ background: book.color }}>
-                  <span className="truncate">{book.name}</span>
-                  <span className="shrink-0">{book.mark}</span>
-                </span>
-                <span className="w-2 bg-[repeating-linear-gradient(to_bottom,#fffaf2_0_1px,#e4d8c4_1px_2px)]" />
-              </div>
-            ))}
-          </div>
           <article className="absolute right-4 top-4 w-[min(48%,220px)] rounded-2xl bg-white p-3 shadow-lg min-[980px]:right-6 min-[980px]:top-6 min-[980px]:w-[230px] min-[980px]:p-4" aria-label="Nümunə nəticə">
             <span className="absolute right-2 top-2 rounded-full bg-[#fff4d6] px-2 py-0.5 text-[10px] font-extrabold text-[#8a5a00]">Nümunə</span>
             <div className="flex items-center gap-2">

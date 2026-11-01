@@ -5,6 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
+import DimBankPanel from '../components/DimBankPanel';
 import { Button, EmptyState, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, examCanEdit, isExamDraft, resolveExamStatus } from '../lib/utils';
@@ -347,6 +348,8 @@ export default function TeacherDashboard() {
           {notice}
         </div>
       )}
+
+      <DimBankPanel />
 
       <WeeklyRanking variant="teacher" />
 

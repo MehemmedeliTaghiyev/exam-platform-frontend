@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { loadDrivePdfBuffer, parseDrivePdfId, extractTextFromPdfBuffer } from './api/drivePdf.js'
 import { createTeacherDriveFolder } from './api/drive-folder.js'
+import { proxyPipeline } from './api/pipelineProxy.js'
 
 function drivePdfDevPlugin() {
   return {
@@ -15,7 +16,22 @@ function drivePdfDevPlugin() {
       if (env.GOOGLE_OAUTH_CLIENT_SECRET) process.env.GOOGLE_OAUTH_CLIENT_SECRET = env.GOOGLE_OAUTH_CLIENT_SECRET
       if (env.GOOGLE_DRIVE_REFRESH_TOKEN) process.env.GOOGLE_DRIVE_REFRESH_TOKEN = env.GOOGLE_DRIVE_REFRESH_TOKEN
       if (env.GOOGLE_DRIVE_PARENT_FOLDER_ID) process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID = env.GOOGLE_DRIVE_PARENT_FOLDER_ID
+      if (env.PIPELINE_API_URL) process.env.PIPELINE_API_URL = env.PIPELINE_API_URL
+      if (env.PIPELINE_API_KEY) process.env.PIPELINE_API_KEY = env.PIPELINE_API_KEY
       server.middlewares.use(async (req, res, next) => {
+        const pipelineUrl = req.url || ''
+        if (pipelineUrl.startsWith('/pipeline')) {
+          try {
+            await proxyPipeline(req, res)
+          } catch (err) {
+            if (!res.headersSent) {
+              res.statusCode = 502
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: String(err?.message || 'pipeline proxy') }))
+            }
+          }
+          return
+        }
         const raw = req.url || ''
         if (raw.startsWith('/drive-folder') && req.method === 'POST') {
           const chunks = []

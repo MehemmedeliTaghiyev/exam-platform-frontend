@@ -6,6 +6,7 @@ import DreamUniversityCard from '../components/DreamUniversityCard';
 import DuelSection from '../components/DuelSection';
 import ExamCard from '../components/ExamCard';
 import WeeklyRanking from '../components/WeeklyRanking';
+import WeeklyDimPapers from '../components/WeeklyDimPapers';
 import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
@@ -199,6 +200,8 @@ export default function StudentDashboard() {
 
       <DreamUniversityCard user={user} />
       <DuelSection user={user} />
+
+      <WeeklyDimPapers />
 
       <WeeklyRanking variant="student" />
 

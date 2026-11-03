@@ -28,6 +28,7 @@ export default function ExamCard({
   saved = false,
   onToggleSave,
   onRetake,
+  progress = '',
 }) {
   const [confirm, setConfirm] = useState(false);
   const status = resolveExamStatus(exam);
@@ -40,7 +41,15 @@ export default function ExamCard({
   return (
     <Card
       onClick={onOpen}
-      className={`ep-lift flex h-full flex-col ${ai ? 'border-transparent bg-[linear-gradient(var(--card),var(--card))_padding-box,linear-gradient(135deg,#5b4cf5,#22d3ee)_border-box] [border-width:1.5px]' : ''}`}
+      className={`ep-lift flex h-full flex-col ${
+        progress === 'done'
+          ? 'border-2 border-emerald-500 bg-emerald-50/80 dark:border-emerald-400 dark:bg-emerald-950/30'
+          : progress === 'missed'
+            ? 'border-2 border-red-500 bg-red-50/80 dark:border-red-400 dark:bg-red-950/30'
+            : ai
+              ? 'border-transparent bg-[linear-gradient(var(--card),var(--card))_padding-box,linear-gradient(135deg,#5b4cf5,#22d3ee)_border-box] [border-width:1.5px]'
+              : ''
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -53,7 +62,11 @@ export default function ExamCard({
             <p className="mt-1 text-xs text-gray-500">{teacherName}</p>
           ) : null}
           {resultText ? (
-            <p className="mt-2 text-sm font-semibold text-emerald-600 dark:text-emerald-300">Nəticə: {resultText}</p>
+            <p className={`mt-2 text-sm font-semibold ${progress === 'missed' ? 'text-red-600 dark:text-red-300' : 'text-emerald-600 dark:text-emerald-300'}`}>
+              Nəticə: {resultText}
+            </p>
+          ) : progress === 'missed' ? (
+            <p className="mt-2 text-sm font-semibold text-red-600 dark:text-red-300">Daxil olunmayıb</p>
           ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">

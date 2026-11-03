@@ -1,4 +1,4 @@
-export const AI_FEATURE_OPEN = false;
+export const AI_FEATURE_OPEN = true;
 
 export function parseDriveFileId(input) {
   const s = String(input || '').trim();
@@ -133,5 +133,8 @@ export function displayExamDescription(exam) {
   return String(exam?.description || exam?.Description || '')
     .replace(/VIS:(public|private)\s*/gi, '')
     .replace(/DRVFILE:\S+\s*/gi, '')
+    .replace(/\[\[WEAK:[^\]]*\]\]/g, '')
+    .replace(/\[\[STORAGE:[^\]]*\]\]/g, '')
+    .replace(/\[\[MIXED\]\]/g, '')
     .trim();
 }

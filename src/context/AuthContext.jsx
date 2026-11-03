@@ -1,11 +1,14 @@
 import { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
-import { isAiEnabled, normalizeRole, TRIAL_ENDED_MESSAGE, trialHasEnded } from '../lib/utils';
+import { isAiEnabled, normalizeRole, TRIAL_ENDED_MESSAGE } from '../lib/utils';
 import { teacherDriveFolderUrl } from '../lib/driveLinks';
 import { localDb } from '../lib/localDb';
-import { clearPractice, practiceUser, setPracticeRole } from '../lib/practice';
+import { teacherSubjectOf } from '../lib/storageCatalog';
+import { clearPractice, ensurePracticeTeacherData, practiceUser, setPracticeRole } from '../lib/practice';
 import { claimDeviceSession, watchDeviceSession } from '../lib/deviceSession';
+import { teacherTokenAccount } from '../lib/tokens';
+import { ensurePrimarySubscription } from '../lib/groupSubscriptions';
 import { Button } from '../components/ui';
 
 export const AuthContext = createContext();
@@ -36,6 +39,7 @@ function normalizeUser(raw) {
     firstName: user.firstName || user.FirstName || '',
     lastName: user.lastName || user.LastName || '',
     driveFolderUrl: user.driveFolderUrl || user.DriveFolderUrl || teacherDriveFolderUrl(user),
+    teachingSubject: teacherSubjectOf(user) || localDb.getTeacherSubject(id, user.email),
   };
 }
 
@@ -59,6 +63,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     const demo = practiceUser(role);
     setPracticeRole(role);
+    if (role === 'Teacher') ensurePracticeTeacherData();
     localStorage.setItem('user', JSON.stringify(demo));
     localStorage.setItem('userId', String(demo.id));
     setAccessClosed(false);
@@ -96,11 +101,9 @@ export const AuthProvider = ({ children }) => {
         stored = null;
       }
       const apiMsg = String(event?.detail?.message || '');
-      const ended = trialHasEnded(stored) || /test müddəti|sınaq müddəti|trial/i.test(apiMsg);
       const teacher = normalizeRole(stored?.role) === 'Teacher';
       logout();
-      if (ended) setAccessNote(TRIAL_ENDED_MESSAGE);
-      else if (teacher && /admin təsdiq/i.test(apiMsg)) setAccessNote('20 günlük sınaq davam edir. Admin təsdiqi gözlənilmir.');
+      if (teacher && /admin təsdiq/i.test(apiMsg)) setAccessNote('Qeydiyyatdan sonra kabinet dərhal açılır. E-poçt və şifrəni yoxlayıb yenidən daxil olun.');
       else setAccessNote(apiMsg || 'Giriş hazırda bağlıdır.');
       setAccessClosed(true);
     };
@@ -119,26 +122,46 @@ export const AuthProvider = ({ children }) => {
     claimDeviceSession(user.id);
   }, [user?.id, user?.practice]);
 
+  const completeLogin = (data, extras = {}) => {
+    const token = data?.token || data?.accessToken || data?.Token;
+    if (!token) {
+      const err = new Error('NO_TOKEN');
+      err.code = 'NO_TOKEN';
+      throw err;
+    }
+    const normalized = normalizeUser({ ...data, ...extras });
+    if (normalized?.id && normalized.teachingSubject) {
+      localDb.setTeacherSubject(normalized.id, normalized.teachingSubject, normalized.email);
+    } else if (normalized?.id) {
+      const savedSubject = localDb.getTeacherSubject(normalized.id, normalized.email);
+      if (savedSubject) normalized.teachingSubject = savedSubject;
+    }
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(normalized));
+    if (normalized?.id) localStorage.setItem('userId', String(normalized.id));
+    if (normalized?.role === 'Teacher' || normalized?.role === 'Admin') {
+      teacherTokenAccount(normalized);
+    }
+    if (normalized?.role === 'Student') {
+      ensurePrimarySubscription(normalized);
+    }
+    setAccessClosed(false);
+    setUser(normalized);
+    return normalized;
+  };
+
   const login = async (credentials) => {
     clearPractice();
     const payload = {
       ...credentials,
-      email: String(credentials?.email || '').trim(),
+      email: String(credentials?.email || '').trim().toLowerCase(),
       password: credentials?.password ?? '',
     };
     let lastError;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const response = await API.post('/Auth/login', payload, { timeout: 25000 });
-        const data = response.data;
-        const token = data.token || data.accessToken;
-        const normalized = normalizeUser(data);
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(normalized));
-        if (normalized?.id) localStorage.setItem('userId', String(normalized.id));
-        setAccessClosed(false);
-        setUser(normalized);
-        return normalized;
+        return completeLogin(response.data);
       } catch (err) {
         lastError = err;
         const status = err?.response?.status;
@@ -151,12 +174,38 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (userData) => {
+    clearPractice();
     const response = await API.post('/Auth/register', userData);
-    return response.data;
+    const data = response.data || {};
+    const extras = {
+      teachingSubject: userData.teachingSubject || userData.TeachingSubject,
+      position: userData.position || userData.Position,
+      phone: userData.phone || userData.Phone,
+      firstName: userData.firstName || userData.FirstName,
+      lastName: userData.lastName || userData.LastName,
+      driveFolderUrl: userData.driveFolderUrl || userData.DriveFolderUrl,
+      trialStartsAt: userData.trialStartsAt || userData.TrialStartsAt,
+      trialEndsAt: userData.trialEndsAt || userData.TrialEndsAt,
+      billingPlan: userData.billingPlan || userData.BillingPlan || 'FreeTrial',
+      role: data.role || data.Role || userData.role || 'Teacher',
+    };
+    if (data.token || data.accessToken || data.Token) {
+      return completeLogin(data, extras);
+    }
+    return login({ email: userData.email, password: userData.password });
+  };
+
+  const patchUser = (partial) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...partial };
+      localStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, enterPractice, loading, accessClosed, setAccessClosed }}>
+    <AuthContext.Provider value={{ user, login, register, completeLogin, logout, enterPractice, patchUser, loading, accessClosed, setAccessClosed }}>
       {accessClosed && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/90 px-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl dark:bg-slate-900">

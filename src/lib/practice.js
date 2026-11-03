@@ -112,7 +112,7 @@ export function defaultStudentExams() {
     {
       id: 'demo-locked',
       title: 'Özəl hazırlıq sınağı',
-      description: 'Kilidli özəl imtahan — ödənişlə açılır',
+      description: 'Özəl imtahan — yalnız müəllimin öz şagirdləri',
       subjectName: 'Riyaziyyat',
       teacherId: 'demo-paid',
       teacherName: 'Nigar Həsənova',
@@ -149,8 +149,69 @@ export function defaultStudentQuestions(examId) {
   return [];
 }
 
+export function defaultTeacherExams() {
+  return [
+    {
+      id: 'pt-demo-live',
+      title: 'Həftəlik riyaziyyat',
+      description: 'Məşq imtahanı — canlı',
+      subjectName: 'Riyaziyyat',
+      teacherId: PRACTICE_TEACHER_ID,
+      teacherName: 'Məşq müəllimi',
+      visibility: 'private',
+      isPublic: false,
+      totalQuestions: 10,
+      durationMinutes: 45,
+      submissionsCount: 8,
+      source: 'practice',
+      ...liveWindow(45),
+    },
+    {
+      id: 'pt-demo-public',
+      title: 'Açıq Azərbaycan dili',
+      description: 'Hamıya açıq sınaq',
+      subjectName: 'Azərbaycan dili',
+      teacherId: PRACTICE_TEACHER_ID,
+      teacherName: 'Məşq müəllimi',
+      visibility: 'public',
+      isPublic: true,
+      totalQuestions: 8,
+      durationMinutes: 30,
+      submissionsCount: 21,
+      source: 'practice',
+      ...liveWindow(30),
+    },
+    {
+      id: 'pt-demo-draft',
+      title: 'Yeni mövzu qaralaması',
+      description: 'Hələ dərc olunmayıb',
+      subjectName: 'Riyaziyyat',
+      teacherId: PRACTICE_TEACHER_ID,
+      teacherName: 'Məşq müəllimi',
+      visibility: 'private',
+      isPublic: false,
+      totalQuestions: 12,
+      durationMinutes: 40,
+      submissionsCount: 0,
+      source: 'practice',
+      status: 'Draft',
+      startTime: new Date(Date.now() + 86400000).toISOString(),
+      endTime: new Date(Date.now() + 86400000 + 40 * 60 * 1000).toISOString(),
+    },
+  ];
+}
+
+export function ensurePracticeTeacherData() {
+  const list = read(TEACHER_EXAMS, []);
+  if (Array.isArray(list) && list.length) return list;
+  const seeded = defaultTeacherExams();
+  write(TEACHER_EXAMS, seeded);
+  return seeded;
+}
+
 export function practiceTeacherExams() {
-  return read(TEACHER_EXAMS, []);
+  const list = read(TEACHER_EXAMS, []);
+  return Array.isArray(list) && list.length ? list : defaultTeacherExams();
 }
 
 export function savePracticeTeacherExams(list) {
@@ -423,6 +484,7 @@ export function practiceUser(role) {
       lastName: 'Müəllim',
       email: 'practice.teacher@local',
       position: 'Bakı',
+      teachingSubject: 'Riyaziyyat',
     };
   }
   return {

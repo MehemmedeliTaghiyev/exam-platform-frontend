@@ -243,19 +243,19 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
   }
 
   return (
-    <section className="mb-10">
+    <section className="mb-6 min-[640px]:mb-10">
       <div className={isTeacher
-        ? 'overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-brand-600 to-violet-700 p-5 text-white shadow-lg sm:p-7'
+        ? 'overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-brand-600 to-violet-700 p-4 text-white shadow-lg sm:p-7'
         : 'weekly-board'}
       >
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className={`flex items-center gap-3 ${isTeacher ? 'text-white' : 'text-[#1d2430]'}`}>
-            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl shadow-md ${isTeacher ? 'bg-amber-400 text-amber-950' : 'bg-[#FABD2F] text-[#3a2a00]'}`}>
-              <Trophy size={24} />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 min-[640px]:mb-5">
+          <div className={`flex min-w-0 items-center gap-3 ${isTeacher ? 'text-white' : 'text-[#1d2430]'}`}>
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-md min-[640px]:h-12 min-[640px]:w-12 ${isTeacher ? 'bg-amber-400 text-amber-950' : 'bg-[#FABD2F] text-[#3a2a00]'}`}>
+              <Trophy size={22} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-black sm:text-xl">{isTeacher ? 'Həftəlik sıralama' : 'Həftəlik Liderlər Lövhəsi 🏆'}</h2>
-              <p className={`text-sm ${isTeacher ? 'text-white/80' : 'text-[#5c564e]'}`}>
+              <p className={`text-sm ${isTeacher ? 'hidden text-white/80 min-[640px]:block' : 'text-[#5c564e]'}`}>
                 {isTeacher
                   ? 'Keçən həftənin qalibi ön plandadır. Açıq yaşıl — sizin öz şagirdlərinizdir.'
                   : 'Bu bölmədə yalnız keçən həftənin ən yaxşı nəticələri, həftənin qalibi və sənin ümumi sıralamadakı yerin göstərilir.'}
@@ -265,7 +265,8 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
           {graphWeek?.rows?.length ? (
             <Button
               variant="secondary"
-              className="bg-white text-brand-700 hover:bg-amber-50"
+              size="sm"
+              className="w-full bg-white text-brand-700 hover:bg-amber-50 min-[640px]:w-auto"
               onClick={() => setGraphOpen(true)}
             >
               <BarChart3 size={16} /> Həftənin qrafiki
@@ -274,7 +275,7 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
         </div>
 
         {isTeacher ? (
-          <p className="mb-4 rounded-xl bg-emerald-100/20 px-3 py-2 text-sm text-white ring-1 ring-emerald-200/40">
+          <p className="mb-4 line-clamp-2 rounded-xl bg-emerald-100/20 px-3 py-2 text-sm text-white ring-1 ring-emerald-200/40">
             Keçən həftə sıralamada <span className="font-bold">{ownInSelected}</span> / {previousWeek?.rows?.length || 0} sizin öz şagirdinizdir.
             Açıq yaşıl rəng onlardır — detallı nəticəyə toxunub baxın.
           </p>

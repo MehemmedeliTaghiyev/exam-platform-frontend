@@ -1,28 +1,18 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { TrendingUp, Users } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import DreamUniversityCard from '../components/DreamUniversityCard';
-import DuelSection from '../components/DuelSection';
-import ExamCard from '../components/ExamCard';
+import ExamRow from '../components/ExamRow';
 import WeeklyRanking from '../components/WeeklyRanking';
 import WeeklyDimPapers from '../components/WeeklyDimPapers';
-import { Badge, Button, Card, EmptyState, Skeleton } from '../components/ui';
+import { Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
+import { subscribeToGroup, trendingGroups } from '../lib/groupSubscriptions';
 import { localDb } from '../lib/localDb';
-import { examMatchesSearch, examSubject, subjectProgress } from '../lib/publicExams';
-import ExamSearchBar from '../components/ExamSearchBar';
-import { examRetakeReady, formatDate, isExamEnded, isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
-
-function resultLabel(item) {
-  if (!item || item.percent == null || item.percent === '') return '';
-  const pct = Math.round(Number(item.percent));
-  if (!Number.isFinite(pct)) return '';
-  if (item.correctAnswersCount != null && item.totalQuestions) {
-    return `${pct}% · ${item.correctAnswersCount}/${item.totalQuestions}`;
-  }
-  return `${pct}%`;
-}
+import { examSubject, subjectProgress } from '../lib/publicExams';
+import { isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
 
 function examSortTime(exam) {
   return (
@@ -36,15 +26,14 @@ function examSortTime(exam) {
 export default function StudentDashboard() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const submittedNotice = searchParams.get('teslim') === '1';
   const [exams, setExams] = useState([]);
   const [publicExams, setPublicExams] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAllExams, setShowAllExams] = useState(false);
-  const [savedIds, setSavedIds] = useState([]);
-  const [nameQuery, setNameQuery] = useState('');
-  const [dateQuery, setDateQuery] = useState('');
   const [, setTick] = useState(0);
+  const [savedRev, setSavedRev] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setTick((n) => n + 1), 1000);
@@ -71,18 +60,10 @@ export default function StudentDashboard() {
   }, [user]);
 
   useEffect(() => {
-    setSavedIds(localDb.getSavedExams(user?.id).map((exam) => String(exam.id)));
-  }, [user?.id]);
-
-  const toggleSave = (exam) => {
-    const next = localDb.toggleSavedExam(user?.id, exam);
-    setSavedIds(next.map((item) => String(item.id)));
-  };
-
-  const retakeExam = (exam) => {
-    if (!examRetakeReady(exam)) return;
-    navigate(`/student/exams/${exam.id}?yeniden=1`);
-  };
+    const bump = () => setSavedRev((n) => n + 1);
+    window.addEventListener('exampulse-saved-exams', bump);
+    return () => window.removeEventListener('exampulse-saved-exams', bump);
+  }, []);
 
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
@@ -99,53 +80,18 @@ export default function StudentDashboard() {
     navigate(`/student/exams/${exam.id}/review`);
   };
 
-  const attemptByExam = useMemo(() => {
-    const map = new Map();
-    history.forEach((item) => {
-      if (item?.examId == null) return;
-      const key = String(item.examId);
-      const prev = map.get(key);
-      if (!prev || (item.submittedAt && !prev.submittedAt)) map.set(key, item);
-    });
-    return map;
-  }, [history]);
+  const savedExams = useMemo(() => {
+    if (!user?.id) return [];
+    const pool = [...exams, ...publicExams];
+    return localDb.getSavedExams(user.id).map((stub) => (
+      pool.find((exam) => String(exam.id) === String(stub.id)) || stub
+    ));
+  }, [user?.id, exams, publicExams, savedRev]);
 
-  const myExams = useMemo(() => {
-    const known = new Set();
-    const rows = exams.filter((exam) => attemptByExam.has(String(exam.id))).map((exam) => {
-      known.add(String(exam.id));
-      return exam;
-    });
-    attemptByExam.forEach((item, id) => {
-      if (known.has(id)) return;
-      rows.push({
-        id,
-        title: item.examTitle || `İmtahan #${id}`,
-        subjectName: item.subjectName || '',
-        totalQuestions: item.totalQuestions,
-        durationMinutes: item.durationMinutes,
-        startTime: item.submittedAt,
-        endTime: item.submittedAt,
-        status: 'Finished',
-      });
-    });
-    return rows.sort((a, b) => {
-      const ta = new Date(attemptByExam.get(String(a.id))?.submittedAt || 0).getTime();
-      const tb = new Date(attemptByExam.get(String(b.id))?.submittedAt || 0).getTime();
-      return tb - ta;
-    });
-  }, [exams, attemptByExam]);
-
-  const sortedExams = useMemo(
-    () => [...exams]
-      .filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }))
-      .sort((a, b) => examSortTime(b) - examSortTime(a)),
-    [exams, nameQuery, dateQuery],
+  const latestExams = useMemo(
+    () => [...exams].sort((a, b) => examSortTime(b) - examSortTime(a)).slice(0, 5),
+    [exams],
   );
-  const searching = Boolean(nameQuery.trim() || dateQuery);
-  const visibleExams = showAllExams || searching ? sortedExams : sortedExams.slice(0, 3);
-  const hiddenExamCount = Math.max(0, sortedExams.length - visibleExams.length);
-  const shownMine = myExams.filter((exam) => examMatchesSearch(exam, { name: nameQuery, date: dateQuery }));
 
   const fenStats = useMemo(() => {
     const followed = new Set(localDb.followedTeacherIds(user?.id).map(String));
@@ -164,217 +110,154 @@ export default function StudentDashboard() {
     return subjectProgress(publicExams, history, Array.from(joined));
   }, [publicExams, history, exams, user?.id, user?.teacherId]);
 
-  const historyRows = (() => {
-    const byExam = new Map();
-    history.forEach((item) => {
-      if (item?.examId != null) byExam.set(String(item.examId), item);
-    });
-    const rows = exams.filter(isExamEnded).map((exam) => {
-      const item = byExam.get(String(exam.id));
-      return {
-        examId: exam.id,
-        examTitle: exam.title || item?.examTitle,
-        submittedAt: item?.submittedAt || exam.endTime,
-        percent: item?.percent,
-        correctAnswersCount: item?.correctAnswersCount,
-        totalQuestions: item?.totalQuestions || exam.totalQuestions,
-        studentExamId: item?.studentExamId || item?.id,
-        participated: Boolean(item),
-      };
-    });
-    history.forEach((item) => {
-      if (!rows.some((row) => String(row.examId) === String(item.examId))) {
-        rows.push({
-          ...item,
-          participated: true,
-          examTitle: item.examTitle || `İmtahan #${item.examId}`,
-        });
-      }
-    });
-    return rows.sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
-  })();
+  const trending = useMemo(() => trendingGroups({ limit: 4 }), [user?.id, exams.length]);
 
   return (
-    <AppShell title="Tələbə paneli">
-      <p className="mb-8 text-sm text-gray-500">Xoş gəldiniz, {user?.fullName || 'Tələbə'}</p>
+    <AppShell title="">
+      {submittedNotice ? (
+        <Card className="mb-6 text-center">
+          <p className="text-lg font-extrabold">İmtahan təhvil verildi</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Nəticən avtomatik saxlanıldı. Düzgün/səhv cavablar və ümumi sıralama imtahan bitəndən sonra, yenidən daxil olanda açılacaq.
+          </p>
+          <Button className="mt-4" variant="secondary" onClick={() => setSearchParams({})}>Bağla</Button>
+        </Card>
+      ) : null}
+      {trending.length ? (
+        <Card className="mb-8 hidden min-[860px]:block">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <TrendingUp size={18} /> Trending qruplar
+            </h2>
+            <Button variant="secondary" onClick={() => navigate('/student/subscriptions')}>Hamısına bax</Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {trending.map((group) => (
+              <div
+                key={group.key}
+                className="rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-4 py-3"
+              >
+                <p className="font-extrabold text-[var(--text)]">{group.groupName}</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Müəllim: {group.teacherName || 'Naməlum'}
+                  {group.teachingSubject ? ` · ${group.teachingSubject}` : ''}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#1f7a3a]">
+                    <Users size={14} /> {group.followers} izləyici
+                  </span>
+                  <Button
+                    variant="secondary"
+                    className="px-3 py-1.5 text-sm"
+                    onClick={() => {
+                      subscribeToGroup(user, group);
+                      navigate('/student/subscriptions');
+                    }}
+                  >
+                    Abunə ol
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <DreamUniversityCard user={user} />
-      <DuelSection user={user} />
-
       <WeeklyDimPapers />
-
-      <WeeklyRanking variant="student" />
+      <div className="hidden min-[860px]:block">
+        <WeeklyRanking variant="student" />
+      </div>
 
       <div className="mb-10">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold">Kabinet · fənnlər</h2>
-          <Button variant="secondary" onClick={() => navigate('/student/public')}>Ümumi zona</Button>
+          <Button variant="secondary" onClick={() => navigate('/student/public')}>İmtahan yeri</Button>
         </div>
         {fenStats.length === 0 ? (
-          <Card className="text-sm text-gray-500">
-            Ümumi zonada fənnə qoşulun (açıq imtahan açın və ya müəllim izləyin). Sonra burada həmin fənnin açıq imtahanlarından neçəsinə daxil olduğunuz görünəcək.
-          </Card>
+          <div className="rounded-[22px] bg-[#171d27] px-4 py-5 text-sm font-semibold text-white/55 ring-1 ring-white/10">
+            İmtahan yerində fənnə qoşulun (açıq imtahan açın və ya müəllim izləyin). Sonra burada həmin fənnin açıq imtahanlarından neçəsinə daxil olduğunuz görünəcək.
+          </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {fenStats.map((row) => (
-              <Card key={row.subject}>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Fənn</p>
-                <p className="mt-1 font-bold">{row.subject}</p>
-                <p className="mt-3 text-2xl font-black text-brand-600">
-                  {row.entered} / {row.total}
-                </p>
-                <p className="mt-1 text-sm text-gray-500">Aktiv açıq imtahanlar</p>
-              </Card>
-            ))}
+          <div className="grid grid-cols-2 gap-3">
+            {fenStats.map((row) => {
+              const pct = row.total ? Math.min(100, Math.round((row.entered / row.total) * 100)) : 0;
+              return (
+                <button
+                  key={row.subject}
+                  type="button"
+                  onClick={() => navigate('/student/public')}
+                  className="rounded-[22px] bg-[#171d27] px-4 py-4 text-left text-white ring-1 ring-white/10"
+                >
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/40">Fənn</p>
+                  <p className="mt-1 truncate text-[15px] font-extrabold leading-tight">{row.subject}</p>
+                  <p className="mt-3 text-2xl font-black tabular-nums leading-none">
+                    <span className="text-[#f0b429]">{row.entered}</span><span className="text-white">/{row.total}</span>
+                  </p>
+                  <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <span className="block h-full rounded-full bg-[#f0b429]" style={{ width: `${pct}%` }} />
+                  </span>
+                  <p className="mt-2 text-[11px] font-semibold leading-tight text-white/40">açıq imtahan tamamlandı</p>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {loading ? (
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Skeleton className="h-44" />
-          <Skeleton className="h-44" />
+      {savedExams.length ? (
+        <div className="mb-4 rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
+          <h2 className="mb-3 text-lg font-bold">Saxlanılanlar</h2>
+          <div className="space-y-2">
+            {savedExams.map((exam) => (
+              <ExamRow
+                key={`saved-${exam.id}`}
+                exam={exam}
+                onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
+              />
+            ))}
+          </div>
         </div>
-      ) : (
-        <>
-          <ExamSearchBar name={nameQuery} date={dateQuery} onName={setNameQuery} onDate={setDateQuery} />
-          <h2 className="mb-4 text-lg font-bold">İmtahanlarım</h2>
-          {shownMine.length === 0 ? (
-            <Card className="mb-10 text-sm text-gray-500">
-              {searching ? 'Bu ad və tarixə uyğun imtahan yoxdur.' : 'Hələ ki qoşulduğun aktiv imtahan tapılmadı. Aşağıdakı siyahıdan sınaq seçib başlaya bilərsən! 👇'}
-            </Card>
-          ) : (
-            <div className="mb-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {shownMine.map((exam) => {
-                const attempt = attemptByExam.get(String(exam.id));
-                return (
-                  <ExamCard
-                    key={`mine-${exam.id}`}
-                    exam={exam}
-                    entered
-                    resultText={resultLabel(attempt)}
-                    actionLabel="Nəticələrə bax"
-                    saved={savedIds.includes(String(exam.id))}
-                    onToggleSave={toggleSave}
-                    onRetake={examRetakeReady(exam) ? retakeExam : undefined}
-                    onOpen={() => openExam(exam)}
-                  />
-                );
-              })}
-            </div>
-          )}
+      ) : null}
 
-          <h2 className="mb-4 text-lg font-bold">Mövcud imtahanlar</h2>
-          {visibleExams.length === 0 ? (
-            <EmptyState
-              title={searching ? 'Uyğun imtahan yoxdur' : 'Aktiv imtahan yoxdur'}
-              text={
-                searching
-                  ? 'Adı və ya tarixi dəyişin.'
-                  : user?.teacherId
-                  ? 'Müəlliminiz imtahan dərc edəndə burada görünəcək.'
-                  : 'Repetitorunuz varsa onunla əlaqə saxlayın. Yoxdursa bölgələrdəki müəllimlərin açıq imtahanlarına baxın.'
-              }
-              action={
-                user?.practice ? null : (
-                  <Button variant="secondary" onClick={() => navigate('/student/teachers')}>
-                    Müəllimlərə bax
-                  </Button>
-                )
-              }
-            />
-          ) : (
-            <>
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {visibleExams.map((exam) => {
-                  const attempt = attemptByExam.get(String(exam.id));
-                  const done = Boolean(attempt);
-                  const live = isExamLive(exam);
-                  const ended = isExamEnded(exam);
-                  return (
-                    <ExamCard
-                      key={exam.id}
-                      exam={exam}
-                      entered={done}
-                      resultText={resultLabel(attempt)}
-                      actionLabel={
-                        live && !done
-                          ? 'İmtahana başla'
-                          : live && done
-                            ? 'Cavablarıma bax'
-                            : ended
-                              ? 'Nəticələrə bax'
-                              : 'Gözləyin'
-                      }
-                      saved={savedIds.includes(String(exam.id))}
-                      onToggleSave={toggleSave}
-                      onRetake={examRetakeReady(exam) ? retakeExam : undefined}
-                      onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
-                    />
-                  );
-                })}
-              </div>
-              {hiddenExamCount > 0 && (
-                <div className="mt-5 flex justify-center">
-                  <Button variant="secondary" onClick={() => setShowAllExams(true)}>
-                    Bütün imtahanları yüklə
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-
-          <h2 className="mb-4 mt-12 text-lg font-bold">İmtahan tarixçəm</h2>
-          <Card className="overflow-x-auto p-0">
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
-                  <th className="px-5 py-3 font-medium">İmtahan</th>
-                  <th className="px-5 py-3 font-medium">Tarix</th>
-                  <th className="px-5 py-3 font-medium">Bal</th>
-                  <th className="px-5 py-3 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-8 text-gray-400">
-                      Bitmiş imtahan yoxdur.
-                    </td>
-                  </tr>
-                ) : (
-                  historyRows.map((item) => (
-                    <tr key={item.studentExamId || item.examId} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
-                      <td className="px-5 py-3 font-medium">{item.examTitle || `İmtahan #${item.examId}`}</td>
-                      <td className="px-5 py-3 text-gray-500">{formatDate(item.submittedAt)}</td>
-                      <td className="px-5 py-3">
-                        {item.participated && item.percent != null ? (
-                          <Badge tone={Number(item.percent) >= 50 ? 'success' : 'danger'}>
-                            {Math.round(Number(item.percent))}%
-                            {item.correctAnswersCount != null && item.totalQuestions
-                              ? ` · ${item.correctAnswersCount}/${item.totalQuestions}`
-                              : ''}
-                          </Badge>
-                        ) : (
-                          <span className="text-gray-400">{item.participated ? 'Nəticə gözlənilir' : 'İştirak edilməyib'}</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <button
-                          className="text-sm font-medium text-brand-600 transition-colors duration-200 hover:text-brand-500"
-                          onClick={() => navigate(`/student/exams/${item.examId}/review`)}
-                        >
-                          Nəticə
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </Card>
-        </>
-      )}
+      <div className="rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">Ən son imtahanlar</h2>
+          <button
+            type="button"
+            onClick={() => navigate('/student/public')}
+            className="text-xs font-extrabold text-[#9d8cff]"
+          >
+            Hamısı
+          </button>
+        </div>
+        {loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-16 rounded-[22px]" />
+            <Skeleton className="h-16 rounded-[22px]" />
+          </div>
+        ) : latestExams.length === 0 ? (
+          <EmptyState
+            title="Hələ imtahan yoxdur"
+            text="Açıq imtahanlar İmtahan yerində görünür. Müəlliminiz dərc edəndə ən yeniləri burada da çıxacaq."
+            action={
+              <Button variant="secondary" onClick={() => navigate('/student/public')}>
+                İmtahan yeri
+              </Button>
+            }
+          />
+        ) : (
+          <div className="space-y-2">
+            {latestExams.map((exam) => (
+              <ExamRow
+                key={exam.id}
+                exam={exam}
+                onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </AppShell>
   );
 }

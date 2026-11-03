@@ -1,7 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
-import AccessPaymentModal from '../components/AccessPaymentModal';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import Header from '../components/home/Header';
@@ -11,13 +10,12 @@ import { AuthContext } from '../context/AuthContext';
 import { fetchListedExamsForTeacher, fetchMarketplaceTeachers } from '../lib/examApi';
 import { examVisibility } from '../lib/examVisibility';
 import { localDb } from '../lib/localDb';
-import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
+import { canEnterExam } from '../lib/teacherAccess';
 import { filterSortTeachers, uniqueRegions, uniqueTeacherSubjects } from '../lib/teacherMarketplace';
 import { examRetakeReady, isExamEnded, isExamScheduled } from '../lib/utils';
 
 export default function BrowseTeachers({ embedded = false }) {
   const { id } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [teachers, setTeachers] = useState([]);
@@ -28,8 +26,6 @@ export default function BrowseTeachers({ embedded = false }) {
   const [sortBy, setSortBy] = useState('rank');
   const [dir, setDir] = useState('desc');
   const [loading, setLoading] = useState(true);
-  const [payExam, setPayExam] = useState(null);
-  const [payOpen, setPayOpen] = useState(false);
   const [savedIds, setSavedIds] = useState([]);
   const followed = user?.id ? localDb.followedTeacherIds(user.id) : [];
   const listPath = embedded ? '/student/teachers' : '/teachers';
@@ -58,15 +54,6 @@ export default function BrowseTeachers({ embedded = false }) {
     setSavedIds(localDb.getSavedExams(user?.id).map((exam) => String(exam.id)));
   }, [user?.id]);
 
-  useEffect(() => {
-    if (searchParams.get('pay') === '1' && exams.length) {
-      setPayExam(exams.find((e) => examVisibility(e) === 'private') || exams[0]);
-      setPayOpen(true);
-      searchParams.delete('pay');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [searchParams, exams, setSearchParams]);
-
   const filtered = useMemo(
     () => filterSortTeachers(teachers, { query, region, subject, sortBy, dir }),
     [teachers, query, region, subject, sortBy, dir],
@@ -77,11 +64,11 @@ export default function BrowseTeachers({ embedded = false }) {
 
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
-    if (!canEnterExam(user, exam)) {
-      setPayExam(exam);
-      setPayOpen(true);
+    if (!user) {
+      navigate('/login');
       return;
     }
+    if (!canEnterExam(user, exam)) return;
     if (user?.role === 'Student' || user?.practice) {
       if (isExamEnded(exam)) {
         navigate(`/student/exams/${exam.id}/review`);
@@ -91,13 +78,6 @@ export default function BrowseTeachers({ embedded = false }) {
       return;
     }
     navigate('/login');
-  };
-
-  const afterPaid = () => {
-    setPayOpen(false);
-    if (payExam && (user?.role === 'Student' || user?.practice) && canEnterExam(user, payExam)) {
-      navigate(`/student/exams/${payExam.id}`);
-    }
   };
 
   const chip = (active) =>
@@ -162,7 +142,7 @@ export default function BrowseTeachers({ embedded = false }) {
                 locked={locked}
                 actionLabel={
                   locked
-                    ? 'Ödənişlə aç'
+                    ? 'Yalnız öz şagirdləri'
                     : (user?.role === 'Student' || user?.practice ? 'İmtahana başla' : 'Daxil olub bax')
                 }
                 saved={savedIds.includes(String(exam.id))}
@@ -175,7 +155,7 @@ export default function BrowseTeachers({ embedded = false }) {
                     ? () => navigate(`/student/exams/${exam.id}?yeniden=1`)
                     : undefined
                 }
-                onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
+                onOpen={isExamScheduled(exam) || locked ? undefined : () => openExam(exam)}
               />
             );
           })}
@@ -188,7 +168,7 @@ export default function BrowseTeachers({ embedded = false }) {
     <>
       <p className="on-public mb-4 text-sm text-gray-500 dark:text-indigo-100/70">
         Müəllimləri bölgə və fənnə görə süzün. Sıra standart olaraq həftəlik imtahan sayı və orta nəticəyə görədir.
-        Özəl imtahanlar kilidli görünür — giriş ödənişlidir; yüksək nəticə şəxsi endirim bileti qazandırır.
+        Açıq imtahanlar pulsuzdur. Özəl imtahanlar yalnız o müəllimin şagirdləri üçündür — tələbə ödəniş etmir.
       </p>
       {filters}
       {loading ? <Skeleton className="mt-6 h-40" /> : null}
@@ -220,23 +200,11 @@ export default function BrowseTeachers({ embedded = false }) {
   );
 
   const body = id ? detail : list;
-  const modal = (
-    <AccessPaymentModal
-      open={payOpen}
-      onClose={() => setPayOpen(false)}
-      user={user}
-      teacher={selected || teachers.find((t) => String(t.id) === examTeacherId(payExam))}
-      exam={payExam}
-      onPaid={afterPaid}
-      onNeedLogin={() => navigate('/login')}
-    />
-  );
 
   if (embedded) {
     return (
       <AppShell title={id ? 'Müəllimin imtahanları' : 'Müəllim tap'}>
         {body}
-        {modal}
       </AppShell>
     );
   }
@@ -253,7 +221,6 @@ export default function BrowseTeachers({ embedded = false }) {
           </Button>
         ) : null}
       </div>
-      {modal}
     </div>
   );
 }

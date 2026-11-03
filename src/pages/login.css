@@ -15,6 +15,28 @@
   background: #1b2438;
 }
 
+.login-back {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
+  z-index: 3;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(250, 249, 246, 0.94);
+  color: #1d2430;
+  cursor: pointer;
+}
+
+.login-back:focus-visible {
+  outline: 2px solid #315efb;
+  outline-offset: 3px;
+}
+
 .login-photo {
   display: block;
   width: 100%;
@@ -182,24 +204,41 @@
 
 .login-row {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   font-size: 14px;
 }
 
+.login-remember {
+  display: grid;
+  gap: 4px;
+}
+
 .login-row label {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-weight: 600;
   color: #202938;
+  cursor: pointer;
 }
 
 .login-row input {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  flex: none;
   accent-color: #315efb;
+}
+
+.login-remember-note {
+  margin: -4px 0 12px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .login-row a {
@@ -337,5 +376,82 @@
   .login-row {
     flex-wrap: wrap;
     font-size: 13px;
+  }
+}
+
+html[data-theme="dark"] .login-page {
+  background: #0f1419;
+  color: #f3f0ea;
+}
+
+html[data-theme="dark"] .login-wave {
+  fill: #0f1419;
+}
+
+html[data-theme="dark"] .login-form {
+  background: #0f1419;
+}
+
+html[data-theme="dark"] .login-back {
+  background: rgba(26, 34, 44, 0.94);
+  color: #f3f0ea;
+}
+
+html[data-theme="dark"] .login-brand,
+html[data-theme="dark"] .login-brand strong,
+html[data-theme="dark"] .login-card h1 {
+  color: #f3f0ea;
+}
+
+html[data-theme="dark"] .login-brand span span,
+html[data-theme="dark"] .login-lead,
+html[data-theme="dark"] .login-remember-note,
+html[data-theme="dark"] .login-or {
+  color: #a8a195;
+}
+
+html[data-theme="dark"] .login-mark {
+  background: #1c2448;
+  color: #93a4ff;
+}
+
+html[data-theme="dark"] .login-group label,
+html[data-theme="dark"] .login-row label {
+  color: #f3f0ea;
+}
+
+html[data-theme="dark"] .login-field {
+  border-color: #2d3642;
+  background: #1a222c;
+  color: #a8a195;
+}
+
+html[data-theme="dark"] .login-field input {
+  color: #f3f0ea;
+}
+
+html[data-theme="dark"] .login-field:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.22);
+}
+
+html[data-theme="dark"] .login-or span {
+  background: #2d3642;
+}
+
+html[data-theme="dark"] .login-create {
+  border-color: #2d3642;
+  background: #1a222c;
+  color: #f3f0ea;
+}
+
+html[data-theme="dark"] .login-create:hover {
+  border-color: #3d4654;
+  background: #222b36;
+}
+
+@media (min-width: 768px) {
+  html[data-theme="dark"] .login-form {
+    background: transparent;
   }
 }

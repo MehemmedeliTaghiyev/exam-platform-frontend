@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GraduationCap } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
 
 const SCENES = [
   { id: 'intro', ms: 5500, kicker: 'ExamPulse', title: 'İmtahan telefonda.', sub: 'Müəllim hazırlayır. Şagird kartlarla həll edir.' },
@@ -15,14 +15,7 @@ const SCENES = [
 ];
 
 function Logo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white">
-        <GraduationCap size={18} />
-      </div>
-      <span className="text-base font-bold text-white">ExamPulse</span>
-    </div>
-  );
+  return <BrandLogo size={32} nameClassName="text-white" />;
 }
 
 function FakeCard({ n, text, opts, pick, img }) {

@@ -15,6 +15,7 @@ import DrivePreview from '../components/DrivePreview';
 import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
+import LatexText from '../components/LatexText';
 
 const LETTERS = [
   { value: 'A', label: 'A' },
@@ -629,7 +630,7 @@ export default function QuestionBuilder() {
                 isOpenQuestion(q) ? (
                   <Card key={q.id || idx}>
                     <p className="text-sm font-semibold text-gray-500">Sual {idx + 1}</p>
-                    <p className="mt-2 font-medium">{q.text}</p>
+                    <p className="mt-2 font-medium"><LatexText text={q.text} /></p>
                     <p className="mt-2 text-sm text-emerald-600">Düzgün: {q.correctText || '—'}</p>
                   </Card>
                 ) : (

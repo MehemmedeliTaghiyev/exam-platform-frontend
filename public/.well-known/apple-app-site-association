@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.az.exampulse.app",
+        "paths": [
+          "/join/*",
+          "/student/*",
+          "/teacher/*",
+          "/login",
+          "/register/*",
+          "/privacy",
+          "/terms",
+          "/support",
+          "/delete-account",
+          "/teachers/*",
+          "/exams"
+        ]
+      }
+    ]
+  }
+}

@@ -3,7 +3,7 @@ import AppShell from '../components/AppShell';
 import { Badge, Button, Card, EmptyState, Input, Modal, Select, Textarea } from '../components/ui';
 import API from '../api/axios';
 import { Ban, CheckCircle2, Sparkles } from 'lucide-react';
-import { createTeacherAccount, setTeacherAiEnabled, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
+import { createTeacherAccount, setStudentAccess, setTeacherAiEnabled, updateTeacherTrial } from '../lib/examApi';
 import { displayTrialMessage, driveFolderOpenUrl, teacherDriveFolderUrl } from '../lib/driveLinks';
 import { createTeacherDriveFolder, teacherFolderName } from '../lib/teacherDrive';
 import { localDb } from '../lib/localDb';
@@ -226,9 +226,8 @@ export default function AdminTeachers() {
   const sorted = useMemo(() => {
     const q = nameQuery.trim().toLowerCase();
     const list = teachers.filter((t) => {
-      if ((t.isAccessEnabled ?? t.IsAccessEnabled) === false) return false;
       if (!q) return true;
-      const name = `${t.fullName || ''} ${t.firstName || ''} ${t.lastName || ''}`.toLowerCase();
+      const name = `${t.fullName || ''} ${t.firstName || ''} ${t.lastName || ''} ${t.email || ''}`.toLowerCase();
       return name.includes(q);
     });
     list.sort((a, b) => {
@@ -338,9 +337,10 @@ export default function AdminTeachers() {
     try {
       const enabled = (t.isAccessEnabled ?? t.IsAccessEnabled) !== false;
       await setStudentAccess(t.id, !enabled);
+      localDb.setTeacherSidelined(t.id, enabled);
       await load();
     } catch (err) {
-      setError(errorMessage(err, 'Pəncərə dəyişmədi.'));
+      setError(errorMessage(err, 'Müəllim statusu dəyişmədi.'));
     } finally {
       setBusyId(null);
     }
@@ -364,8 +364,8 @@ export default function AdminTeachers() {
   return (
     <AppShell title="Müəllim qeydiyyatı">
       <p className="mb-6 text-sm text-gray-500">
-        Hər müəllim üçün Google Drive qovluq linkini bura yazın. Müəllim PDF-i o qovluğa yükləyir, imtahana isə həmin
-        faylın öz linkini bağlayır — qovluqda 10 imtahan olsa belə qarışıqlıq olmur. AI hazırda heç kimə açıq deyil.
+        Qeydiyyat avtomatik açılır. İstəmədiyiniz müəllimi kənarlaşdıra bilərsiniz — o zaman hesab daxil ola bilməz.
+        Drive qovluğu və istifadə müddəti burada qalır.
       </p>
       <div className="mb-4 max-w-md">
         <Input label="Ad ilə axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Müəllimin adı" />
@@ -399,7 +399,7 @@ export default function AdminTeachers() {
                 <th className="px-5 py-3 font-medium">Ad</th>
                 <th className="px-5 py-3 font-medium">Soyad</th>
                 <th className="px-5 py-3 font-medium">Nömrə</th>
-                <th className="px-5 py-3 font-medium">Pəncərə</th>
+                <th className="px-5 py-3 font-medium">Hesab</th>
                 <th className="px-5 py-3 font-medium">İstifadə müddəti</th>
                 <th className="px-5 py-3 font-medium">Drive qovluğu</th>
                 <th className="px-5 py-3 font-medium">AI</th>
@@ -417,7 +417,7 @@ export default function AdminTeachers() {
                 const events = filterEventsByRange(eventsFromTeacher(t), usageFrom, usageTo);
                 const totals = totalsByFeature(events);
                 return (
-                  <tr key={t.id} className="border-b border-gray-100 align-top last:border-0 dark:border-slate-800">
+                  <tr key={t.id} className={`border-b border-gray-100 align-top last:border-0 dark:border-slate-800 ${accessOn ? '' : 'bg-rose-50/70 dark:bg-rose-950/20'}`}>
                     <td className="px-5 py-3 font-medium">{t.firstName || t.fullName?.split(' ')[0] || '—'}</td>
                     <td className="px-5 py-3 font-medium">{t.lastName || '—'}</td>
                     <td className="px-5 py-3 text-gray-500">{t.phone || '—'}</td>
@@ -428,7 +428,7 @@ export default function AdminTeachers() {
                         onClick={() => toggleAccess(t)}
                       >
                         {accessOn ? <Ban size={14} /> : <CheckCircle2 size={14} />}
-                        {accessOn ? 'Bağla' : 'Aç'}
+                        {accessOn ? 'Kənarlaşdır' : 'Geri qaytar'}
                       </Button>
                     </td>
                     <td className="px-5 py-3">

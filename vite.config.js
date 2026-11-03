@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { loadDrivePdfBuffer, parseDrivePdfId, extractTextFromPdfBuffer } from './api/drivePdf.js'
 import { createTeacherDriveFolder } from './api/drive-folder.js'
+import { compileLatexToPdfBuffer } from './api/latexPdf.js'
 import { proxyPipeline } from './api/pipelineProxy.js'
 
 function drivePdfDevPlugin() {
@@ -33,6 +34,25 @@ function drivePdfDevPlugin() {
           return
         }
         const raw = req.url || ''
+        if (raw.startsWith('/latex-pdf') && req.method === 'POST') {
+          const chunks = []
+          req.on('data', (c) => chunks.push(c))
+          req.on('end', async () => {
+            try {
+              const body = JSON.parse(Buffer.concat(chunks).toString() || '{}')
+              const compiled = await compileLatexToPdfBuffer(body.source || body.latex, body.title || 'ExamPulse')
+              res.setHeader('Content-Type', 'application/pdf')
+              res.setHeader('Content-Disposition', `attachment; filename="${String(body.filename || 'material.pdf').replace(/"/g, '')}"`)
+              res.setHeader('X-Latex-Fallback', compiled.fallback ? '1' : '0')
+              res.end(compiled.buffer)
+            } catch (err) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: String(err.message || 'LaTeX PDF alınmadı') }))
+            }
+          })
+          return
+        }
         if (raw.startsWith('/drive-folder') && req.method === 'POST') {
           const chunks = []
           req.on('data', (c) => chunks.push(c))

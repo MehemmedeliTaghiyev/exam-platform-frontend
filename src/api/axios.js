@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { apiBase } from '../lib/runtime';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://127.0.0.1:5000/api');
+const API_BASE = apiBase();
 
 const API = axios.create({
   baseURL: API_BASE,
@@ -11,8 +12,9 @@ const API = axios.create({
 });
 
 API.interceptors.request.use((config) => {
+  config.baseURL = apiBase();
   const url = String(config.url || '');
-  const publicCall = /\/Groups\/invite\//i.test(url) || /\/Auth\/register/i.test(url);
+  const publicCall = /\/Groups\/invite\//i.test(url) || /\/Auth\//i.test(url);
   const token = publicCall ? null : localStorage.getItem('token');
   if (token) {
     const bearer = `Bearer ${token}`;

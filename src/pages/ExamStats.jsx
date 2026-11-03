@@ -12,6 +12,7 @@ import { difficultyLabel } from '../lib/questionDifficulty';
 import { localDb } from '../lib/localDb';
 import { recordAiUsage } from '../lib/aiUsage';
 import DualExamRanking from '../components/DualExamRanking';
+import LatexText from '../components/LatexText';
 
 export default function ExamStats() {
   const { id } = useParams();
@@ -168,7 +169,7 @@ export default function ExamStats() {
                   return (
                   <tr key={q.id} className="border-b border-gray-100 last:border-0 dark:border-slate-800">
                     <td className="px-5 py-3">{q.index}</td>
-                    <td className="px-5 py-3">{q.text}</td>
+                    <td className="px-5 py-3"><LatexText text={q.text} /></td>
                     <td className="px-5 py-3">{q.asked}</td>
                     <td className="px-5 py-3">{aiOn ? `${q.wrongCount} nəfər` : '—'}</td>
                     <td className="px-5 py-3">

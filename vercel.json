@@ -5,7 +5,7 @@
     { "source": "/drive-folder", "destination": "/api/drive-folder" },
     { "source": "/pipeline/:path*", "destination": "/api/pipeline?path=:path*" },
     { "source": "/pipeline", "destination": "/api/pipeline" },
-    { "source": "/((?!api/|drive-pdf|drive-extract|drive-folder).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|pipeline|drive-pdf|drive-extract|drive-folder|\\.well-known/).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/drive-extract.js": {
@@ -17,6 +17,18 @@
     }
   },
   "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    },
     {
       "source": "/assets/(.*)",
       "headers": [

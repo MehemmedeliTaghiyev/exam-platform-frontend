@@ -10,9 +10,11 @@ export function claimDream(studentId, email) {
 
 export function saveDream(studentId, dream) {
   return localDb.saveDream(studentId, {
+    universityId: String(dream.universityId || '').trim(),
     university: String(dream.university || '').trim(),
     major: String(dream.major || '').trim(),
     image: dream.image || '',
+    passingScore: String(dream.passingScore ?? '').replace(/[^\d]/g, '').slice(0, 3),
   });
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Card } from './ui';
+import LatexText from './LatexText';
 import { difficultyLabel, pointsForDifficulty } from '../lib/questionDifficulty';
 
 function optionClass(opt, reveal) {
@@ -53,7 +54,7 @@ export default function QuestionReviewList({ questions = [], reveal = true }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium">
-                  {q.index}. {q.text}
+                  {q.index}. <LatexText text={q.text} />
                 </p>
                 {reveal ? (
                   q.unanswered ? (
@@ -88,7 +89,7 @@ export default function QuestionReviewList({ questions = [], reveal = true }) {
                     key={opt.id || oi}
                     className={`rounded-xl border px-3 py-2.5 text-sm ${optionClass(opt, reveal)}`}
                   >
-                    {String.fromCharCode(65 + oi)}) {opt.text}
+                    {String.fromCharCode(65 + oi)}) <LatexText text={opt.text} />
                     {opt.isSelected ? '  · sizin cavab' : ''}
                     {reveal && opt.isCorrect ? '  · düzgün cavab' : ''}
                   </div>
@@ -98,12 +99,12 @@ export default function QuestionReviewList({ questions = [], reveal = true }) {
                     {q.selectedText ? (
                       <p>
                         <span className="text-gray-500">Tələbənin cavabı: </span>
-                        {q.selectedText}
+                        <LatexText text={q.selectedText} />
                       </p>
                     ) : null}
                     {reveal && q.correctText ? (
                       <p className="text-emerald-700 dark:text-emerald-300">
-                        Düzgün cavab: {q.correctText}
+                        Düzgün cavab: <LatexText text={q.correctText} />
                       </p>
                     ) : null}
                   </div>

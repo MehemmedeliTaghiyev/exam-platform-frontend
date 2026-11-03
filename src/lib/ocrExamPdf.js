@@ -1,4 +1,5 @@
 import { getDocument } from 'pdfjs-dist';
+import { drivePdfSrc } from './runtime';
 
 function toBytes(buf) {
   const src = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
@@ -39,7 +40,7 @@ export async function ocrPdfArrayBuffer(buf, onProgress) {
 
 export async function fetchDrivePdfBuffer(fileId) {
   const id = String(fileId || '').trim();
-  const res = await fetch(`/drive-pdf?id=${encodeURIComponent(id)}`);
+  const res = await fetch(drivePdfSrc(id));
   if (!res.ok) throw new Error('Drive PDF yüklənmədi.');
   return res.arrayBuffer();
 }

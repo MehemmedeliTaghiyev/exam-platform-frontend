@@ -6,6 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Button, Card, ConfirmDialog, EmptyState, Input, Modal, Badge } from '../components/ui';
 import { createStudentAccount, deleteGroup, deleteStudentAccount, ensureGroupOnServer, fetchGroup, fetchStudents, groupInviteSlug, groupInviteUrl, setStudentAccess, updateStudentProfile } from '../lib/examApi';
 import { groupNeedsApproval } from '../lib/groupApproval';
+import { groupSubscriberCount, groupSubscribers, publishGroupCatalog } from '../lib/groupSubscriptions';
 import { formatDate, fullNameOf, errorMessage } from '../lib/utils';
 
 const emptyForm = {
@@ -245,11 +246,38 @@ export default function GroupDetail() {
             <ArrowLeft size={16} /> Kabinet
           </Button>
           <p className="mt-4 whitespace-pre-wrap text-sm text-gray-500">{group.schedule || 'Dərs cədvəli əlavə edilməyib'}</p>
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Badge tone={groupNeedsApproval(group) ? 'warning' : 'success'}>
               {groupNeedsApproval(group) ? 'Şagird üçün icazə lazımdır' : 'Şagird icazəsiz daxil olur'}
             </Badge>
+            <Badge tone="brand">
+              {groupSubscriberCount({
+                id: group.id,
+                groupId: group.id,
+                name: group.name || group.number,
+                inviteCode: groupInviteSlug(group),
+                teacherId: user?.id,
+              })} abunə
+            </Badge>
           </div>
+          {groupSubscribers({
+            id: group.id,
+            groupId: group.id,
+            name: group.name || group.number,
+            inviteCode: groupInviteSlug(group),
+            teacherId: user?.id,
+          }).length ? (
+            <p className="mt-2 text-xs text-gray-500">
+              Son abunələr:{' '}
+              {groupSubscribers({
+                id: group.id,
+                groupId: group.id,
+                name: group.name || group.number,
+                inviteCode: groupInviteSlug(group),
+                teacherId: user?.id,
+              }).slice(0, 5).map((row) => row.fullName).join(', ')}
+            </p>
+          ) : null}
           {error && !open && !editing && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -282,6 +310,15 @@ export default function GroupDetail() {
                   setError('Qrup serverə yazılmadı. Bir az sonra yenidən yoxlayın.');
                   return;
                 }
+                publishGroupCatalog({
+                  id: saved.id,
+                  groupId: saved.id,
+                  name: saved.name || saved.number || groupLabel,
+                  number: saved.number,
+                  inviteCode: slug,
+                  teacherId: user?.id,
+                  teacherName: user?.fullName || user?.email || '',
+                });
                 setShareUrl(url);
                 setCopied(false);
               } catch (err) {

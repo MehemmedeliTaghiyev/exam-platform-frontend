@@ -59,7 +59,9 @@ export function openParentWhatsapp(phone, text) {
   const digits = whatsappDigits(phone);
   if (!digits || !text) return false;
   const url = `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-  const opened = window.open(url, '_blank', 'noopener,noreferrer');
-  if (!opened) window.location.href = url;
+  import('@capacitor/app').then(({ App }) => App.openUrl({ url })).catch(() => {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = url;
+  });
   return true;
 }

@@ -1,0 +1,29 @@
+{
+  "appId": "az.exampulse.app",
+  "appName": "ExamPulse",
+  "webDir": "dist",
+  "backgroundColor": "#FDFBF7",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#FDFBF7",
+    "webContentsDebuggingEnabled": false,
+    "captureInput": true
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#FDFBF7",
+    "preferredContentMode": "mobile",
+    "scheme": "exampulse",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "LIGHT",
+      "backgroundColor": "#FDFBF7"
+    }
+  }
+}

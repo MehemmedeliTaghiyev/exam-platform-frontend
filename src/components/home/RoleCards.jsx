@@ -1,8 +1,8 @@
 import { GraduationCap, PenLine } from 'lucide-react';
 
-export default function RoleCards({ onTeacher, onStudent }) {
+export default function RoleCards() {
   return (
-    <section className="hp-section pt-0">
+    <section id="imkanlar" className="hp-section scroll-mt-24 pt-0">
       <div className="mx-auto grid max-w-[1180px] gap-4 px-4 min-[640px]:grid-cols-2 min-[980px]:px-6">
         <article className="hp-role">
           <div className="hp-role-head">
@@ -11,12 +11,9 @@ export default function RoleCards({ onTeacher, onStudent }) {
             </span>
             <div>
               <h2>Müəllim</h2>
-              <p>İmtahan yarat, sual kartı əlavə et. Məşq rejimində serverə getmir.</p>
+              <p>İmtahan yarat, sual kartı əlavə et, qruplarını idarə et.</p>
             </div>
           </div>
-          <button type="button" onClick={onTeacher} className="hp-btn hp-btn-primary hp-lift">
-            Müəllim kimi başla
-          </button>
         </article>
         <article className="hp-role">
           <div className="hp-role-head">
@@ -28,9 +25,6 @@ export default function RoleCards({ onTeacher, onStudent }) {
               <p>Hazır sınaqları aç, A–E seç, nəticəyə bax.</p>
             </div>
           </div>
-          <button type="button" onClick={onStudent} className="hp-btn hp-btn-gold hp-lift">
-            Məşqə başla
-          </button>
         </article>
       </div>
     </section>

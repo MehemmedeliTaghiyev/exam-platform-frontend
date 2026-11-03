@@ -7,8 +7,10 @@ import { examVisibility, withExamVisibility } from './examVisibility';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher } from './teacherMarketplace';
+import { subscribedTeacherIds } from './groupSubscriptions';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
+import { publicWebOrigin } from './runtime';
 import {
   isPractice,
   practiceRole,
@@ -78,6 +80,30 @@ export async function fetchSubjects() {
   return localDb.getSubjects();
 }
 
+export async function requestPasswordSms({ email = '', phone = '' }) {
+  const res = await API.post('/Auth/forgot-password', {
+    email,
+    phone,
+    Email: email,
+    Phone: phone,
+  });
+  return unwrapItem(res.data) || res.data;
+}
+
+export async function resetPasswordWithSms({ email = '', phone = '', code, newPassword }) {
+  const res = await API.post('/Auth/reset-password', {
+    email,
+    phone,
+    code,
+    newPassword,
+    Email: email,
+    Phone: phone,
+    Code: code,
+    NewPassword: newPassword,
+  });
+  return unwrapItem(res.data) || res.data;
+}
+
 export async function createStudentAccount(payload) {
   const body = {
     fullName: payload.fullName,
@@ -130,6 +156,7 @@ function mapGroup(g) {
   const rawSchedule = g.schedule || g.Schedule || '';
   const group = {
     id: g.id ?? g.Id,
+    teacherId: g.teacherId ?? g.TeacherId ?? null,
     name: g.name || g.Name || '',
     number: g.number || g.Number || g.name || g.Name || '',
     schedule: rawSchedule,
@@ -190,6 +217,7 @@ export function mapStudent(u) {
     isAccessEnabled: (u.isAccessEnabled ?? u.IsAccessEnabled) !== false,
     createdAt: u.createdAt || u.CreatedAt,
     position: u.position || u.Position || '',
+    teachingSubject: u.teachingSubject || u.TeachingSubject || u.subject || u.Subject || localDb.getTeacherSubject(u.id ?? u.Id, u.email || u.Email) || '',
     phone: u.phone || u.Phone || localDb.getParentPhone(u.id ?? u.Id) || '',
     teacherId: u.teacherId ?? u.TeacherId ?? null,
     role: u.role || u.Role,
@@ -219,7 +247,7 @@ export function groupInviteUrl(inviteCode, groupName = '', approvalRequired = tr
   if (name) params.set('group', name);
   params.set('icaze', approvalRequired ? 'var' : 'yox');
   const query = params.toString();
-  return `${window.location.origin}/join/${encodeURIComponent(code)}${query ? `?${query}` : ''}`;
+  return `${publicWebOrigin()}/join/${encodeURIComponent(code)}${query ? `?${query}` : ''}`;
 }
 
 export async function fetchGroupInvite(code) {
@@ -228,7 +256,11 @@ export async function fetchGroupInvite(code) {
   return {
     inviteCode: data.inviteCode || data.InviteCode || code,
     groupName: data.groupName || data.GroupName || '',
+    groupNumber: data.number || data.Number || '',
     teacherName: data.teacherName || data.TeacherName || '',
+    teacherId: data.teacherId ?? data.TeacherId ?? null,
+    groupId: data.groupId ?? data.GroupId ?? null,
+    approvalRequired: data.approvalRequired ?? data.ApprovalRequired,
   };
 }
 
@@ -315,49 +347,80 @@ function withoutHiddenGroups(teacherId, list) {
   return (list || []).filter((g) => !hidden.has(String(g.id)));
 }
 
+function mergeGroupsFromStudents(teacherId, list, students) {
+  const rows = Array.isArray(list) ? [...list] : [];
+  const seen = new Set(rows.map((g) => String(g.id)));
+  const names = new Set(rows.flatMap((g) => [g.name, g.number].map((v) => String(v || '').trim().toLowerCase()).filter(Boolean)));
+  (students || []).forEach((student) => {
+    if (!studentBelongsToTeacher(student, teacherId, rows)) return;
+    const label = String(student.groupName || '').trim();
+    const gid = student.groupId;
+    if (gid != null && gid !== '' && !seen.has(String(gid))) {
+      seen.add(String(gid));
+      rows.push({
+        id: gid,
+        teacherId,
+        name: label || `Qrup ${gid}`,
+        number: label || `g${gid}`,
+        schedule: '',
+        studentCount: 1,
+        inviteCode: `g${gid}`,
+        approvalRequired: true,
+      });
+      if (label) names.add(label.toLowerCase());
+      return;
+    }
+    const key = label.toLowerCase();
+    if (!label || names.has(key)) return;
+    names.add(key);
+    rows.push({
+      id: `name:${key}`,
+      teacherId,
+      name: label,
+      number: label,
+      schedule: '',
+      studentCount: 1,
+      inviteCode: '',
+      approvalRequired: true,
+    });
+  });
+  return rows.map((g) => {
+    const count = (students || []).filter((s) => studentBelongsToTeacher(s, teacherId, [g])).length;
+    return count && !g.studentCount ? { ...g, studentCount: count } : { ...g, studentCount: Math.max(Number(g.studentCount) || 0, count) };
+  });
+}
+
 export async function fetchGroups() {
   if (isPractice()) return [];
   const teacherId = currentTeacherId();
+  const remembered = new Map(localDb.getGroups(teacherId).map((g) => [String(g.id), g.approvalRequired]));
+  let list = [];
   try {
-    const local = localDb.getGroups(teacherId);
-    let remote = [];
-    try {
-      remote = unwrapList(await tryGet('/Groups')).map(mapGroup);
-    } catch {
-      remote = [];
-    }
-    for (const g of local) {
-      if (Number(g.id) > 0) continue;
-      if (!String(g.name || g.number || '').trim()) continue;
-      if (findDuplicateGroup(remote, g)) continue;
-      try {
-        await API.post('/Groups', {
-          name: g.name || g.number,
-          number: g.number || g.name,
-          schedule: withApprovalMark(g.schedule || '', groupNeedsApproval(g)),
-        });
-      } catch {
-        /* duplicate or offline */
-      }
-    }
     const data = await tryGet('/Groups');
-    const remembered = new Map(localDb.getGroups(teacherId).map((g) => [String(g.id), g.approvalRequired]));
-    const list = withoutHiddenGroups(teacherId, unwrapList(data).map(mapGroup)).map((g) => {
+    list = unwrapList(data).map(mapGroup).map((g) => {
       const approvalRequired = g.approvalMarked
         ? g.approvalRequired
         : (remembered.get(String(g.id)) === false ? false : g.approvalRequired);
       const { approvalMarked, ...rest } = g;
       return { ...rest, approvalRequired };
     });
-    if (list.length) {
-      localDb.saveGroups(teacherId, list);
-      return list;
-    }
-    const localOnly = withoutHiddenGroups(teacherId, localDb.getGroups(teacherId));
-    return localOnly.length ? localOnly : list;
   } catch {
-    return withoutHiddenGroups(teacherId, localDb.getGroups(teacherId));
+    list = localDb.getGroups(teacherId);
   }
+  try {
+    const students = (await fetchUsersByRole('Student')).map(mapStudent).filter(Boolean);
+    list = mergeGroupsFromStudents(teacherId, list, students);
+  } catch {
+    /* qruplar API-dən gəlsə belə tələbə siyahısı olmaya bilər */
+  }
+  localDb.saveGroups(teacherId, list);
+  return withoutHiddenGroups(teacherId, list);
+}
+
+export async function fetchGroupsForTeacher(teacherId) {
+  if (!teacherId) return [];
+  const data = await tryGet(`/Groups/teacher/${encodeURIComponent(teacherId)}`);
+  return unwrapList(data).map(mapGroup).map(({ approvalMarked, ...rest }) => rest);
 }
 
 export async function createGroup(payload) {
@@ -407,6 +470,36 @@ export async function ensureGroupOnServer(group) {
     schedule: group?.schedule || '',
     approvalRequired: groupNeedsApproval(group),
   });
+}
+
+export async function releasePendingTeachers() {
+  if (isPractice()) return;
+  const snap = currentUserSnapshot();
+  if (snap.role !== 'Admin') return;
+  let teachers = [];
+  try {
+    teachers = unwrapList((await API.get('/Users', { params: { role: 'Teacher', includeDeleted: false } })).data)
+      .filter(isPendingApproval);
+  } catch {
+    return;
+  }
+  for (const teacher of teachers) {
+    if (!teacher.id || localDb.isTeacherSidelined(teacher.id)) continue;
+    const msg = String(teacher.trialMessage || teacher.TrialMessage || '');
+    if (/kənarlaşdır/i.test(msg)) continue;
+    try {
+      await setStudentAccess(teacher.id, true);
+      await updateTeacherTrial(teacher.id, {
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        phone: teacher.phone,
+        billingPlan: teacher.billingPlan || teacher.BillingPlan || 'Monthly',
+        trialMessage: teacher.trialMessage || 'Hesab aktivdir.',
+      }).catch(() => {});
+    } catch {
+      /* növbəti açılışda yenidən cəhd */
+    }
+  }
 }
 
 export async function releaseOpenGroupStudents() {
@@ -516,7 +609,10 @@ export async function fetchStudents() {
   const list = (await fetchUsersByRole('Student')).map(mapStudent).filter(Boolean);
   const snap = currentUserSnapshot();
   if (snap.role === 'Teacher' && snap.id) {
-    const groups = localDb.getGroups(snap.id);
+    let groups = localDb.getGroups(snap.id);
+    if (!groups.length) {
+      try { groups = await fetchGroups(); } catch { groups = []; }
+    }
     return list.filter((s) => studentBelongsToTeacher(s, snap.id, groups));
   }
   return list;
@@ -763,9 +859,11 @@ function visibleForCurrentUser(exams) {
     return exams.filter((exam) => String(examOwnerId(exam)) === String(scope));
   }
   const followed = new Set(localDb.followedTeacherIds(id));
+  const subscribedTeachers = new Set(subscribedTeacherIds(id));
   return exams.filter((exam) => {
     const owner = String(examOwnerId(exam) ?? '');
     if (scope != null && owner === String(scope)) return true;
+    if (subscribedTeachers.has(owner)) return true;
     return examVisibility(exam) === 'public' && followed.has(owner);
   }).map(withExamVisibility);
 }
@@ -1128,8 +1226,8 @@ function rawQuestionOptions(q) {
   return list.map((opt) => ({
     ...opt,
     id: opt.id ?? opt.Id ?? opt.optionId ?? opt.OptionId,
-    optionText: opt.optionText || opt.OptionText || opt.text || opt.Text || '',
-    text: opt.text || opt.Text || opt.optionText || opt.OptionText || '',
+    optionText: opt.optionText || opt.OptionText || opt.text || opt.Text || opt.latex || opt.Latex || '',
+    text: opt.text || opt.Text || opt.optionText || opt.OptionText || opt.latex || opt.Latex || '',
     isCorrect: Boolean(opt.isCorrect ?? opt.IsCorrect),
   }));
 }
@@ -1139,7 +1237,8 @@ function normalizeQuestion(q) {
   const typeName = typeof type === 'number'
     ? ['SingleChoice', 'MultipleChoice', 'OpenEnded'][type] || 'SingleChoice'
     : (type || 'SingleChoice');
-  const rawText = q.text || q.Text || q.questionText || q.QuestionText || q.title || q.Title || '';
+  const rawText = q.text || q.Text || q.questionText || q.QuestionText || q.title || q.Title
+    || q.latex || q.Latex || q.latexSource || q.LatexSource || q.body || q.Body || '';
   const imageUrl = parseQuestionImage({ ...q, text: rawText });
   const marker = isDriveMarkerQuestion({ text: rawText });
   const text = marker
@@ -1520,7 +1619,7 @@ export async function tryGenerateAiQuestions(payload, { soft = false } = {}) {
     const list = unwrapList(data.questions || data.Questions || data);
     if (!list.length) return null;
     return list.map((q) => ({
-      text: q.text || q.Text || q.questionText || q.QuestionText || q.stem,
+      text: q.text || q.Text || q.questionText || q.QuestionText || q.stem || q.latex || q.Latex,
       options: unwrapOptions(q.options || q.Options).map((o, idx) => ({
         letter: o.letter || o.Letter || ['A', 'B', 'C', 'D', 'E'][idx],
         text: o.text || o.Text || o.optionText || o.OptionText,
@@ -1805,6 +1904,33 @@ export async function submitExam(payload) {
     localDb.addSubmission(submission);
     return submission;
   }
+}
+
+export async function fetchDuelLookup(code) {
+  const res = await API.get('/Duels/lookup', { params: { code }, timeout: 8000 });
+  const item = unwrapItem(res.data) || res.data || {};
+  const id = item.id ?? item.Id;
+  if (id == null) return null;
+  return {
+    id,
+    fullName: item.fullName || item.FullName || 'Şagird',
+    duelCode: item.duelCode || item.DuelCode || code,
+  };
+}
+
+export async function fetchMyDuels() {
+  const res = await API.get('/Duels', { timeout: 8000 });
+  return unwrapList(res.data);
+}
+
+export async function postDuel(payload) {
+  const res = await API.post('/Duels', payload, FAST);
+  return unwrapItem(res.data) || res.data;
+}
+
+export async function patchDuel(id, status) {
+  const res = await API.patch(`/Duels/${id}`, { status }, FAST);
+  return unwrapItem(res.data) || res.data;
 }
 
 function normalizeSubmission(item) {

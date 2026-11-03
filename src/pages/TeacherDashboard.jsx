@@ -9,10 +9,11 @@ import DimBankPanel from '../components/DimBankPanel';
 import { Button, EmptyState, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, examCanEdit, isExamDraft, resolveExamStatus } from '../lib/utils';
-import AccessPeriodBanner from '../components/AccessPeriodBanner';
+import TokenBanner from '../components/TokenBanner';
 import ExamSearchBar from '../components/ExamSearchBar';
 import { examMatchesSearch } from '../lib/publicExams';
 import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
+import { withMixedMark } from '../lib/syllabus';
 
 function toDatetimeLocalValue(date) {
   const d = date instanceof Date ? date : new Date(date);
@@ -50,6 +51,7 @@ export default function TeacherDashboard() {
   const [driveFileLink, setDriveFileLink] = useState('');
   const [folderUrl, setFolderUrl] = useState('');
   const [visibility, setVisibility] = useState('private');
+  const [mixedTopics, setMixedTopics] = useState(false);
   const [examFilter, setExamFilter] = useState('all');
   const [nameQuery, setNameQuery] = useState('');
   const [dateQuery, setDateQuery] = useState('');
@@ -65,6 +67,7 @@ export default function TeacherDashboard() {
     startLocal,
     driveFileLink,
     visibility,
+    mixedTopics,
   };
 
   useEffect(() => {
@@ -112,6 +115,7 @@ export default function TeacherDashboard() {
       if (saved.startLocal) setStartLocal(saved.startLocal);
       if (saved.driveFileLink) setDriveFileLink(saved.driveFileLink);
       if (saved.visibility === 'public' || saved.visibility === 'private') setVisibility(saved.visibility);
+      if (typeof saved.mixedTopics === 'boolean') setMixedTopics(saved.mixedTopics);
     } catch {
       /* ignore */
     }
@@ -123,7 +127,7 @@ export default function TeacherDashboard() {
       localStorage.setItem(draftStorageKey(user?.id), JSON.stringify(formRef.current));
     }, 250);
     return () => clearTimeout(timer);
-  }, [showModal, title, description, questionCount, durationMinutes, subjectMode, subjectId, newSubject, startLocal, driveFileLink, visibility, user?.id]);
+  }, [showModal, title, description, questionCount, durationMinutes, subjectMode, subjectId, newSubject, startLocal, driveFileLink, visibility, mixedTopics, user?.id]);
 
   const resetForm = () => {
     setTitle('');
@@ -132,6 +136,7 @@ export default function TeacherDashboard() {
     setStartLocal(toDatetimeLocalValue(new Date()));
     setDriveFileLink('');
     setVisibility('private');
+    setMixedTopics(false);
     setSubjectMode(subjects.length ? 'existing' : 'new');
     localStorage.removeItem(draftStorageKey(user?.id));
   };
@@ -164,9 +169,10 @@ export default function TeacherDashboard() {
         }
       })();
 
+      const mixed = Boolean(form.mixedTopics);
       const payload = {
         title: form.title,
-        description: form.description,
+        description: withMixedMark(form.description, mixed),
         totalQuestions: Number(form.questionCount) || 10,
         durationMinutes: duration,
         teacherId: user?.id,
@@ -176,8 +182,8 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
-        visibility: form.visibility === 'public' ? 'public' : 'private',
-        isPublic: form.visibility === 'public',
+        visibility: mixed ? 'private' : form.visibility === 'public' ? 'public' : 'private',
+        isPublic: !mixed && form.visibility === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(form.driveFileLink)) || undefined,
       };
 
@@ -255,7 +261,7 @@ export default function TeacherDashboard() {
 
       const payload = {
         title,
-        description,
+        description: withMixedMark(description, mixedTopics),
         totalQuestions: Number(questionCount),
         durationMinutes: Number(durationMinutes),
         teacherId: user?.id,
@@ -265,8 +271,8 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
-        visibility: visibility === 'public' ? 'public' : 'private',
-        isPublic: visibility === 'public',
+        visibility: mixedTopics ? 'private' : visibility === 'public' ? 'public' : 'private',
+        isPublic: !mixedTopics && visibility === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(driveFileLink)) || undefined,
       };
 
@@ -320,7 +326,7 @@ export default function TeacherDashboard() {
         </Button>
       )}
     >
-      <AccessPeriodBanner user={periodUser || user} />
+      <TokenBanner user={periodUser || user} />
       <ExamSearchBar name={nameQuery} date={dateQuery} onName={setNameQuery} onDate={setDateQuery} />
       <div className="mb-6 flex flex-wrap gap-2">
         {[
@@ -372,7 +378,7 @@ export default function TeacherDashboard() {
       ) : visibleExams.length === 0 ? (
         <EmptyState title="Uyğun imtahan yoxdur" text="Adı və ya tarixi dəyişin." />
       ) : (
-        <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
+        <div className="grid gap-3 [grid-template-columns:1fr] min-[640px]:gap-5 min-[640px]:[grid-template-columns:repeat(auto-fill,minmax(290px,1fr))]">
           {visibleExams.map((exam) => (
             <ExamCard
               key={exam.id}
@@ -390,7 +396,7 @@ export default function TeacherDashboard() {
       <Modal open={showModal} title="Yeni imtahan yarat" onClose={closeModal}>
         <form onSubmit={handleCreateExam} noValidate className="space-y-4">
           <p className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100">
-            AI lazım deyil. İmtahanı özəl və ya açıq dərc edə bilərsiniz — ikisini də özünüz seçirsiniz.
+            Tək mövzulu sınağı hamı ilə açıq paylaşmaq olar. Bir neçə mövzu qarışıqdırsa, yalnız öz tələbələriniz görür.
           </p>
           <Input label="İmtahan mövzusu" value={title} onChange={(e) => setTitle(e.target.value)} required />
           <Textarea
@@ -400,6 +406,22 @@ export default function TeacherDashboard() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+          <label className="flex items-start gap-3 rounded-xl border border-[var(--line)] bg-[var(--card)] px-3 py-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={mixedTopics}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setMixedTopics(on);
+                if (on) setVisibility('private');
+              }}
+            />
+            <span>
+              <span className="font-bold">Qarışıq / ümumi imtahan</span>
+              <span className="mt-0.5 block text-[var(--muted)]">Bir neçə mövzu birlikdədirsə işarələyin. Yalnız öz tələbələrinizə açıq qalır.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -410,18 +432,19 @@ export default function TeacherDashboard() {
                   : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
               }`}
             >
-              Özəl
+              Öz tələbələr
             </button>
             <button
               type="button"
+              disabled={mixedTopics}
               onClick={() => setVisibility('public')}
-              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
-                visibility === 'public'
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                visibility === 'public' && !mixedTopics
                   ? 'border-brand-600 bg-brand-600 text-white'
                   : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
               }`}
             >
-              Açıq
+              Hamı
             </button>
           </div>
           <div className="flex gap-2 rounded-xl bg-gray-50 p-1 dark:bg-slate-800">

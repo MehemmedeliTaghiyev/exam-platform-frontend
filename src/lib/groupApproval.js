@@ -1,4 +1,4 @@
-import { isPublicGroupName } from './publicGroup';
+import { isPublicGroupCode, isPublicGroupName } from './publicGroup';
 
 const MARK = /\[\[APPR:(0|1)\]\]/;
 
@@ -14,7 +14,14 @@ export function withApprovalMark(schedule, approvalRequired) {
 
 export function groupNeedsApproval(group) {
   if (!group) return true;
-  if (isPublicGroupName(group.name) || isPublicGroupName(group.number)) return false;
+  if (
+    isPublicGroupName(group.name)
+    || isPublicGroupName(group.number)
+    || isPublicGroupCode(group.inviteCode)
+    || isPublicGroupCode(group.number)
+    || isPublicGroupName(group.groupName)
+    || isPublicGroupName(group.groupNumber)
+  ) return false;
   if (group.approvalRequired === false) return false;
   if (group.approvalRequired === true) return true;
   const raw = String(group.schedule || '');

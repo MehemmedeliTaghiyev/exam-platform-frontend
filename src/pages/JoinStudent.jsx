@@ -1,28 +1,53 @@
 import { useContext, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { GraduationCap, Moon, Sun } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
 import { AuthContext } from '../context/AuthContext';
-import { Button, FormError, Input } from '../components/ui';
+import Header from '../components/home/Header';
+import { Button, FormError, Input, Select } from '../components/ui';
+import { AZERBAIJAN_UNIVERSITIES, universityById } from '../lib/azerbaijanUniversities';
 import { fetchGroupInvite, registerStudentInvite } from '../lib/examApi';
 import { errorMessage } from '../lib/utils';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE, PUBLIC_GROUP_NAME } from '../lib/publicGroup';
+import { groupNeedsApproval } from '../lib/groupApproval';
 import { buildStudentEmail, STUDENT_EMAIL_HINT, STUDENT_EMAIL_RE } from '../lib/studentEmail';
 import { localDb } from '../lib/localDb';
+import { subscribeToGroup } from '../lib/groupSubscriptions';
 import '../components/home/home.css';
+
+function subscriptionFromInvite({ inviteCode, preview, namedGroup, publicGroup }) {
+  const numeric = String(inviteCode || '').replace(/^g/i, '');
+  const fromCode = Number.isFinite(Number(numeric)) ? Number(numeric) : null;
+  return {
+    groupId: preview?.groupId ?? preview?.GroupId ?? fromCode,
+    groupName: preview?.groupName || namedGroup || (publicGroup ? PUBLIC_GROUP_NAME : 'Qrup'),
+    teacherName: preview?.teacherName || '',
+    teacherId: preview?.teacherId ?? preview?.TeacherId ?? null,
+    inviteCode: preview?.inviteCode || inviteCode,
+  };
+}
 
 export default function JoinStudent() {
   const { code } = useParams();
   const [params] = useSearchParams();
   const namedGroup = String(params.get('group') || '').trim();
   const icaze = String(params.get('icaze') || '').trim().toLowerCase();
-  const publicGroup = isPublicGroupCode(code) || isPublicGroupName(namedGroup);
-  const inviteCode = publicGroup ? PUBLIC_GROUP_CODE : String(code || '').trim();
-  const openJoin = publicGroup || icaze === 'yox' || icaze === '0';
-  const { login } = useContext(AuthContext);
+  const { user, login, completeLogin } = useContext(AuthContext);
   const navigate = useNavigate();
-  const { dark, toggle } = useTheme();
   const [preview, setPreview] = useState(null);
+  const publicFromLink = isPublicGroupCode(code) || isPublicGroupName(namedGroup);
+  const publicGroup = publicFromLink
+    || isPublicGroupName(preview?.groupName)
+    || isPublicGroupName(preview?.groupNumber || preview?.number)
+    || isPublicGroupCode(preview?.inviteCode);
+  const inviteCode = publicFromLink ? PUBLIC_GROUP_CODE : String(code || '').trim();
+  const previewOpen = preview
+    ? !groupNeedsApproval({
+      name: preview.groupName,
+      number: preview.groupNumber || preview.number,
+      inviteCode: preview.inviteCode || inviteCode,
+      approvalRequired: preview.approvalRequired,
+    })
+    : false;
+  const openJoin = publicGroup || previewOpen || icaze === 'yox' || icaze === '0';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -65,6 +90,17 @@ export default function JoinStudent() {
     };
   }, [code, namedGroup, publicGroup, inviteCode]);
 
+  useEffect(() => {
+    if (!user || user.practice || user.role !== 'Student' || !preview) return;
+    const row = subscribeToGroup(user, subscriptionFromInvite({
+      inviteCode,
+      preview,
+      namedGroup,
+      publicGroup,
+    }));
+    navigate(row?.key ? `/student/subscriptions/${encodeURIComponent(row.key)}` : '/student/subscriptions', { replace: true });
+  }, [user, preview, inviteCode, namedGroup, publicGroup, navigate]);
+
   const onChange = (e) => {
     const { name, value } = e.target;
     if (name === 'email') setEmailEdited(value.trim() !== '' && value.trim().toLowerCase() !== suggestedEmail);
@@ -95,10 +131,17 @@ export default function JoinStudent() {
     setSaving(true);
     try {
       if (form.dreamUniversity.trim() || form.dreamMajor.trim()) {
+        const uni = universityById(form.dreamUniversity.trim());
+        if (form.dreamUniversity.trim() && !uni) {
+          setError('Universiteti siyahıdan seçin.');
+          setSaving(false);
+          return;
+        }
         localDb.saveDreamPending(email, {
-          university: form.dreamUniversity.trim(),
+          universityId: uni?.id || '',
+          university: uni?.name || '',
           major: form.dreamMajor.trim(),
-          image: '',
+          image: uni?.image || '',
         });
       }
       const result = await registerStudentInvite({
@@ -113,8 +156,25 @@ export default function JoinStudent() {
       });
       if (openJoin) {
         try {
-          await login({ email, password: form.password });
-          navigate('/student');
+          const token = result?.token || result?.Token || result?.accessToken;
+          let signed = null;
+          if (token) {
+            signed = completeLogin({
+              ...result,
+              token,
+              email: result.email || result.Email || email,
+              role: result.role || result.Role || 'Student',
+            });
+          } else {
+            signed = await login({ email, password: form.password });
+          }
+          const row = subscribeToGroup(signed || { id: result?.id, role: 'Student', email }, subscriptionFromInvite({
+            inviteCode,
+            preview,
+            namedGroup,
+            publicGroup,
+          }));
+          navigate(row?.key ? `/student/subscriptions/${encodeURIComponent(row.key)}` : '/student', { replace: true });
           return;
         } catch (err) {
           const apiMsg = err?.response?.data?.message;
@@ -140,26 +200,27 @@ export default function JoinStudent() {
     }
   };
 
+  if (user && !user.practice && user.role === 'Student') {
+    return (
+      <div className="home-page flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="w-full max-w-lg rounded-2xl border border-[var(--hp-line)] bg-[var(--hp-card)] p-8 text-center text-[var(--hp-text)] shadow-[0_8px_30px_rgba(15,23,42,0.06)]">
+          <p className="text-lg font-extrabold">Qrupa abunə olunur...</p>
+          <p className="mt-2 text-sm text-[var(--hp-muted)]">{preview?.groupName || 'Qrup'} Abunələr siyahınıza əlavə edilir.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="home-page flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-lg">
-        <div className="mb-4 flex justify-end">
-          <button
-            type="button"
-            onClick={toggle}
-            className="rounded-xl p-2.5 text-gray-500 transition-all duration-200 hover:bg-white dark:hover:bg-slate-800"
-            title="Tema"
-          >
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-        </div>
-        <div className="mb-8 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e7f6ea] text-[#1f7a3a]">
-            <GraduationCap size={20} />
-          </div>
-          <span className="text-lg font-extrabold text-[#1f7a3a]">ExamPulse</span>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900">
+    <div className="home-page min-h-screen">
+      <Header hideAuth />
+      <div className="mx-auto w-full max-w-lg px-4 py-8">
+        <div className="rounded-2xl border border-[var(--hp-line)] bg-[var(--hp-card)] p-8 shadow-[0_8px_30px_rgba(15,23,42,0.06)]">
+          <p className="mb-4">
+            <Link to="/register" className="text-sm font-extrabold text-[var(--hp-accent)] underline decoration-2 underline-offset-4">
+              ← Geri
+            </Link>
+          </p>
           {loading ? (
             <p className="text-sm text-gray-500">Link yoxlanılır...</p>
           ) : done ? (
@@ -183,8 +244,8 @@ export default function JoinStudent() {
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold">Şagird qeydiyyatı</h1>
-              <p className="mt-1 text-sm text-gray-500">
+              <h1 className="text-2xl font-bold text-[var(--hp-text)]">Şagird qeydiyyatı</h1>
+              <p className="mt-1 text-sm text-[var(--hp-muted)]">
                 {publicGroup
                   ? 'Bu ümumi qrupdur. E-poçt ad.soyad_ataadi@gmail.com olur. Adi Gmail qəbul olunmur. Müəllimin icazəsi tələb olunmur.'
                   : openJoin
@@ -203,7 +264,7 @@ export default function JoinStudent() {
                 </div>
                 <div className="sm:col-span-2">
                   <Input label="Valideynin WhatsApp nömrəsi" name="phone" required value={form.phone} onChange={onChange} placeholder="0501234567" />
-                  <p className="mt-1.5 text-xs text-gray-500">İmtahan bitəndə ətraflı nəticə bu nömrəyə açılır.</p>
+                  <p className="mt-1.5 text-xs text-[var(--hp-muted)]">İmtahan bitəndə ətraflı nəticə bu nömrəyə açılır.</p>
                 </div>
                 <div className="sm:col-span-2">
                   <Input
@@ -217,20 +278,24 @@ export default function JoinStudent() {
                     onChange={onChange}
                     placeholder={STUDENT_EMAIL_HINT}
                   />
-                  <p className="mt-1.5 text-xs text-gray-500">
+                  <p className="mt-1.5 text-xs text-[var(--hp-muted)]">
                     {suggestedEmail
                       ? `Giriş ünvanı: ${suggestedEmail}`
                       : 'Ad, soyad və ata adı yazın. Ünvan belə yaranır: nigar.eliyeva_veli@gmail.com'}
                   </p>
                 </div>
                 <div className="sm:col-span-2">
-                  <Input
-                    label="Dream university"
+                  <Select
+                    label="Hədəflədiyin universitet"
                     name="dreamUniversity"
                     value={form.dreamUniversity}
                     onChange={onChange}
-                    placeholder="Arzu etdiyiniz universitet"
-                  />
+                  >
+                    <option value="">Azərbaycan universitetlərindən seç</option>
+                    {AZERBAIJAN_UNIVERSITIES.map((row) => (
+                      <option key={row.id} value={row.id}>{row.name}</option>
+                    ))}
+                  </Select>
                 </div>
                 <div className="sm:col-span-2">
                   <Input
@@ -252,7 +317,7 @@ export default function JoinStudent() {
                     onChange={onChange}
                   />
                 </div>
-                <p className="sm:col-span-2 text-xs text-gray-500">
+                <p className="sm:col-span-2 text-xs text-[var(--hp-muted)]">
                   {openJoin
                     ? 'Şifrəni yadda saxlayın. Bu qrupda «Giriş ver» gözlənilmir.'
                     : 'Şifrəni yadda saxlayın. Göndərdikdən sonra yalnız bu müəllimin «Yeni şagirdlər» siyahısına düşəcəksiniz.'}

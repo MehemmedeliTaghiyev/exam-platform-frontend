@@ -1,19 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Menu, Moon, Sun, UserRound, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Menu, Moon, Sun, UserRound, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { goToHash, scrollToHash } from '../../lib/scrollToHash';
+import BrandLogo from '../BrandLogo';
 
 const LINKS = [
-  { href: '/#imkanlar', label: 'İmkanlar' },
-  { href: '/#nece', label: 'Necə işləyir' },
+  { href: '/#imkanlar', label: 'İmkanlar', hash: 'imkanlar' },
+  { href: '/#elaqe', label: 'Necə işləyir', hash: 'elaqe' },
   { href: '/teachers', label: 'Müəllim tap' },
-  { href: '/#elaqe', label: 'Əlaqə' },
+  { href: '/#elaqe', label: 'Əlaqə', hash: 'elaqe' },
 ];
 
 export default function Header({ hideAuth = false, overlay = false }) {
   const { dark, toggle } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const menuId = 'hp-mobile-nav';
+  const showBack = location.pathname !== '/';
 
   useEffect(() => {
     if (!overlay) return undefined;
@@ -23,51 +30,110 @@ export default function Header({ hideAuth = false, overlay = false }) {
     return () => window.removeEventListener('scroll', onScroll);
   }, [overlay]);
 
-  const bar = overlay && !scrolled ? 'hp-header-overlay' : '';
+  useEffect(() => {
+    if (open) {
+      setShown(true);
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = previous;
+      };
+    }
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timer = setTimeout(() => setShown(false), reduce ? 0 : 220);
+    return () => clearTimeout(timer);
+  }, [open]);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    const onResize = () => {
+      if (window.matchMedia('(min-width: 900px)').matches) setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+    };
+  }, []);
+
+  const close = () => setOpen(false);
+  const goBack = () => {
+    close();
+    if (location.key !== 'default') navigate(-1);
+    else navigate('/');
+  };
+  const goLink = (item) => (event) => {
+    if (!item.hash) {
+      close();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+    if (location.pathname !== '/') {
+      goToHash(navigate, item.hash);
+      return;
+    }
+    if (location.hash !== `#${item.hash}`) {
+      navigate({ pathname: '/', hash: `#${item.hash}` }, { replace: true });
+    }
+    window.setTimeout(() => scrollToHash(item.hash), 30);
+  };
+  const bar = overlay && !scrolled && !open ? 'hp-header-overlay' : '';
 
   return (
-    <header className={`hp-header sticky top-0 z-40 ${bar}`}>
-      <div className="mx-auto flex h-[72px] max-w-[1180px] items-center justify-between gap-3 px-4 min-[420px]:px-6">
-        <Link to="/" className="hp-brand flex items-center gap-2.5 font-extrabold">
-          <svg className="hp-logo-svg" viewBox="0 0 36 36" width="34" height="34" aria-hidden="true">
-            <path d="M18 3.5 32 11.5 18 19.5 4 11.5Z" fill="#f0b429" />
-            <path d="M4 11.5V24.5L18 32.5V19.5Z" fill="#1f6f4a" />
-            <path d="M32 11.5V24.5L18 32.5V19.5Z" fill="#3eae72" />
-            <path d="M18 11.2 25.2 15.3 18 19.4 10.8 15.3Z" fill="#fff8e8" />
-          </svg>
-          ExamPulse
+    <header className={`hp-header sticky top-0 z-40 ${bar} ${open || shown ? 'is-open' : ''} ${showBack ? 'has-back' : ''}`}>
+      <div className="hp-header-bar">
+        <div className="hp-header-start">
+          {showBack ? (
+            <button type="button" className="hp-header-icon hp-header-back" aria-label="Geri" onClick={goBack}>
+              <ArrowLeft size={20} />
+            </button>
+          ) : null}
+          <Link to="/" className="hp-brand flex min-w-0 items-center gap-2 font-extrabold" onClick={close}>
+          <BrandLogo />
         </Link>
+        </div>
 
-        <nav className="hidden items-center gap-7 min-[900px]:flex" aria-label="İctimai menyu">
+        <nav className="hp-desktop-nav hidden items-center gap-7 min-[900px]:flex" aria-label="İctimai menyu">
           {LINKS.map((item) => (
-            <Link key={item.href} to={item.href} className="font-semibold text-[var(--hp-text)] hover:text-[var(--hp-accent)]">
+            <Link
+              key={item.href}
+              to={item.href}
+              onClick={goLink(item)}
+              className="font-semibold text-[var(--hp-text)] hover:text-[var(--hp-accent)]"
+            >
               {item.label}
             </Link>
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="hp-header-actions">
           <button
             type="button"
             onClick={toggle}
-            className="grid h-11 w-11 place-items-center rounded-full text-[var(--hp-text)]"
+            className="hp-header-icon"
             aria-label="Tema"
           >
             {dark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           {hideAuth ? null : (
-            <div className="flex items-center gap-4">
-              <Link to="/login" className="hidden text-sm font-extrabold text-[var(--hp-text)] min-[520px]:inline">Daxil ol</Link>
-              <Link to="/register" className="hp-btn hp-btn-sm hp-btn-gold hp-lift">
+            <>
+              <Link to="/login" className="hp-header-login hidden text-sm font-extrabold text-[var(--hp-text)] min-[520px]:inline">Daxil ol</Link>
+              <Link to="/register" className="hp-btn hp-btn-sm hp-btn-gold hp-lift hp-header-register">
                 <UserRound size={16} aria-hidden="true" />
-                Qeydiyyat
+                <span className="hp-header-register-label">Qeydiyyat</span>
               </Link>
-            </div>
+            </>
           )}
           <button
             type="button"
-            className="grid h-11 w-11 place-items-center rounded-full min-[900px]:hidden"
+            className="hp-header-icon hp-header-menu min-[900px]:hidden"
             aria-expanded={open}
+            aria-controls={menuId}
             aria-label={open ? 'Menyunu bağla' : 'Menyu'}
             onClick={() => setOpen((value) => !value)}
           >
@@ -75,17 +141,34 @@ export default function Header({ hideAuth = false, overlay = false }) {
           </button>
         </div>
       </div>
-      {open ? (
-        <nav className="mx-auto flex max-w-[1180px] flex-col gap-1 px-4 pb-4 min-[900px]:hidden" aria-label="İctimai menyu">
-          {LINKS.map((item) => (
-            <Link key={item.href} to={item.href} className="rounded-2xl px-3 py-3 font-semibold" onClick={() => setOpen(false)}>
-              {item.label}
-            </Link>
-          ))}
-          {hideAuth ? null : (
-            <Link to="/login" className="rounded-2xl px-3 py-3 font-semibold min-[520px]:hidden" onClick={() => setOpen(false)}>Daxil ol</Link>
-          )}
-        </nav>
+
+      {shown ? (
+        <>
+          <button
+            type="button"
+            className={`hp-nav-backdrop ${open ? 'is-open' : ''}`}
+            tabIndex={-1}
+            aria-label="Menyunu bağla"
+            onClick={close}
+          />
+          <nav
+            id={menuId}
+            className={`hp-mobile-nav ${open ? 'is-open' : ''}`}
+            aria-label="İctimai menyu"
+          >
+            {LINKS.map((item) => (
+              <Link key={item.href} to={item.href} onClick={goLink(item)}>
+                {item.label}
+              </Link>
+            ))}
+            {hideAuth ? null : (
+              <>
+                <Link to="/login" className="min-[520px]:hidden" onClick={close}>Daxil ol</Link>
+                <Link to="/register" className="hp-mobile-register" onClick={close}>Qeydiyyat</Link>
+              </>
+            )}
+          </nav>
+        </>
       ) : null}
     </header>
   );

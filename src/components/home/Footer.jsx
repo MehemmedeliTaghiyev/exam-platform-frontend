@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { CONTACT_EMAIL, CONTACT_MAILTO } from '../../lib/contact';
 
 export default function Footer() {
@@ -5,7 +6,13 @@ export default function Footer() {
     <footer className="border-t border-[var(--hp-line)]">
       <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3 px-5 py-6 text-sm text-[var(--hp-muted)]">
         <p>© 2026 ExamPulse · İmtahan platforması</p>
-        <a href={CONTACT_MAILTO} className="font-semibold text-[var(--hp-text)]">{CONTACT_EMAIL}</a>
+        <p className="flex flex-wrap gap-3 font-semibold">
+          <Link className="text-[var(--hp-text)]" to="/privacy">Məxfilik</Link>
+          <Link className="text-[var(--hp-text)]" to="/terms">Şərtlər</Link>
+          <Link className="text-[var(--hp-text)]" to="/support">Dəstək</Link>
+          <Link className="text-[var(--hp-text)]" to="/delete-account">Hesabı sil</Link>
+          <a href={CONTACT_MAILTO} className="text-[var(--hp-text)]">{CONTACT_EMAIL}</a>
+        </p>
       </div>
     </footer>
   );

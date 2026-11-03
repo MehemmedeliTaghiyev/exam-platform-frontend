@@ -5,6 +5,7 @@ import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Skeleton } from 
 import { AuthContext } from '../context/AuthContext';
 import API from '../api/axios';
 import { errorMessage, formatDate, unwrapList } from '../lib/utils';
+import { localDb } from '../lib/localDb';
 
 function normalizeAdminUser(u) {
   return {
@@ -21,7 +22,7 @@ function normalizeAdminUser(u) {
   };
 }
 
-export default function AccessUsersPanel({ title, description, roles }) {
+export default function AccessUsersPanel({ title, description, roles, canToggleAccess = true, toggleAccessRoles = null }) {
   const { user } = useContext(AuthContext);
   const teacherId = user?.id || 'me';
   const [tab, setTab] = useState(roles[0].id);
@@ -66,7 +67,15 @@ export default function AccessUsersPanel({ title, description, roles }) {
   };
 
   const currentLabel = roles.find((r) => r.id === tab)?.label || 'İstifadəçilər';
+  const allowToggle = toggleAccessRoles ? toggleAccessRoles.includes(tab) : canToggleAccess;
+  const teacherToggle = tab === 'Teacher';
   const q = nameQuery.trim().toLowerCase();
+
+  const setAccess = (u) => run(u.id, async () => {
+    const next = !u.isAccessEnabled;
+    await API.patch(`/Users/${u.id}/access`, { enabled: next });
+    if (teacherToggle) localDb.setTeacherSidelined(u.id, !next);
+  });
   const visibleUsers = users.filter((u) => {
     if (!q) return true;
     return `${u.fullName || ''}`.toLowerCase().includes(q);
@@ -74,15 +83,17 @@ export default function AccessUsersPanel({ title, description, roles }) {
 
   const actionsFor = (u) => (
     <div className="flex flex-wrap gap-2">
-      {!u.isDeleted && Number(u.id) > 0 && (
+      {allowToggle && !u.isDeleted && Number(u.id) > 0 && (
         <Button
           size="sm"
           variant={u.isAccessEnabled ? 'danger-soft' : 'success'}
           disabled={busyId === u.id}
-          onClick={() => run(u.id, () => API.patch(`/Users/${u.id}/access`, { enabled: !u.isAccessEnabled }))}
+          onClick={() => setAccess(u)}
         >
           {u.isAccessEnabled ? <Ban size={14} /> : <CheckCircle2 size={14} />}
-          {u.isAccessEnabled ? 'Pəncərəni bağla' : 'Giriş ver'}
+          {teacherToggle
+            ? (u.isAccessEnabled ? 'Kənarlaşdır' : 'Geri qaytar')
+            : (u.isAccessEnabled ? 'Pəncərəni bağla' : 'Giriş ver')}
         </Button>
       )}
       {u.isDeleted ? (
@@ -144,7 +155,7 @@ export default function AccessUsersPanel({ title, description, roles }) {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {showGroup ? <Badge tone="accent">Qrup: {u.groupName || '—'}</Badge> : null}
                   <span className="whitespace-nowrap text-sm text-[var(--muted)]">{formatDate(u.createdAt)}</span>
-                  {u.isDeleted ? <Badge>Silinib</Badge> : u.isAccessEnabled ? <Badge tone="success">Giriş açıq</Badge> : <Badge tone="danger">Pəncərə bağlı</Badge>}
+                  {u.isDeleted ? <Badge>Silinib</Badge> : u.isAccessEnabled ? <Badge tone="success">Giriş açıq</Badge> : <Badge tone="danger">{teacherToggle ? 'Kənarlaşdırılıb' : 'Pəncərə bağlı'}</Badge>}
                 </div>
                 <div className="mt-3">{actionsFor(u)}</div>
               </div>
@@ -178,21 +189,21 @@ export default function AccessUsersPanel({ title, description, roles }) {
                     ) : u.isAccessEnabled ? (
                       <Badge tone="success">Giriş açıq</Badge>
                     ) : (
-                      <Badge tone="danger">Pəncərə bağlı</Badge>
+                      <Badge tone="danger">{teacherToggle ? 'Kənarlaşdırılıb' : 'Pəncərə bağlı'}</Badge>
                     )}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex flex-wrap justify-end gap-2">
-                      {!u.isDeleted && Number(u.id) > 0 && (
+                      {allowToggle && !u.isDeleted && Number(u.id) > 0 && (
                         <Button
                           variant={u.isAccessEnabled ? 'danger' : 'success'}
                           disabled={busyId === u.id}
-                          onClick={() =>
-                            run(u.id, () => API.patch(`/Users/${u.id}/access`, { enabled: !u.isAccessEnabled }))
-                          }
+                          onClick={() => setAccess(u)}
                         >
                           {u.isAccessEnabled ? <Ban size={14} /> : <CheckCircle2 size={14} />}
-                          {u.isAccessEnabled ? 'Pəncərəni bağla' : 'Giriş ver'}
+                          {teacherToggle
+                            ? (u.isAccessEnabled ? 'Kənarlaşdır' : 'Geri qaytar')
+                            : (u.isAccessEnabled ? 'Pəncərəni bağla' : 'Giriş ver')}
                         </Button>
                       )}
                       {u.isDeleted ? (

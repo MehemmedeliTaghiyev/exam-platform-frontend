@@ -11,6 +11,9 @@ function read(key, fallback) {
 
 function write(key, value) {
   localStorage.setItem(prefix + key, JSON.stringify(value));
+  if (key === 'saved_exams' && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('exampulse-saved-exams'));
+  }
 }
 
 export const localDb = {
@@ -303,6 +306,10 @@ export const localDb = {
     write('parent_whatsapp', map);
     return value;
   },
+  ensureSavedExam(userId, exam) {
+    if (this.isExamSaved(userId, exam?.id)) return this.getSavedExams(userId);
+    return this.toggleSavedExam(userId, exam);
+  },
   toggleSavedExam(userId, exam) {
     const key = String(userId || '');
     if (!key || exam?.id == null) return this.getSavedExams(userId);
@@ -327,5 +334,68 @@ export const localDb = {
     ));
     this.saveDiscountTickets(list);
     return list.find((t) => t.code === code) || null;
+  },
+  getTeacherSubject(userId, email = '') {
+    const byId = read('teacher_subjects', {});
+    const fromId = byId[String(userId || '')];
+    if (fromId) return fromId;
+    const byEmail = read('teacher_subjects_email', {});
+    return byEmail[String(email || '').trim().toLowerCase()] || '';
+  },
+  setTeacherSubject(userId, subject, email = '') {
+    const value = String(subject || '').trim();
+    if (userId) {
+      const byId = read('teacher_subjects', {});
+      if (value) byId[String(userId)] = value;
+      else delete byId[String(userId)];
+      write('teacher_subjects', byId);
+    }
+    const key = String(email || '').trim().toLowerCase();
+    if (key) {
+      const byEmail = read('teacher_subjects_email', {});
+      if (value) byEmail[key] = value;
+      else delete byEmail[key];
+      write('teacher_subjects_email', byEmail);
+    }
+    return value;
+  },
+  teacherSubjectChangeUsed(userId, email = '') {
+    const byId = read('teacher_subject_changes', {});
+    if (userId != null && byId[String(userId)]) return true;
+    const key = String(email || '').trim().toLowerCase();
+    if (!key) return false;
+    const byEmail = read('teacher_subject_changes_email', {});
+    return Boolean(byEmail[key]);
+  },
+  markTeacherSubjectChangeUsed(userId, email = '') {
+    if (userId != null && userId !== '') {
+      const byId = read('teacher_subject_changes', {});
+      byId[String(userId)] = new Date().toISOString();
+      write('teacher_subject_changes', byId);
+    }
+    const key = String(email || '').trim().toLowerCase();
+    if (key) {
+      const byEmail = read('teacher_subject_changes_email', {});
+      byEmail[key] = new Date().toISOString();
+      write('teacher_subject_changes_email', byEmail);
+    }
+  },
+  canChangeTeacherSubject(userId, email = '') {
+    return !this.teacherSubjectChangeUsed(userId, email);
+  },
+  sidelinedTeacherIds() {
+    const list = read('sidelined_teachers', []);
+    return Array.isArray(list) ? list.map(String) : [];
+  },
+  isTeacherSidelined(id) {
+    return this.sidelinedTeacherIds().includes(String(id || ''));
+  },
+  setTeacherSidelined(id, on) {
+    const key = String(id || '');
+    if (!key) return false;
+    const next = this.sidelinedTeacherIds().filter((item) => item !== key);
+    if (on) next.push(key);
+    write('sidelined_teachers', next);
+    return Boolean(on);
   },
 };

@@ -56,15 +56,23 @@ export function examMatchesSearch(exam, { name = '', date = '' } = {}) {
   return true;
 }
 
-export function filterPublicExams(exams, { dateMode = 'all', pickDate = '', subject = 'all', query = '' } = {}) {
+export function filterPublicExams(exams, {
+  dateMode = 'all',
+  pickDate = '',
+  subject = 'all',
+  query = '',
+  savedIds = null,
+} = {}) {
   const today = new Date();
   const todayKey = dayStamp(today);
   const y = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   y.setDate(y.getDate() - 1);
   const yesterdayKey = dayStamp(y);
   const sub = String(subject || 'all');
+  const saved = savedIds instanceof Set ? savedIds : null;
 
   return (exams || []).filter((exam) => {
+    if (saved && !saved.has(String(exam?.id))) return false;
     if (sub !== 'all' && examSubject(exam) !== sub) return false;
     if (!examMatchesSearch(exam, { name: query })) return false;
     if (dateMode === 'all') return true;

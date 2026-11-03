@@ -1,24 +1,45 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { GraduationCap, Menu, Moon, Sun, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, Moon, Sun, X } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 import { useTheme } from '../context/ThemeContext';
+import { goToHash, scrollToHash } from '../lib/scrollToHash';
 
 const LINKS = [
-  { to: '/#imkanlar', label: 'İmkanlar' },
+  { to: '/#imkanlar', label: 'İmkanlar', hash: 'imkanlar' },
   { to: '/teachers', label: 'Müəllim tap' },
   { to: '/exams', label: 'Açıq imtahanlar' },
-  { to: '/#elaqe', label: 'Əlaqə' },
+  { to: '/#elaqe', label: 'Əlaqə', hash: 'elaqe' },
 ];
 
 export default function PublicNav({ darkOnNavy = false, appearance }) {
   const { dark, toggle } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const navy = appearance === 'navy' || (appearance !== 'light' && darkOnNavy);
 
   useEffect(() => {
     setOpen(false);
   }, [location.pathname, location.hash]);
+
+  const goLink = (item) => (event) => {
+    if (!item.hash) {
+      setOpen(false);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(false);
+    if (location.pathname !== '/') {
+      goToHash(navigate, item.hash);
+      return;
+    }
+    if (location.hash !== `#${item.hash}`) {
+      navigate({ pathname: '/', hash: `#${item.hash}` }, { replace: true });
+    }
+    window.setTimeout(() => scrollToHash(item.hash), 30);
+  };
 
   const bar = navy
     ? 'border-[#2a2a2a] bg-[#161616] text-[#e8e8e8]'
@@ -37,20 +58,12 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
     <header className={`sticky top-0 z-40 border-b backdrop-blur ${bar}`}>
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
         <Link to="/" className="flex min-w-0 items-center gap-2">
-          {navy ? null : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
-              <GraduationCap size={20} />
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className={`leading-tight ${navy ? 'text-[15px] font-semibold text-[#f2f2f2]' : 'text-lg font-bold'}`}>ExamPulse</p>
-            {navy ? null : <p className="truncate text-xs text-slate-500">İmtahan platforması</p>}
-          </div>
+          <BrandLogo size={32} nameClassName={navy ? 'text-[#f2f2f2]' : 'text-[#1f7a3a]'} />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="İctimai menyu">
           {LINKS.map((item) => (
-            <Link key={item.to} to={item.to} className={ghost}>
+            <Link key={item.to} to={item.to} className={ghost} onClick={goLink(item)}>
               {item.label}
             </Link>
           ))}
@@ -81,7 +94,7 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
         <div className={`border-t px-4 py-3 md:hidden ${navy ? 'border-[#2a2a2a]' : 'border-indigo-100'}`}>
           <div className="flex flex-col gap-1">
             {LINKS.map((item) => (
-              <Link key={item.to} to={item.to} className={ghost}>
+              <Link key={item.to} to={item.to} className={ghost} onClick={goLink(item)}>
                 {item.label}
               </Link>
             ))}

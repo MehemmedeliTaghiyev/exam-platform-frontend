@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -74,7 +73,7 @@ const STRIP = [
   },
 ];
 
-export default function Hero({ onPractice }) {
+export default function Hero({ onPractice, onTeacherPractice }) {
   return (
     <>
       <section className="hp-hero" aria-label="İmtahana hazırlıq">
@@ -91,14 +90,15 @@ export default function Hero({ onPractice }) {
               ExamPulse test nəticələrini anlamağa, zəif mövzularını kəşf etməyə və hədəfinə addım-addım çatmağa kömək edir.
             </p>
             <div className="hp-hero-actions">
-              <Link to="/register" className="hp-btn hp-btn-primary hp-lift">
-                <ArrowRight size={18} aria-hidden="true" />
-                Pulsuz başla
-              </Link>
-              <button type="button" onClick={onPractice} className="hp-btn hp-btn-secondary hp-lift">
+              <button type="button" onClick={onPractice} className="hp-btn hp-btn-gold hp-lift">
                 <Play size={16} aria-hidden="true" />
-                Girişsiz məşq et
+                Şagird kimi məşq et
               </button>
+              {onTeacherPractice ? (
+                <button type="button" onClick={onTeacherPractice} className="hp-btn hp-btn-teacher-try hp-lift">
+                  Müəllim kimi sınaq iştirakı et
+                </button>
+              ) : null}
             </div>
             <p className="hp-hero-check">
               <Check size={16} aria-hidden="true" />

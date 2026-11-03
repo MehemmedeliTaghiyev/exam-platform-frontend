@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { isNativeApp } from '../lib/runtime';
 
 const ThemeContext = createContext();
 const CHOICE_KEY = 'exampulse_theme_choice';
@@ -6,32 +7,31 @@ const CHOICE_KEY = 'exampulse_theme_choice';
 function readChoice() {
   try {
     const value = localStorage.getItem(CHOICE_KEY);
-    return value === 'dark' || value === 'light' ? value : null;
+    return value === 'light' ? 'light' : 'dark';
   } catch {
-    return null;
+    return 'dark';
   }
-}
-
-function systemIsDark() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
 export function ThemeProvider({ children }) {
   const [choice, setChoice] = useState(readChoice);
-  const [systemDark, setSystemDark] = useState(systemIsDark);
-  const dark = choice ? choice === 'dark' : systemDark;
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => setSystemDark(media.matches);
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
-  }, []);
+  const dark = choice !== 'light';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    if (choice) localStorage.setItem(CHOICE_KEY, choice);
+    try {
+      localStorage.setItem(CHOICE_KEY, dark ? 'dark' : 'light');
+    } catch {
+      /* ignore */
+    }
+    if (!isNativeApp()) return undefined;
+    import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: dark ? '#0F1419' : '#FDFBF7' }).catch(() => {});
+      StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
+    }).catch(() => {});
+    return undefined;
   }, [dark, choice]);
 
   const toggle = () => setChoice(dark ? 'light' : 'dark');

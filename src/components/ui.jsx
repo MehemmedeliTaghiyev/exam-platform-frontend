@@ -28,7 +28,7 @@ export function Button({
         'ep-focus ep-lift inline-flex items-center justify-center gap-2 rounded-[14px] font-semibold disabled:cursor-not-allowed disabled:opacity-50',
         sizeClass,
         styles[variant] || styles.primary,
-        variant === 'primary' ? 'bg-[linear-gradient(135deg,#5b4cf5,#7c5cff)]' : '',
+        variant === 'primary' ? 'bg-[linear-gradient(135deg,#2f7a45,#3d9a58)]' : '',
         className,
       )}
       {...props}

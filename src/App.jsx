@@ -1,7 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
 import Register from './pages/Register';
 import TeacherDashboard from './pages/TeacherDashboard';
+import WeakExam from './pages/WeakExam';
+import TeacherStorage from './pages/TeacherStorage';
 import StudentDashboard from './pages/StudentDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import QuestionBuilder from './pages/QuestionBuilder';
@@ -26,6 +29,13 @@ import BrowseTeachers from './pages/BrowseTeachers';
 import PublicExamZone from './pages/PublicExamZone';
 import SavedExams from './pages/SavedExams';
 import TakePipelineExam from './pages/TakePipelineExam';
+import StudentSubscriptions from './pages/StudentSubscriptions';
+import RepublicExam from './pages/RepublicExam';
+import RepublicTake from './pages/RepublicTake';
+import RepublicResult from './pages/RepublicResult';
+import StudentSyllabus from './pages/StudentSyllabus';
+import StudentAccount from './pages/StudentAccount';
+import Legal from './pages/Legal';
 
 function App() {
   return (
@@ -35,11 +45,16 @@ function App() {
       <Route path="/teachers" element={<BrowseTeachers />} />
       <Route path="/teachers/:id" element={<BrowseTeachers />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/register" element={<Register />} />
       <Route path="/register/teacher" element={<Register />} />
       <Route path="/register/student" element={<Register />} />
       <Route path="/join/:code" element={<JoinStudent />} />
       <Route path="/reklam" element={<PromoAd />} />
+      <Route path="/privacy" element={<Legal />} />
+      <Route path="/terms" element={<Legal />} />
+      <Route path="/support" element={<Legal />} />
+      <Route path="/delete-account" element={<Legal />} />
 
       <Route
         path="/admin"
@@ -103,6 +118,22 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
             <TeacherDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/weak"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <WeakExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teacher/storage"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <TeacherStorage />
           </ProtectedRoute>
         }
       />
@@ -180,10 +211,74 @@ function App() {
         }
       />
       <Route
+        path="/student/syllabus"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentSyllabus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/syllabus/:topicId"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentSyllabus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/account"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentAccount />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/student/saved"
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <SavedExams />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/republic"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <RepublicExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/republic/take"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <RepublicTake />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/republic/result/:month"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <RepublicResult />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/subscriptions"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentSubscriptions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/subscriptions/:groupKey"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentSubscriptions />
           </ProtectedRoute>
         }
       />

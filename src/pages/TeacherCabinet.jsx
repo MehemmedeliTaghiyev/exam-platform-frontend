@@ -1,22 +1,28 @@
-import { useContext, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Bell, Coins, LogOut, Plus, Trash2, Users } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
-import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, Textarea } from '../components/ui';
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, Select, Textarea } from '../components/ui';
 import {
   createGroup,
   deleteGroup,
   fetchGroups,
   fetchOwnProfile,
   fetchStudents,
+  groupInviteSlug,
   groupsShareName,
   updateOwnProfile,
   DUPLICATE_GROUP_MESSAGE,
 } from '../lib/examApi';
+import { localDb } from '../lib/localDb';
+import { PREFERENCE_OPTIONS, teacherSubjectOf } from '../lib/storageCatalog';
 import { errorMessage } from '../lib/utils';
 import { groupNeedsApproval } from '../lib/groupApproval';
-import AccessPeriodBanner from '../components/AccessPeriodBanner';
+import { groupSubscriberCount, publishGroupCatalog } from '../lib/groupSubscriptions';
+import { useTeacherTokens } from '../lib/tokens';
+import TokenPaymentCard from '../components/TokenPaymentCard';
+import TeacherSyllabusPanel from '../components/TeacherSyllabusPanel';
 
 function inGroup(student, group) {
   if (!student || !group) return false;
@@ -28,8 +34,10 @@ function inGroup(student, group) {
 }
 
 export default function TeacherCabinet() {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
+  const tokens = useTeacherTokens(user);
   const [groups, setGroups] = useState([]);
   const [ask, setAsk] = useState(null);
   const askConfirm = (text, note) => new Promise((resolve) => setAsk({ text, note, resolve }));
@@ -48,12 +56,16 @@ export default function TeacherCabinet() {
     lastName: '',
     fatherName: '',
     position: '',
+    teachingSubject: '',
     phone: '',
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
   const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [periodUser, setPeriodUser] = useState(user);
+  const [subjectLocked, setSubjectLocked] = useState(true);
+  const [subjectDraft, setSubjectDraft] = useState('');
+  const canChangeSubject = localDb.canChangeTeacherSubject(user?.id, user?.email);
 
   const load = async () => {
     setLoading(true);
@@ -65,16 +77,32 @@ export default function TeacherCabinet() {
       ]);
       setGroups(groupList);
       setStudents(studentList.filter((s) => s.isAccessEnabled !== false));
+      groupList.forEach((g) => {
+        publishGroupCatalog({
+          id: g.id,
+          groupId: g.id,
+          name: g.name || g.number,
+          number: g.number,
+          inviteCode: groupInviteSlug(g),
+          teacherId: user?.id,
+          teacherName: user?.fullName || user?.email || '',
+          teachingSubject: teacherSubjectOf(user) || localDb.getTeacherSubject(user?.id, user?.email) || '',
+        });
+      });
       if (me) {
         setPeriodUser({ ...user, ...me, role: user?.role || 'Teacher' });
         setDriveFolderUrl(me.driveFolderUrl || '');
+        const subject = teacherSubjectOf(me) || localDb.getTeacherSubject(me.id || user?.id, me.email || user?.email) || '';
         setProfile({
           firstName: me.firstName || me.FirstName || '',
           lastName: me.lastName || me.LastName || '',
           fatherName: me.fatherName || me.FatherName || '',
           position: me.position || me.Position || '',
+          teachingSubject: subject,
           phone: me.phone || me.Phone || '',
         });
+        setSubjectDraft(subject);
+        setSubjectLocked(true);
       }
     } catch (err) {
       setError(errorMessage(err, 'Qruplar yüklənmədi.'));
@@ -86,6 +114,12 @@ export default function TeacherCabinet() {
   useEffect(() => {
     load();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (location.hash !== '#odenis') return;
+    const node = document.getElementById('odenis');
+    if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash, loading]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -143,9 +177,37 @@ export default function TeacherCabinet() {
     setError('');
   };
 
+  const requestSubjectChange = async () => {
+    if (!canChangeSubject) {
+      setError('Fənn artıq bir dəfə dəyişilib. Daha dəyişmək mümkün deyil.');
+      return;
+    }
+    const ok = await askConfirm(
+      'Fənni dəyişmək istəyirsiniz?',
+      'Fənni yalnız 1 dəfə dəyişə bilərsiniz. Dəyişdikdən sonra Anbar və qruplar yeni fənnə uyğunlaşacaq. Bu şansı istifadə etmək istədiyinizə əminsiniz?',
+    );
+    if (!ok) return;
+    setSubjectDraft(profile.teachingSubject);
+    setSubjectLocked(false);
+    setProfileMsg('Fənn seçimini dəyişin və «Məlumatı saxla»ya basın. Bu son şansınızdır.');
+  };
+
   const saveProfile = async (e) => {
     e.preventDefault();
     if (profileSaving) return;
+    const nextSubject = (subjectLocked ? profile.teachingSubject : subjectDraft).trim();
+    const prevSubject = String(profile.teachingSubject || '').trim();
+    const subjectChanged = nextSubject && nextSubject !== prevSubject;
+    if (subjectChanged && !canChangeSubject) {
+      setError('Fənn dəyişmək hüququnuz bitib.');
+      setSubjectLocked(true);
+      setSubjectDraft(prevSubject);
+      return;
+    }
+    if (!subjectLocked && !nextSubject) {
+      setError('Fənn boş ola bilməz.');
+      return;
+    }
     setProfileSaving(true);
     setProfileMsg('');
     setError('');
@@ -155,15 +217,39 @@ export default function TeacherCabinet() {
         lastName: profile.lastName.trim(),
         fatherName: profile.fatherName.trim(),
         position: profile.position.trim(),
+        teachingSubject: nextSubject,
+        TeachingSubject: nextSubject,
         phone: profile.phone.trim(),
       });
-      setProfileMsg('Məlumat saxlanıldı.');
+      localDb.setTeacherSubject(user?.id, nextSubject, user?.email);
+      if (subjectChanged) {
+        localDb.markTeacherSubjectChangeUsed(user?.id, user?.email);
+        setProfileMsg('Fənn dəyişildi. Daha fənn dəyişmək mümkün olmayacaq.');
+      } else {
+        setProfileMsg('Məlumat saxlanıldı.');
+      }
+      setProfile((prev) => ({ ...prev, teachingSubject: nextSubject }));
+      setSubjectDraft(nextSubject);
+      setSubjectLocked(true);
     } catch (err) {
       setError(errorMessage(err, 'Məlumat saxlanılmadı. Konum mütləqdir.'));
     } finally {
       setProfileSaving(false);
     }
   };
+
+  const totalSubscribers = useMemo(
+    () => groups.reduce((sum, g) => sum + groupSubscriberCount({
+      id: g.id,
+      groupId: g.id,
+      name: g.name || g.number,
+      inviteCode: groupInviteSlug(g),
+      teacherId: user?.id,
+    }), 0),
+    [groups, user?.id],
+  );
+
+  const initial = String(user?.fullName || user?.email || 'M').trim().charAt(0).toUpperCase();
 
   return (
     <AppShell title="Müəllim kabineti">
@@ -174,11 +260,58 @@ export default function TeacherCabinet() {
         onCancel={() => { ask?.resolve(false); setAsk(null); }}
         onConfirm={() => { ask?.resolve(true); setAsk(null); }}
       />
-      <AccessPeriodBanner user={periodUser || user} />
+
+      <div className="mb-6 overflow-hidden rounded-[22px] border border-[var(--line)] bg-[var(--card)]">
+        <div className="flex items-center gap-4 bg-[linear-gradient(135deg,#2f7a45,#1f5c34)] px-5 py-5 text-white">
+          <span className="grid h-14 w-14 place-items-center rounded-full bg-white/20 text-xl font-extrabold">{initial}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-lg font-extrabold">{user?.fullName || user?.email}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-semibold text-white/90">
+              <span className="inline-flex items-center gap-1.5">
+                <Coins size={15} /> Jeton: {tokens.unlimited ? '∞' : tokens.balance}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Bell size={15} /> Abunə: {totalSubscribers}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Users size={15} /> Qrup: {groups.length}
+              </span>
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-[var(--line)] text-center">
+          <div className="px-3 py-3">
+            <p className="text-xs font-semibold text-[var(--muted)]">Jeton</p>
+            <p className="mt-1 text-lg font-extrabold text-[var(--text)]">{tokens.unlimited ? '∞' : tokens.balance}</p>
+          </div>
+          <div className="px-3 py-3">
+            <p className="text-xs font-semibold text-[var(--muted)]">Abunəçilər</p>
+            <p className="mt-1 text-lg font-extrabold text-[var(--text)]">{totalSubscribers}</p>
+          </div>
+          <div className="px-3 py-3">
+            <p className="text-xs font-semibold text-[var(--muted)]">Qruplar</p>
+            <p className="mt-1 text-lg font-extrabold text-[var(--text)]">{groups.length}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            logout();
+            navigate(user?.practice ? '/' : '/login');
+          }}
+        >
+          <LogOut size={16} /> Hesabdan çıx
+        </Button>
+      </div>
+      <TokenPaymentCard user={periodUser || user} />
+      <TeacherSyllabusPanel />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm text-gray-500">{user?.fullName}</p>
-          <p className="mt-1 text-2xl font-bold">Qruplar və tələbələr</p>
+          <p className="text-sm text-[var(--muted)]">Ümumi abunə: {totalSubscribers}</p>
+          <p className="mt-1 text-2xl font-bold text-[var(--text)]">Qruplar və tələbələr</p>
         </div>
         <Button onClick={() => { setError(''); setOpen(true); }}>
           <Plus size={16} /> Qrup yarat
@@ -187,7 +320,7 @@ export default function TeacherCabinet() {
 
       <Card className="mb-8">
         <h2 className="text-lg font-bold">Şəxsi məlumatlar</h2>
-        <p className="mt-1 text-sm text-gray-500">Konum (yer) hesabınızda qeyd olunmalıdır.</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">Konum (yer) hesabınızda qeyd olunmalıdır.</p>
         {driveFolderUrl ? (
           <p className="mt-3 text-sm text-gray-800 dark:text-gray-200">
             Drive qovluğu:{' '}
@@ -200,6 +333,51 @@ export default function TeacherCabinet() {
           <Input label="Ad" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} required />
           <Input label="Soyad" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} required />
           <Input label="Konum" value={profile.position} onChange={(e) => setProfile({ ...profile, position: e.target.value })} required placeholder="məs. Bakı, Nəsimi" />
+          <div className="space-y-2">
+            {subjectLocked ? (
+              <>
+                <Input label="Fənn (qeydiyyatdan)" value={profile.teachingSubject || '—'} readOnly />
+                <p className="text-xs font-semibold text-[var(--muted)]">
+                  {canChangeSubject
+                    ? 'Fənn qeydiyyatda seçilib. Dəyişmək üçün yalnız 1 şansınız var.'
+                    : 'Fənn artıq bir dəfə dəyişilib — daha dəyişmək olmur.'}
+                </p>
+                {canChangeSubject ? (
+                  <Button type="button" variant="secondary" onClick={requestSubjectChange}>
+                    Fənni dəyiş (1 şans)
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Select
+                  label="Yeni fənn"
+                  value={subjectDraft}
+                  onChange={(e) => setSubjectDraft(e.target.value)}
+                  required
+                >
+                  <option value="">Fənni seçin</option>
+                  {PREFERENCE_OPTIONS.subjects.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </Select>
+                <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-100">
+                  Xəbərdarlıq: bu dəyişiklik sonuncu şansınızdır. Saxladıqdan sonra fənn kilidlənəcək.
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setSubjectDraft(profile.teachingSubject);
+                    setSubjectLocked(true);
+                    setProfileMsg('');
+                  }}
+                >
+                  Ləğv et
+                </Button>
+              </>
+            )}
+          </div>
           <Input label="Əlaqə nömrəsi" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
           <div className="flex items-end gap-3">
             <Button type="submit" disabled={profileSaving}>{profileSaving ? 'Saxlanılır...' : 'Məlumatı saxla'}</Button>
@@ -222,12 +400,20 @@ export default function TeacherCabinet() {
         <div className="grid gap-5 sm:grid-cols-2">
           {groups.map((g) => {
             const count = g.studentCount || students.filter((s) => inGroup(s, g)).length;
+            const subs = groupSubscriberCount({
+              id: g.id,
+              groupId: g.id,
+              name: g.name || g.number,
+              inviteCode: groupInviteSlug(g),
+              teacherId: user?.id,
+            });
             return (
               <Card key={g.id} onClick={() => navigate(`/teacher/groups/${g.id}`)}>
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-lg font-bold">{g.number || g.name}</h3>
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge>{count} tələbə</Badge>
+                    <Badge tone="brand">{subs} abunə</Badge>
                     <Badge tone={groupNeedsApproval(g) ? 'warning' : 'success'}>
                       {groupNeedsApproval(g) ? 'İcazə lazımdır' : 'İcazə lazım deyil'}
                     </Badge>
@@ -241,7 +427,7 @@ export default function TeacherCabinet() {
                     </Button>
                   </div>
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-gray-500">
+                <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--muted)]">
                   {g.schedule || 'Dərs cədvəli əlavə edilməyib'}
                 </p>
               </Card>

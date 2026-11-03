@@ -108,28 +108,12 @@ export function rememberTeacherTrial(email, endsAt) {
   }
 }
 
-export function rememberedTrialEnded(email) {
-  try {
-    const ends = localStorage.getItem(trialStorageKey(email));
-    if (!ends) return false;
-    return new Date(ends).getTime() <= Date.now();
-  } catch {
-    return false;
-  }
+export function rememberedTrialEnded(_email) {
+  return false;
 }
 
-export function trialHasEnded(user) {
-  if (!user) return false;
-  const plan = teacherPlanOf(user);
-  if (plan === 'Monthly') {
-    const ends = user.trialEndsAt || user.TrialEndsAt;
-    if (!ends) return false;
-    return new Date(ends).getTime() <= Date.now();
-  }
-  const start = user.trialStartsAt || user.TrialStartsAt || user.createdAt || user.CreatedAt;
-  const ends = user.trialEndsAt || user.TrialEndsAt || computeAccessEnd(start, 'FreeTrial', teacherTrialDaysOf(user));
-  if (!ends) return false;
-  return new Date(ends).getTime() <= Date.now();
+export function trialHasEnded(_user) {
+  return false;
 }
 
 export function teacherTrialDaysOf(user) {
@@ -162,12 +146,12 @@ export function accessPeriodInfo(user) {
     ends,
     left,
     ended,
-    title: monthly ? 'Aylıq istifadə müddəti' : 'Sınaq müddəti',
+    title: monthly ? 'Aylıq istifadə müddəti' : 'Hesab',
     hint: ended
       ? TRIAL_ENDED_MESSAGE
       : monthly
         ? 'Aylıq paket bitəndə giriş bağlanır. Davam etmək üçün adminlə əlaqə saxlayın.'
-        : `Qeydiyyatdan sonra ${DEFAULT_TEACHER_TRIAL_DAYS} günlük sınaq avtomatik başlayır. Admin təsdiqi gözlənilmir.`,
+        : 'Qeydiyyatdan sonra hesab dərhal açılır. Admin təsdiqi lazım deyil.',
   };
 }
 
@@ -266,6 +250,13 @@ export function resolveExamStatus(exam) {
 
 export function isExamEnded(exam) {
   return resolveExamStatus(exam) === 'Finished';
+}
+
+export function studentResultsReady(exam, user) {
+  if (user?.practice) return true;
+  if (user?.role && user.role !== 'Student') return true;
+  if (!exam) return false;
+  return isExamEnded(exam);
 }
 
 export function isExamLive(exam) {

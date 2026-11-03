@@ -4,11 +4,11 @@ import { AuthContext } from '../context/AuthContext';
 import Header from '../components/home/Header';
 import Hero from '../components/home/Hero';
 import RoleCards from '../components/home/RoleCards';
-import Features from '../components/home/Features';
-import Steps from '../components/home/Steps';
 import CtaBand from '../components/home/CtaBand';
 import Footer from '../components/home/Footer';
+import MonthlyExamAd from '../components/MonthlyExamAd';
 import '../components/home/home.css';
+import { scrollToHash } from '../lib/scrollToHash';
 
 export default function Home() {
   const { enterPractice, user } = useContext(AuthContext);
@@ -18,13 +18,17 @@ export default function Home() {
   useEffect(() => {
     const id = String(location.hash || '').replace('#', '');
     if (!id) return;
-    const node = document.getElementById(id);
-    if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [location.hash]);
+    scrollToHash(id);
+  }, [location.hash, location.pathname]);
 
-  const practice = (role) => {
-    enterPractice(role);
-    navigate(role === 'Teacher' ? '/teacher' : '/student');
+  const practiceStudent = () => {
+    enterPractice('Student');
+    navigate('/student');
+  };
+
+  const practiceTeacher = () => {
+    enterPractice('Teacher');
+    navigate('/teacher');
   };
 
   const real = user && !user.practice;
@@ -44,10 +48,11 @@ export default function Home() {
         </div>
       ) : null}
       <main>
-        <Hero onPractice={() => practice('Student')} />
-        <Features onPractice={() => practice('Student')} />
-        <RoleCards onTeacher={() => practice('Teacher')} onStudent={() => practice('Student')} />
-        <Steps />
+        <Hero onPractice={practiceStudent} onTeacherPractice={practiceTeacher} />
+        <div className="mx-auto max-w-[1120px] px-5">
+          <MonthlyExamAd />
+        </div>
+        <RoleCards />
         <CtaBand />
       </main>
       <Footer />

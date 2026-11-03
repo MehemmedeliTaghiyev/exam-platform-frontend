@@ -4,6 +4,7 @@ import { Button, Card, Textarea } from './ui';
 import { isOpenChoiceOption, isLetterOption, optionLetter, unwrapOptions } from '../lib/utils';
 import { difficultyLabel, normalizeDifficulty } from '../lib/questionDifficulty';
 import { compressQuestionImage } from '../lib/questionImage';
+import LatexText from './LatexText';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 const LEVELS = [
@@ -230,7 +231,7 @@ export default function QuestionCard({
 
   const renderVariant = (opt, oi) => {
     const letter = opt.letter || LETTERS[oi];
-    const label = opt.text ? `${letter}) ${opt.text}` : letter;
+    const label = opt.text || '';
     const active = teacher
       ? (editing ? draftCorrect === letter : correctLetter === letter)
       : String(opt.id) === selectedId;
@@ -254,17 +255,17 @@ export default function QuestionCard({
           ? `flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-200 ${
             active ? variantOn : variantIdle
           } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`
-          : `flex w-full select-none items-start gap-3 rounded-xl border px-3 py-3 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
+          : `flex w-full select-none items-center gap-3 rounded-2xl border px-4 py-3.5 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
             active
-              ? 'border-[#4F46E5] bg-[#EEF2FF] text-[#4F46E5]'
-              : 'border-[#E5E7EB] bg-white text-[#1F2937] hover:border-[#C7D2FE]'
+              ? 'border-[#2f7a45] bg-[#e7f6ea] text-[#1f5c34] dark:bg-[#163022] dark:text-[#c6f0d4]'
+              : 'border-[var(--line)] bg-[var(--card)] text-[var(--text)] hover:border-[#2f7a45]/40'
           } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
       >
         <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
           teacher
             ? (active ? (dark ? 'bg-amber-400 text-indigo-950' : 'bg-brand-600 text-white') : (dark ? 'bg-white/10' : 'bg-gray-100 dark:bg-slate-800'))
-            : (active ? 'bg-[#4F46E5] text-white' : 'bg-[#F3F4F6] text-[#1F2937]')
-        }`}>{letter}</span>
+            : (active ? 'bg-[#2f7a45] text-white' : 'bg-[var(--bg)] text-[var(--text)]')}
+        }`}>{letter})</span>
         {editing && teacher ? (
           <input
             value={draftOpts[letter] || ''}
@@ -272,9 +273,12 @@ export default function QuestionCard({
             onChange={(e) => setDraftOpts((p) => ({ ...p, [letter]: e.target.value }))}
             className="min-w-0 flex-1 rounded-lg border border-white/20 bg-white px-2 py-1 text-sm text-ink dark:border-slate-600 dark:bg-slate-950 dark:text-gray-100"
           />
-        ) : (
-          <span className="min-w-0 flex-1">{label}</span>
-        )}
+        ) : label ? (
+          <LatexText className="min-w-0 flex-1" text={label} />
+        ) : <span className="min-w-0 flex-1" />}
+        {!teacher ? (
+          <span className={`h-5 w-5 shrink-0 rounded-full border-2 ${active ? 'border-[#2f7a45] bg-[#2f7a45] shadow-[inset_0_0_0_3px_var(--card)]' : 'border-[var(--muted)]'}`} />
+        ) : null}
       </button>
     );
   };
@@ -282,13 +286,15 @@ export default function QuestionCard({
   const body = (
     <div className="flex items-start gap-3">
       <div className="min-w-0 flex-1 space-y-3">
-        <p className={`text-sm font-semibold ${teacher ? muted : 'text-[#6B7280]'}`}>Sual {index + 1}</p>
+        <p className={`text-sm font-semibold ${teacher ? muted : 'text-[var(--muted)]'}`}>Sual {index + 1}</p>
         {editing && teacher ? (
           <Textarea rows={3} value={draftText} onChange={(e) => setDraftText(e.target.value)} />
         ) : teacher ? (
-          <div className={textCard}>{stem || 'Sual mətni yoxdur'}</div>
+          <div className={textCard}><LatexText text={stem || 'Sual mətni yoxdur'} /></div>
         ) : (
-          <div className="select-none text-[18px] font-medium leading-[1.5] text-[#1F2937]">{stem || 'Sual mətni yoxdur'}</div>
+          <div className="select-none rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-[18px] font-medium leading-[1.55] text-[var(--text)] ring-1 ring-[#2f7a45]/20">
+            <LatexText text={stem || 'Sual mətni yoxdur'} />
+          </div>
         )}
 
         <div className="space-y-2">
@@ -303,14 +309,14 @@ export default function QuestionCard({
               onClick={() => onSelect?.({ id: split.open?.id || 'open', letter: 'OPEN' })}
               className={`flex w-full select-none items-center gap-3 rounded-xl border px-3 py-3 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
                 selectedId === String(split.open?.id || 'open')
-                  ? 'border-[#4F46E5] bg-[#EEF2FF] text-[#4F46E5]'
-                  : 'border-[#E5E7EB] bg-white text-[#1F2937] hover:border-[#C7D2FE]'
+                  ? 'border-[#2f7a45] bg-[#e7f6ea] text-[#1f5c34] dark:bg-[#163022] dark:text-[#c6f0d4]'
+                  : 'border-[var(--line)] bg-[var(--card)] text-[var(--text)]'
               }`}
             >
               <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1 text-xs font-bold ${
                 selectedId === String(split.open?.id || 'open')
-                  ? 'bg-[#4F46E5] text-white'
-                  : 'bg-[#F3F4F6] text-[#1F2937]'
+                  ? 'bg-[#2f7a45] text-white'
+                  : 'bg-[var(--bg)] text-[var(--text)]'
               }`}>Açıq</span>
               Öz cavabınız
             </button>
@@ -395,7 +401,7 @@ export default function QuestionCard({
 
   if (dark) return <div className={shell}>{body}</div>;
   return (
-    <Card className={teacher ? shell : 'border-[#E5E7EB] !bg-white text-[#1F2937] !shadow-[0_1px_3px_rgba(0,0,0,0.05)]'}>
+    <Card className={teacher ? shell : 'border-[var(--line)] bg-[var(--card)] text-[var(--text)] shadow-none'}>
       {body}
     </Card>
   );

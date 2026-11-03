@@ -1,44 +1,67 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, UserPlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail, UserPlus } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
 import { AuthContext } from '../context/AuthContext';
 import { FormError } from '../components/ui';
-import { CONTACT_MAILTO } from '../lib/contact';
-import { errorMessage, rememberedTrialEnded, TRIAL_ENDED_MESSAGE } from '../lib/utils';
+import { readBrowserCredential, readRemembered, saveRemembered } from '../lib/rememberLogin';
+import { errorMessage } from '../lib/utils';
 import './login.css';
 
-const REMEMBER_KEY = 'exampulse_remember_login';
-
 export default function Login() {
-  const savedEmail = localStorage.getItem(REMEMBER_KEY) || '';
-  const [email, setEmail] = useState(savedEmail);
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(Boolean(savedEmail));
+  const saved = readRemembered();
+  const [email, setEmail] = useState(saved.email);
+  const [password, setPassword] = useState(saved.password);
+  const [remember, setRemember] = useState(saved.rememberEmail || saved.rememberPassword);
+  const [rememberPassword, setRememberPassword] = useState(saved.rememberPassword);
   const [showPassword, setShowPassword] = useState(false);
   const location = useLocation();
   const [error, setError] = useState(location.state?.notice || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const goBack = () => {
+    if (location.key !== 'default') navigate(-1);
+    else navigate('/');
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    readBrowserCredential().then((cred) => {
+      if (cancelled || !cred?.email || !cred?.password) return;
+      setEmail((value) => value || cred.email);
+      setPassword((value) => value || cred.password);
+      setRemember(true);
+      setRememberPassword(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsSubmitting(true);
-    if (remember) localStorage.setItem(REMEMBER_KEY, email.trim());
-    else localStorage.removeItem(REMEMBER_KEY);
     try {
       const userData = await login({ email, password });
+      saveRemembered({
+        email,
+        password,
+        rememberEmail: remember || rememberPassword,
+        rememberPassword,
+      });
       if (userData?.role === 'Admin') navigate('/admin');
       else if (userData?.role === 'Teacher') navigate('/teacher');
       else navigate('/student');
     } catch (err) {
+      if (!remember && !rememberPassword) {
+        saveRemembered({ email: '', password: '', rememberEmail: false, rememberPassword: false });
+      }
       if (err?.response?.data?.code === 'ACCESS_CLOSED') {
         const apiMsg = String(err.response.data.message || '');
-        const ended = rememberedTrialEnded(email) || /test müddəti|sınaq müddəti|trial/i.test(apiMsg);
-        if (ended) setError(TRIAL_ENDED_MESSAGE);
-        else if (/müəllim təsdiq/i.test(apiMsg)) setError(apiMsg);
-        else if (/admin təsdiq/i.test(apiMsg)) setError('20 günlük sınaq başlayıb. Admin təsdiqi gözlənilmir. E-poçt və şifrəni yoxlayıb yenidən daxil olun.');
+        if (/müəllim təsdiq/i.test(apiMsg)) setError(apiMsg);
+        else if (/admin təsdiq/i.test(apiMsg)) setError('Qeydiyyatdan sonra kabinet dərhal açılır. E-poçt və şifrəni yoxlayıb yenidən daxil olun.');
         else setError(apiMsg || 'Giriş hazırda bağlıdır. Məlumatları yoxlayıb yenidən cəhd edin.');
       } else {
         setError(errorMessage(err, 'Giriş uğursuz oldu. E-poçt və ya şifrə yanlışdır.'));
@@ -51,6 +74,9 @@ export default function Login() {
   return (
     <div className="login-page">
       <section className="login-scene" aria-label="Dərs otağı">
+        <button type="button" className="login-back" aria-label="Geri" onClick={goBack}>
+          <ArrowLeft size={20} />
+        </button>
         <img className="login-photo" src="/login-scene.jpg" alt="Gecə vaxtı Bakıda dərs hazırlayan şagird" />
         <svg className="login-wave login-wave-bottom" viewBox="0 0 800 48" preserveAspectRatio="none" aria-hidden="true">
           <path d="M0 24C120 40 240 8 400 20C560 32 680 6 800 18V48H0Z" />
@@ -64,13 +90,7 @@ export default function Login() {
         <div className="login-scroll">
         <div className="login-card">
           <Link to="/" className="login-brand">
-            <span className="login-mark">
-              <GraduationCap size={26} aria-hidden="true" />
-            </span>
-            <span>
-              <strong>ExamPulse</strong>
-              Daha yaxşı nəticələr üçün
-            </span>
+            <BrandLogo size={40} nameClassName="text-[27px]" />
           </Link>
 
           <h1>Xoş gəlmisən!</h1>
@@ -118,19 +138,41 @@ export default function Login() {
             </div>
 
             <div className="login-row">
-              <label htmlFor="login-remember">
-                <input
-                  id="login-remember"
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                />
-                Məni xatırla
-              </label>
-              <a href={`${CONTACT_MAILTO}?subject=${encodeURIComponent('Şifrəni unutdum')}`}>
+              <div className="login-remember">
+                <label htmlFor="login-remember">
+                  <input
+                    id="login-remember"
+                    type="checkbox"
+                    checked={remember || rememberPassword}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setRemember(on);
+                      if (!on) setRememberPassword(false);
+                    }}
+                  />
+                  Məni xatırla
+                </label>
+                <label htmlFor="login-remember-password">
+                  <input
+                    id="login-remember-password"
+                    type="checkbox"
+                    checked={rememberPassword}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setRememberPassword(on);
+                      if (on) setRemember(true);
+                    }}
+                  />
+                  Şifrəni xatırla
+                </label>
+              </div>
+              <Link to="/forgot-password">
                 Şifrəni unutmusunuz?
-              </a>
+              </Link>
             </div>
+            {rememberPassword ? (
+              <p className="login-remember-note">Şifrə yalnız bu cihazda saxlanır. Başqa telefondan daxil olanda yenidən yazın.</p>
+            ) : null}
 
             <button type="submit" className="login-submit" disabled={isSubmitting}>
               <span>{isSubmitting ? 'Daxil olunur...' : 'Daxil ol'}</span>

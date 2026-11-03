@@ -1,5 +1,5 @@
-import { useContext, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useContext, useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import DualExamRanking from '../components/DualExamRanking';
 import QuestionReviewList from '../components/QuestionReviewList';
@@ -7,12 +7,15 @@ import { Button, Card, Skeleton, StatCard } from '../components/ui';
 import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions, fetchOwnProfile, fetchOwnStudentIdsForTeacher, fetchQuestions, fetchUserById } from '../lib/examApi';
 import { splitExamLeaderboards } from '../lib/stats';
 import { AuthContext } from '../context/AuthContext';
-import { Award, CheckCircle2, Percent, Ticket, XCircle } from 'lucide-react';
-import { durationSecondsBetween, examRetakeReady, formatDateTime, formatHms, isExamEnded } from '../lib/utils';
+import { Award, CheckCircle2, Percent, XCircle } from 'lucide-react';
+import { durationSecondsBetween, examRetakeReady, formatDateTime, formatHms, isExamEnded, studentResultsReady } from '../lib/utils';
 import { localDb } from '../lib/localDb';
 import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
-import { examTeacherId, maybeAwardDiscountTicket } from '../lib/teacherAccess';
+import { examTeacherId } from '../lib/teacherAccess';
+import { teacherWatermarkText } from '../lib/storageAccess';
+import { isPublicExam } from '../lib/examVisibility';
+import ScreenGuard from '../components/ScreenGuard';
 import { buildExamResultMessage, openParentWhatsapp } from '../lib/whatsappResult';
 
 function messageFor({ review, paper, examMeta, rank, studentName }) {
@@ -86,11 +89,7 @@ export default function ExamResult() {
   const [examMeta, setExamMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [ticket, setTicket] = useState(null);
   const [boards, setBoards] = useState({ own: [], general: [] });
-  const [saved, setSaved] = useState(false);
-  const location = useLocation();
-  const notifyOnce = useRef(false);
   const [parentPhone, setParentPhone] = useState('');
   const [phoneReady, setPhoneReady] = useState(false);
   const [whatsappNote, setWhatsappNote] = useState('');
@@ -158,20 +157,6 @@ export default function ExamResult() {
   }, [submissionId, examId, reviewId, user?.role, navigate]);
 
   useEffect(() => {
-    if (!review || !examMeta || !user?.id) return;
-    if (user.role !== 'Student' && !user.practice) return;
-    const row = review.result || review;
-    const pct = Number(row?.percent ?? row?.score);
-    if (!Number.isFinite(pct)) return;
-    const awarded = maybeAwardDiscountTicket({
-      studentId: user.id,
-      teacherId: examTeacherId(examMeta),
-      percent: pct,
-    });
-    if (awarded) setTicket(awarded);
-  }, [review, examMeta, user]);
-
-  useEffect(() => {
     const eid = examMeta?.id || examId;
     if (!eid) return undefined;
     let cancelled = false;
@@ -200,9 +185,11 @@ export default function ExamResult() {
   }, [examMeta, examId, review]);
 
   useEffect(() => {
-    const target = examId || review?.result?.examId || examMeta?.id;
-    setSaved(Boolean(user?.id && target) && localDb.isExamSaved(user.id, target));
-  }, [examId, examMeta?.id, review, user?.id]);
+    const target = examMeta || { id: examId || review?.result?.examId, title: review?.result?.examTitle };
+    if ((user?.role === 'Student' || user?.practice) && user?.id && target.id != null) {
+      localDb.ensureSavedExam(user.id, target);
+    }
+  }, [examId, examMeta, review, user]);
 
   useEffect(() => {
     const studentId = (user?.role === 'Student' || user?.practice)
@@ -233,27 +220,6 @@ export default function ExamResult() {
     };
   }, [loading, queryStudentId, review, user]);
 
-  useEffect(() => {
-    if (!location.state?.notifyParent || notifyOnce.current || loading || !phoneReady || !review) return;
-    notifyOnce.current = true;
-    if (!parentPhone) {
-      setWhatsappNote('Valideynin WhatsApp nömrəsi yoxdur. Qeydiyyatda və ya şagird kartında yazın.');
-      return;
-    }
-    const resultRow = review?.result || review;
-    const studentId = resultRow?.studentId || user?.id;
-    const rank = boards.general.find((row) => String(row.studentId) === String(studentId))?.rank;
-    const opened = openParentWhatsapp(parentPhone, messageFor({
-      review,
-      paper,
-      examMeta,
-      rank,
-      studentName: resultRow?.studentName || user?.fullName,
-    }));
-    setWhatsappNote(opened
-      ? 'Ətraflı nəticə valideynin WhatsApp-ına açıldı. Mesajı orada göndərin.'
-      : 'WhatsApp nömrəsi tanınmadı. 0501234567 formatında yazın.');
-  }, [boards.general, examMeta, loading, location.state, paper, parentPhone, phoneReady, review, user]);
 
   if (loading) {
     return (
@@ -283,8 +249,10 @@ export default function ExamResult() {
   const isPassed = scorePercentage >= 50;
   const isPersonal = Boolean(result?.studentExamId || reviewId);
   const examEnded = Boolean(user?.practice) || (examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded));
-  const mistakes = questions.filter((q) => !q.unanswered && q.isCorrect === false);
+  const resultsReady = studentResultsReady(examMeta, user) || (examMeta == null && examEnded);
   const isStudent = user?.role === 'Student';
+  const personalQuiz = isStudent && !isPublicExam(examMeta);
+  const watermarkName = teacherWatermarkText(examTeacherId(examMeta)) || (personalQuiz ? (user?.fullName || user?.email || 'ExamPulse') : '');
   const myId = String(user?.id || '');
   const generalRank = boards.general.find((r) => String(r.studentId) === myId)?.rank;
   const ownRank = isStudent ? null : boards.own.find((r) => String(r.studentId) === myId)?.rank;
@@ -296,11 +264,11 @@ export default function ExamResult() {
 
   return (
     <AppShell title="İmtahan nəticəsi">
-      <div className="mx-auto max-w-3xl space-y-8">
-        {isPersonal && examEnded && (
+      <div className={`mx-auto max-w-3xl space-y-8 ${personalQuiz || watermarkName ? 'exam-guard' : ''}`}>
+        {isPersonal && resultsReady && (
           <Card className="text-center">
             <p className="text-sm text-gray-500">{result.examTitle || `İmtahan #${result.examId}`}</p>
-            {examEnded && (generalRank || (!isStudent && ownRank) || result.rank) ? (
+            {resultsReady && (generalRank || (!isStudent && ownRank) || result.rank) ? (
               <p className="mt-2 text-sm font-medium text-brand-600">
                 {isStudent
                   ? `Ümumi sıralama: ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}`
@@ -325,24 +293,17 @@ export default function ExamResult() {
               <StatCard
                 icon={Percent}
                 label={isStudent ? 'Ümumi sıra' : 'Öz / ümumi'}
-                value={examEnded
-                  ? (isStudent
-                    ? (generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—'))
-                    : `${ownRank ? `#${ownRank}` : '—'} / ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}`)
-                  : '—'}
+                value={
+                  resultsReady
+                    ? (isStudent
+                      ? (generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—'))
+                      : `${ownRank ? `#${ownRank}` : '—'} / ${generalRank ? `#${generalRank}` : (result.rank ? `#${result.rank}` : '—')}`)
+                    : '—'
+                }
               />
               <StatCard icon={CheckCircle2} label="Düzgün" value={`${correct} / ${total}`} />
               <StatCard icon={XCircle} label="Səhv" value={result.wrongAnswersCount ?? Math.max(total - correct, 0)} />
             </div>
-            {ticket ? (
-              <div className="mt-5 inline-flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                <Ticket size={18} className="mt-0.5 shrink-0" />
-                <p>
-                  Yüksək nəticəyə görə şəxsi endirim bileti: <span className="font-bold">{ticket.code}</span>.
-                  Yalnız sizə aiddir; bu müəllimdən hazırlıq müddətində növbəti ödənişdə endirim verir.
-                </p>
-              </div>
-            ) : null}
             {aiWeighted && weightedMax > 0 ? (
               <p className="mt-4 text-sm text-gray-500">
                 Çətinlik balı: <span className="font-semibold text-ink dark:text-white">{weightedEarned} / {weightedMax}</span>
@@ -350,19 +311,6 @@ export default function ExamResult() {
               </p>
             ) : null}
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-              {(user?.role === 'Student' || user?.practice) ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const target = examMeta || { id: result?.examId || examId, title: result?.examTitle };
-                    if (!user?.id || target.id == null) return;
-                    const next = localDb.toggleSavedExam(user.id, target);
-                    setSaved(next.some((item) => String(item.id) === String(target.id)));
-                  }}
-                >
-                  {saved ? 'Saxlanıldı' : 'Saxla'}
-                </Button>
-              ) : null}
               {examRetakeReady(examMeta) && (user?.role === 'Student' || user?.practice) ? (
                 <Button className="dream-change" onClick={() => navigate(`/student/exams/${result?.examId || examId}?yeniden=1`)}>
                   Yenidən həll et
@@ -396,7 +344,7 @@ export default function ExamResult() {
           </Card>
         )}
 
-        {examEnded ? (
+        {resultsReady ? (
           <>
             <div>
                 <h3 className="mb-4 text-lg font-bold">İmtahan vərəqi</h3>
@@ -407,31 +355,22 @@ export default function ExamResult() {
                 )}
             </div>
 
-            {mistakes.length > 0 && (
-              <div>
-                <h3 className="mb-4 text-lg font-bold">Səhv cavablar</h3>
-                <QuestionReviewList questions={mistakes} />
-              </div>
-            )}
-
             <DualExamRanking ownRows={boards.own} generalRows={boards.general} generalOnly={isStudent} />
           </>
         ) : (
-          <div>
-              <p className="mb-4 text-center text-sm text-gray-500">
-                İmtahan təhvil verilib. Cavablar dəyişdirilə bilməz. Düzgün/səhv yoxlama və sıralama imtahan bitəndən sonra açılacaq.
-              </p>
-              {questions.length ? (
-                <QuestionReviewList questions={questions} reveal={false} />
-              ) : (
-                <Card className="text-sm text-gray-500">Cavablar tapılmadı.</Card>
-              )}
-          </div>
+          <Card className="text-center">
+            <p className="text-lg font-extrabold">İmtahan təhvil verildi</p>
+            <p className="mt-3 text-sm text-[var(--muted)]">
+              Nəticə avtomatik saxlanıldı. Düzgün və səhv cavablar, eləcə də ümumi sıralama imtahan bitəndən sonra açılacaq.
+              Bitəndən sonra kabinetə daxil olub nəticənə baxa bilərsən.
+            </p>
+          </Card>
         )}
 
         <div className="flex justify-center">
           <Button onClick={() => navigate(backTo)}>Panelə qayıt</Button>
         </div>
+        <ScreenGuard active={Boolean(watermarkName)} name={watermarkName} />
       </div>
     </AppShell>
   );

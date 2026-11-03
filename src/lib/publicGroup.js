@@ -1,7 +1,8 @@
 const fromEnv = String(import.meta.env.VITE_PUBLIC_GROUP_CODE || '').trim();
-const envIsPlaceholder = !fromEnv || fromEnv.toLowerCase() === 'umumi' || fromEnv.toLowerCase() === 'ümumi' || fromEnv.toLowerCase() === 'g11';
+const envLooksLikeName = !fromEnv
+  || ['umumi', 'ümumi', 'hamı', 'hami', 'hamisi'].includes(fromEnv.toLowerCase());
 
-export const PUBLIC_GROUP_CODE = envIsPlaceholder ? 'hamı' : fromEnv;
+export const PUBLIC_GROUP_CODE = envLooksLikeName ? 'g11' : fromEnv;
 export const PUBLIC_GROUP_NAME = 'hamı';
 
 const PUBLIC_CODES = new Set(['g11', 'hamı', 'hami', 'umumi', 'ümumi', PUBLIC_GROUP_CODE.toLowerCase()]);

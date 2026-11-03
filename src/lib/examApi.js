@@ -297,8 +297,24 @@ export async function registerStudentInvite(payload) {
     closeAccess: independent ? false : undefined,
     CloseAccess: independent ? false : undefined,
   };
-  const res = await API.post('/Auth/register-student', body);
-  return unwrapItem(res.data) || res.data;
+  const codes = [inviteCode];
+  if (isPublicGroupCode(inviteCode) || isPublicGroupName(inviteCode)) {
+    ['g11', 'hamı', 'hami', 'umumi'].forEach((code) => {
+      if (!codes.some((item) => item.toLowerCase() === code.toLowerCase())) codes.push(code);
+    });
+  }
+  let lastErr;
+  for (const code of codes) {
+    try {
+      const res = await API.post('/Auth/register-student', { ...body, inviteCode: code, InviteCode: code });
+      return unwrapItem(res.data) || res.data;
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.response?.data?.message || '');
+      if (!/etibarsız|silinib|invite/i.test(msg)) throw err;
+    }
+  }
+  throw lastErr;
 }
 
 export async function registerOpenStudent(payload) {

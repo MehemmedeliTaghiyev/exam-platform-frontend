@@ -25,6 +25,7 @@ import Home from './pages/Home';
 import BrowseTeachers from './pages/BrowseTeachers';
 import PublicExamZone from './pages/PublicExamZone';
 import SavedExams from './pages/SavedExams';
+import TakePipelineExam from './pages/TakePipelineExam';
 
 function App() {
   return (
@@ -161,6 +162,14 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/teacher/dim/:examId"
+        element={
+          <ProtectedRoute allowedRoles={['Teacher', 'Admin']}>
+            <TakePipelineExam preview />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/student"
@@ -215,6 +224,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <TakeExam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/dim/:examId"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <TakePipelineExam />
           </ProtectedRoute>
         }
       />

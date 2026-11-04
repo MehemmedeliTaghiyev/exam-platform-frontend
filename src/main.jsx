@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import App from './App.jsx';
+import AppSplash from './components/LoadingScreen.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { applyNativeChrome, isNativeApp } from './lib/runtime';
@@ -31,7 +32,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <Router>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <AppSplash>
+            <App />
+          </AppSplash>
         </AuthProvider>
       </ThemeProvider>
     </Router>

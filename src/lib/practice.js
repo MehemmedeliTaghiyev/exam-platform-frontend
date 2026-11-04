@@ -5,6 +5,7 @@ const STUDENT_SUBS = 'exampulse_practice_subs';
 
 export const PRACTICE_TEACHER_ID = 'practice-teacher';
 export const PRACTICE_STUDENT_ID = 'practice-student';
+export const PRACTICE_ADMIN_ID = 'practice-admin';
 
 export function isPractice() {
   try {
@@ -244,12 +245,84 @@ export function addPracticeSubmission(item) {
 
 export function practiceFetchExams() {
   if (practiceRole() === 'Student') return defaultStudentExams();
+  if (practiceRole() === 'Admin') {
+    const own = practiceTeacherExams();
+    const extra = defaultStudentExams().filter((exam) => !own.some((row) => String(row.id) === String(exam.id)));
+    return [...own, ...extra];
+  }
   return practiceTeacherExams();
 }
 
 export function practiceFetchExam(id) {
-  const list = practiceRole() === 'Student' ? defaultStudentExams() : practiceTeacherExams();
+  const list = practiceRole() === 'Student'
+    ? defaultStudentExams()
+    : practiceRole() === 'Admin'
+      ? [...practiceTeacherExams(), ...defaultStudentExams()]
+      : practiceTeacherExams();
   return list.find((e) => String(e.id) === String(id)) || null;
+}
+
+export function practiceAdminTeachers() {
+  const start = new Date();
+  const end = new Date();
+  end.setDate(end.getDate() + 26);
+  return [
+    {
+      id: PRACTICE_TEACHER_ID,
+      fullName: 'Məşq Müəllim',
+      firstName: 'Məşq',
+      lastName: 'Müəllim',
+      email: 'practice.teacher@local',
+      phone: '',
+      role: 'Teacher',
+      isAccessEnabled: true,
+      createdAt: start.toISOString(),
+      trialStartsAt: start.toISOString(),
+      trialEndsAt: end.toISOString(),
+      billingPlan: 'Trial14',
+      trialDays: 20,
+      aiEnabled: true,
+      driveFolderUrl: 'https://drive.google.com/drive/folders/practice',
+      teachingSubject: 'Riyaziyyat',
+      position: 'Bakı',
+    },
+    {
+      id: 'practice-teacher-elvin',
+      fullName: 'Elvin Müəllim',
+      firstName: 'Elvin',
+      lastName: 'Müəllim',
+      email: 'elvin.teacher@local',
+      phone: '',
+      role: 'Teacher',
+      isAccessEnabled: false,
+      createdAt: start.toISOString(),
+      trialStartsAt: start.toISOString(),
+      trialEndsAt: end.toISOString(),
+      billingPlan: 'Trial14',
+      trialDays: 20,
+      aiEnabled: false,
+      teachingSubject: 'Riyaziyyat',
+      position: 'Bakı',
+    },
+  ];
+}
+
+export function practiceAdminStudents() {
+  const at = new Date().toISOString();
+  return [
+    {
+      id: PRACTICE_STUDENT_ID,
+      fullName: 'Məşq şagirdi',
+      email: 'practice.student@local',
+      role: 'Student',
+      teacherId: PRACTICE_TEACHER_ID,
+      groupName: 'Məşq qrupu',
+      isAccessEnabled: true,
+      createdAt: at,
+    },
+    { id: 'own-a', fullName: 'Aysel Məmmədova', email: 'aysel@local', role: 'Student', teacherId: PRACTICE_TEACHER_ID, groupName: 'Məşq qrupu', isAccessEnabled: true, createdAt: at },
+    { id: 'own-b', fullName: 'Elvin Quliyev', email: 'elvin@local', role: 'Student', teacherId: PRACTICE_TEACHER_ID, groupName: 'Məşq qrupu', isAccessEnabled: true, createdAt: at },
+  ];
 }
 
 export function practiceCreateExam(payload) {
@@ -473,6 +546,18 @@ export function practiceGroupmates() {
 }
 
 export function practiceUser(role) {
+  if (role === 'Admin') {
+    return {
+      practice: true,
+      practiceRole: 'Admin',
+      id: PRACTICE_ADMIN_ID,
+      role: 'Admin',
+      fullName: 'Admin',
+      firstName: 'Admin',
+      lastName: '',
+      email: 'practice.admin@local',
+    };
+  }
   if (role === 'Teacher') {
     return {
       practice: true,

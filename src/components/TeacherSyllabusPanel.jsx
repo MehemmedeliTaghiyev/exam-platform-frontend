@@ -6,7 +6,6 @@ import { fetchExams } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { teacherSubjectOf } from '../lib/storageCatalog';
 import { examAudience, isMixedSyllabusExam, teacherSyllabusState } from '../lib/syllabus';
-import { Badge, Card, EmptyState } from './ui';
 
 export default function TeacherSyllabusPanel() {
   const { user } = useContext(AuthContext);
@@ -26,51 +25,62 @@ export default function TeacherSyllabusPanel() {
 
   if (!subject) {
     return (
-      <Card className="mb-8">
-        <h2 className="text-lg font-bold">Sillabus</h2>
-        <p className="mt-2 text-sm text-[var(--muted)]">Fənn qeydiyyatda seçiləndən sonra sillabus burada açılır.</p>
-      </Card>
+      <section>
+        <h2 className="text-lg font-black">Sillabus</h2>
+        <p className="mt-2 text-sm font-semibold text-white/45">Fənn qeydiyyatda seçiləndən sonra sillabus burada açılır.</p>
+      </section>
     );
   }
 
   return (
-    <Card className="mb-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold">Sillabus · {subject}</h2>
-          <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-[#1f7a3a]">
-            <MapPin size={15} />
-            {state.current ? `Hazırda: ${state.current.title}` : 'Hələ mövzu paylaşılmayıb'}
-          </p>
-          <p className="mt-1 text-xs text-[var(--muted)]">{state.done}/{state.total} mövzuda sınaq paylaşılıb</p>
-        </div>
+    <section>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-black">Sillabus · {subject}</h2>
+        <p className="shrink-0 text-sm font-semibold text-white/40">{state.done} / {state.total}</p>
       </div>
-      <div className="mt-4 space-y-2">
+      <p className="mt-2 text-sm font-semibold text-white/45">{state.done}/{state.total} mövzuda sınaq paylaşılıb</p>
+      {state.current ? (
+        <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-white/70">
+          <MapPin size={15} className="text-[#9d93ff]" />
+          Hazırda: <span className="font-extrabold text-white">{state.current.title}</span>
+        </p>
+      ) : (
+        <p className="mt-3 text-sm font-semibold text-white/45">Hələ mövzu paylaşılmayıb.</p>
+      )}
+      <ul className="mt-4 space-y-1">
         {state.topics.map((topic) => {
           const here = state.current?.id === topic.id;
           return (
-            <div
-              key={topic.id}
-              className={`rounded-2xl border px-4 py-3 ${here ? 'border-[#2f7a45] bg-[#eef8f1] dark:bg-[#163022]' : 'border-[var(--line)]'}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-extrabold">{topic.order}. {topic.title}</p>
-                <Badge tone={topic.exams.length ? 'success' : 'neutral'}>
+            <li key={topic.id}>
+              <div
+                className={`flex items-center gap-3 rounded-[18px] px-3 py-3 ${
+                  here ? 'bg-[linear-gradient(90deg,#6d5efc,#7c6aff)]' : ''
+                }`}
+              >
+                <span
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-black ${
+                    here ? 'bg-white/20 text-white' : 'text-white/35'
+                  }`}
+                >
+                  {topic.order}
+                </span>
+                <p className="min-w-0 flex-1 truncate font-extrabold">{topic.title}</p>
+                <span className={`shrink-0 text-xs font-extrabold ${here ? 'text-white/80' : 'text-white/35'}`}>
                   {topic.exams.length ? `${topic.exams.length} imtahan` : 'Boş'}
-                </Badge>
+                </span>
               </div>
               {topic.exams.length ? (
-                <ul className="mt-2 space-y-1 text-sm">
+                <ul className="mt-1 space-y-1 pl-12 text-sm">
                   {topic.exams.map((exam) => (
                     <li key={exam.id}>
                       <button
                         type="button"
-                        className="text-left font-semibold text-[#1f7a3a] underline"
+                        className="text-left font-semibold text-[#9d93ff] underline"
                         onClick={() => navigate(`/teacher/exams/${exam.id}`)}
                       >
                         {exam.title}
                       </button>
-                      <span className="ml-2 text-xs text-[var(--muted)]">
+                      <span className="ml-2 text-xs text-white/35">
                         {isMixedSyllabusExam(exam) || examAudience(exam) === 'students'
                           ? 'öz tələbələr'
                           : 'hamı'}
@@ -79,11 +89,13 @@ export default function TeacherSyllabusPanel() {
                   ))}
                 </ul>
               ) : null}
-            </div>
+            </li>
           );
         })}
-      </div>
-      {!state.topics.length ? <EmptyState title="Sillabus yoxdur" text="" /> : null}
-    </Card>
+      </ul>
+      {!state.topics.length ? (
+        <p className="mt-3 text-sm font-semibold text-white/40">Sillabus mövzusu yoxdur.</p>
+      ) : null}
+    </section>
   );
 }

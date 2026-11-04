@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/AppShell';
-import { Badge, Button, Card, EmptyState, Input, Modal, Select, Textarea } from '../components/ui';
+import { Button, Input, Modal, Select, Textarea } from '../components/ui';
 import API from '../api/axios';
-import { Ban, CheckCircle2, Sparkles } from 'lucide-react';
-import { createTeacherAccount, setStudentAccess, setTeacherAiEnabled, updateTeacherTrial } from '../lib/examApi';
+import { Ban, Calendar, ChevronDown, Plus, Search } from 'lucide-react';
+import { createTeacherAccount, setStudentAccess, updateTeacherTrial } from '../lib/examApi';
+import { isPractice, practiceAdminTeachers } from '../lib/practice';
 import { displayTrialMessage, driveFolderOpenUrl, teacherDriveFolderUrl } from '../lib/driveLinks';
 import { createTeacherDriveFolder, teacherFolderName } from '../lib/teacherDrive';
 import { localDb } from '../lib/localDb';
-import { AI_FEATURES, eventsFromTeacher, filterEventsByRange, groupUsageByDate, totalsByFeature } from '../lib/aiUsage';
 import {
   computeAccessEnd,
   errorMessage,
-  formatDate,
   formatDateTime,
-  isAiEnabled,
   remainingUsageLabel,
   teacherPlanOf,
   teacherTrialDaysOf,
@@ -31,7 +29,28 @@ function endsFor(teacher, startDate, plan, days) {
     || teacher.TrialEndsAt;
 }
 
-function TeacherPlanCell({ teacher, onSaved, onError }) {
+function initials(teacher) {
+  const first = String(teacher.firstName || teacher.fullName || 'M').trim()[0] || 'M';
+  return first.toUpperCase();
+}
+
+function displayName(teacher) {
+  const name = `${teacher.firstName || ''} ${teacher.lastName || ''}`.trim();
+  return name || teacher.fullName || 'Müəllim';
+}
+
+function Chip({ tone = 'neutral', children }) {
+  const cls = tone === 'ok'
+    ? 'bg-[#1f6a3a]/25 text-[#7dffa8]'
+    : tone === 'warn'
+      ? 'bg-[#7c6aff]/20 text-[#b4abff]'
+      : tone === 'bad'
+        ? 'bg-[#e11d48]/18 text-[#ff8aa0]'
+        : 'bg-white/8 text-white/55';
+  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${cls}`}>{children}</span>;
+}
+
+function TeacherPlanFields({ teacher, onSaved, onError }) {
   const [startDate, setStartDate] = useState(toDateInput(teacher.trialStartsAt || teacher.createdAt) || todayInput());
   const [plan, setPlan] = useState(teacherPlanOf(teacher));
   const [trialDays, setTrialDays] = useState(teacherTrialDaysOf(teacher));
@@ -57,18 +76,23 @@ function TeacherPlanCell({ teacher, onSaved, onError }) {
       const trialStartsAt = new Date(`${startDate}T12:00:00`).toISOString();
       const days = plan === 'Monthly' ? 30 : Math.max(1, Number(trialDays) || 20);
       const trialEndsAt = computeAccessEnd(trialStartsAt, plan, days);
+      const patch = { billingPlan: plan === 'Monthly' ? 'Monthly' : 'Trial14', trialDays: days, trialStartsAt, trialEndsAt };
+      if (isPractice()) {
+        onSaved({ ...teacher, ...patch });
+        return;
+      }
       const updated = await updateTeacherTrial(teacher.id, {
         firstName: teacher.firstName,
         lastName: teacher.lastName,
         phone: teacher.phone,
         trialStartsAt,
         trialEndsAt,
-        billingPlan: plan === 'Monthly' ? 'Monthly' : 'Trial14',
+        billingPlan: patch.billingPlan,
         trialDays: days,
         trialMessage: teacher.trialMessage,
         driveFolderUrl: teacher.driveFolderUrl,
       });
-      onSaved({ ...teacher, ...updated, billingPlan: plan === 'Monthly' ? 'Monthly' : 'Trial14', trialDays: days, trialStartsAt, trialEndsAt });
+      onSaved({ ...teacher, ...updated, ...patch });
     } catch (err) {
       onError(errorMessage(err, 'Müddət saxlanılmadı.'));
     } finally {
@@ -77,33 +101,68 @@ function TeacherPlanCell({ teacher, onSaved, onError }) {
   };
 
   return (
-    <div className="flex min-w-[260px] flex-col gap-2">
-      <Select value={plan} onChange={(e) => setPlan(e.target.value)}>
-        <option value="FreeTrial">Free-trial</option>
-        <option value="Monthly">Aylıq (30 gün)</option>
-      </Select>
-      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-      {plan === 'FreeTrial' && (
-        <Input
-          type="number"
-          min={1}
-          max={365}
-          value={trialDays}
-          onChange={(e) => setTrialDays(e.target.value)}
-          placeholder="gün sayı"
-        />
-      )}
-      <div className="flex items-center justify-between gap-2">
-        <span className={`text-xs ${left.className}`}>{left.text}</span>
-        <Button variant="secondary" disabled={saving} onClick={save}>
-          {saving ? '...' : 'Saxla'}
-        </Button>
+    <div className="space-y-3">
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-white/35">İstifadə müddəti</p>
+      <label className="block text-xs font-bold text-white/40">
+        Növ
+        <select
+          className="mt-1 h-12 w-full rounded-2xl bg-[#12141a] px-3 text-sm font-extrabold text-white outline-none ring-1 ring-white/10"
+          value={plan}
+          onChange={(e) => setPlan(e.target.value)}
+        >
+          <option value="FreeTrial">Free-trial</option>
+          <option value="Monthly">Aylıq (30 gün)</option>
+        </select>
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs font-bold text-white/40">
+          Başlanğıc
+          <span className="relative mt-1 block">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-12 w-full rounded-2xl bg-[#12141a] px-3 pr-8 text-sm font-extrabold text-white outline-none ring-1 ring-white/10"
+            />
+            <Calendar size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/35" />
+          </span>
+        </label>
+        {plan === 'FreeTrial' ? (
+          <label className="text-xs font-bold text-white/40">
+            Müddət (gün)
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={trialDays}
+              onChange={(e) => setTrialDays(e.target.value)}
+              className="mt-1 h-12 w-full rounded-2xl bg-[#12141a] px-3 text-sm font-extrabold text-white outline-none ring-1 ring-white/10"
+            />
+          </label>
+        ) : (
+          <label className="text-xs font-bold text-white/40">
+            Müddət
+            <p className="mt-1 grid h-12 place-items-center rounded-2xl bg-[#12141a] text-sm font-extrabold ring-1 ring-white/10">30 gün</p>
+          </label>
+        )}
       </div>
+      <div className="flex items-center justify-between text-xs font-extrabold">
+        <span className="text-[#7dffa8]">{left.text}</span>
+        <span className="text-white/30">{formatDateTime(previewEnd)}</span>
+      </div>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={save}
+        className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#7c6aff] text-sm font-extrabold disabled:opacity-50"
+      >
+        {saving ? 'Saxlanılır...' : 'Saxla'}
+      </button>
     </div>
   );
 }
 
-function DriveFolderCell({ teacher, onSaved, onError }) {
+function DriveFolderFields({ teacher, onSaved, onError }) {
   const [url, setUrl] = useState(teacher.driveFolderUrl || '');
   const [saving, setSaving] = useState(false);
 
@@ -117,6 +176,10 @@ function DriveFolderCell({ teacher, onSaved, onError }) {
     onError('');
     try {
       const folder = driveFolderOpenUrl(url);
+      if (isPractice()) {
+        onSaved({ ...teacher, driveFolderUrl: folder });
+        return;
+      }
       await updateTeacherTrial(teacher.id, {
         firstName: teacher.firstName,
         lastName: teacher.lastName,
@@ -138,28 +201,31 @@ function DriveFolderCell({ teacher, onSaved, onError }) {
   };
 
   return (
-    <div className="flex min-w-[240px] flex-col gap-2">
-      <Input
-        placeholder="https://drive.google.com/drive/folders/..."
+    <div className="space-y-3">
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-white/35">Drive qovluğu</p>
+      <p className="text-xs font-bold text-white/40">Drive qovluğunun linki</p>
+      <input
         value={url}
         onChange={(e) => setUrl(e.target.value)}
+        placeholder="https://drive.google.com/drive/folders/..."
+        className="h-12 w-full rounded-2xl bg-[#12141a] px-3 text-sm font-semibold text-white outline-none ring-1 ring-white/10 placeholder:text-white/25"
       />
-      <div className="flex items-center justify-between gap-2">
-        {teacher.driveFolderUrl ? (
-          <a
-            className="text-xs font-medium text-brand-600 underline"
-            href={teacher.driveFolderUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Aç
-          </a>
-        ) : (
-          <span className="text-xs text-gray-400">Boşdur</span>
-        )}
-        <Button variant="secondary" disabled={saving} onClick={save}>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setUrl('')}
+          className="min-h-12 rounded-full bg-white/[0.06] text-sm font-extrabold"
+        >
+          Təmizlə
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={save}
+          className="min-h-12 rounded-full bg-[#5b4fd6] text-sm font-extrabold disabled:opacity-50"
+        >
           {saving ? '...' : 'Saxla'}
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -191,22 +257,25 @@ export default function AdminTeachers() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
-  const [usageFrom, setUsageFrom] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    return toDateInput(d);
-  });
-  const [usageTo, setUsageTo] = useState(() => toDateInput(new Date()));
-  const [usageTeacher, setUsageTeacher] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [pendingBan, setPendingBan] = useState(null);
+
+  const patchTeacher = (updated) => {
+    setTeachers((prev) => prev.map((row) => (String(row.id) === String(updated.id) ? { ...row, ...updated } : row)));
+  };
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
+      if (isPractice()) {
+        setTeachers(practiceAdminTeachers());
+        setLoading(false);
+        return;
+      }
       const res = await API.get('/Users', { params: { role: 'Teacher', includeDeleted: false } });
       const list = unwrapList(res.data).map((t) => ({
         ...t,
-        aiEnabled: isAiEnabled(t) || localDb.getTeacherAi(t.id),
         driveFolderUrl: teacherDriveFolderUrl(t) || localDb.getTeacherDriveFolder(t.id),
         trialMessage: displayTrialMessage(t.trialMessage || t.TrialMessage),
       }));
@@ -244,25 +313,6 @@ export default function AdminTeachers() {
     setOpen(true);
   };
 
-  const openEdit = (t) => {
-    setEdit(t);
-    setForm({
-      firstName: t.firstName || '',
-      lastName: t.lastName || '',
-      email: t.email || '',
-      phone: t.phone || '',
-      userName: t.userName || '',
-      password: '',
-      startDate: toDateInput(t.trialStartsAt || t.createdAt) || todayInput(),
-      billingPlan: teacherPlanOf(t),
-      trialDays: teacherTrialDaysOf(t),
-      trialMessage: displayTrialMessage(t.trialMessage || t.TrialMessage || 'Free trial bitdi.'),
-      aiEnabled: isAiEnabled(t) || localDb.getTeacherAi(t.id),
-      driveFolderUrl: t.driveFolderUrl || teacherDriveFolderUrl(t) || localDb.getTeacherDriveFolder(t.id) || '',
-    });
-    setOpen(true);
-  };
-
   const submit = async (e) => {
     e.preventDefault();
     if (saving) return;
@@ -276,13 +326,36 @@ export default function AdminTeachers() {
       const billingPlan = plan === 'Monthly' ? 'Monthly' : 'Trial14';
       let driveFolderUrl = form.driveFolderUrl.trim();
       let driveNote = '';
-      if (!driveFolderUrl) {
+      if (!driveFolderUrl && !isPractice()) {
         try {
           const folder = await createTeacherDriveFolder(teacherFolderName(form));
           driveFolderUrl = folder?.url || '';
         } catch (err) {
           driveNote = errorMessage(err, 'Drive qovluğu yaranmadı. Hesab saxlanıldı.');
         }
+      }
+      if (isPractice()) {
+        const row = {
+          id: edit?.id || `practice-teacher-${Date.now()}`,
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          fullName: `${form.firstName.trim()} ${form.lastName.trim()}`.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          trialStartsAt,
+          trialEndsAt,
+          billingPlan,
+          trialDays: days,
+          trialMessage: form.trialMessage,
+          aiEnabled: form.aiEnabled === true,
+          driveFolderUrl,
+          isAccessEnabled: true,
+          createdAt: edit?.createdAt || new Date().toISOString(),
+          role: 'Teacher',
+        };
+        setTeachers((prev) => (edit ? prev.map((item) => (String(item.id) === String(edit.id) ? { ...item, ...row } : item)) : [row, ...prev]));
+        setOpen(false);
+        return;
       }
       if (edit) {
         await updateTeacherTrial(edit.id, {
@@ -334,8 +407,12 @@ export default function AdminTeachers() {
     if (!t.id || busyId) return;
     setBusyId(t.id);
     setError('');
+    const enabled = (t.isAccessEnabled ?? t.IsAccessEnabled) !== false;
     try {
-      const enabled = (t.isAccessEnabled ?? t.IsAccessEnabled) !== false;
+      if (isPractice()) {
+        patchTeacher({ ...t, isAccessEnabled: !enabled });
+        return;
+      }
       await setStudentAccess(t.id, !enabled);
       localDb.setTeacherSidelined(t.id, enabled);
       await load();
@@ -346,153 +423,164 @@ export default function AdminTeachers() {
     }
   };
 
-  const toggleAi = async (t) => {
-    if (!t.id || busyId) return;
-    setBusyId(`ai-${t.id}`);
-    setError('');
-    const next = !(isAiEnabled(t) || localDb.getTeacherAi(t.id));
-    try {
-      await setTeacherAiEnabled(t.id, next);
-      setTeachers((prev) => prev.map((row) => (String(row.id) === String(t.id) ? { ...row, aiEnabled: next, AiEnabled: next } : row)));
-    } catch (err) {
-      setError(errorMessage(err, 'AI statusu dəyişmədi.'));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   return (
     <AppShell title="Müəllim qeydiyyatı">
-      <p className="mb-6 text-sm text-gray-500">
-        Qeydiyyat avtomatik açılır. İstəmədiyiniz müəllimi kənarlaşdıra bilərsiniz — o zaman hesab daxil ola bilməz.
-        Drive qovluğu və istifadə müddəti burada qalır.
-      </p>
-      <div className="mb-4 max-w-md">
-        <Input label="Ad ilə axtar" value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} placeholder="Müəllimin adı" />
-      </div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          <Button variant={sortDir === 'desc' ? 'primary' : 'secondary'} onClick={() => setSortDir('desc')}>
-            Yeni → köhnə
-          </Button>
-          <Button variant={sortDir === 'asc' ? 'primary' : 'secondary'} onClick={() => setSortDir('asc')}>
-            Köhnə → yeni
-          </Button>
+      {pendingBan ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button type="button" className="absolute inset-0 bg-black/55" aria-label="Ləğv et" onClick={() => setPendingBan(null)} />
+          <div className="relative w-full max-w-sm rounded-[28px] bg-[#171a22] p-5 text-white shadow-[0_20px_50px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08]">
+            <h3 className="text-xl font-black">Müəllimi kənarlaşdırırsınız?</h3>
+            <p className="mt-3 text-sm font-semibold leading-snug text-white/70">
+              <span className="font-extrabold text-white">{displayName(pendingBan)}</span> hesaba daxil ola bilməyəcək.
+              Drive qovluğu və istifadə müddəti qalır.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setPendingBan(null)} className="min-h-12 rounded-full bg-white/[0.08] text-sm font-extrabold">
+                Ləğv et
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const row = pendingBan;
+                  setPendingBan(null);
+                  if (row) toggleAccess(row);
+                }}
+                className="min-h-12 rounded-full bg-[#e11d48] text-sm font-extrabold"
+              >
+                Kənarlaşdır
+              </button>
+            </div>
+          </div>
         </div>
-        <Button onClick={openCreate}>Müəllim qeydə al</Button>
-      </div>
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <Input label="AI istifadə (başlanğıc)" type="date" value={usageFrom} onChange={(e) => setUsageFrom(e.target.value)} />
-        <Input label="AI istifadə (son)" type="date" value={usageTo} onChange={(e) => setUsageTo(e.target.value)} />
-        <p className="pb-2 text-xs text-gray-500">Saylar seçilən tarix aralığına görədir.</p>
-      </div>
-      {error && !open && <p className="mb-4 text-sm text-red-600">{error}</p>}
-      {loading ? (
-        <p className="text-sm text-gray-500">Yüklənir...</p>
-      ) : sorted.length === 0 ? (
-        <EmptyState title="Müəllim yoxdur" text="Qeydiyyat üçün düyməni basın." />
-      ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1320px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500 dark:border-slate-800">
-                <th className="px-5 py-3 font-medium">Ad</th>
-                <th className="px-5 py-3 font-medium">Soyad</th>
-                <th className="px-5 py-3 font-medium">Nömrə</th>
-                <th className="px-5 py-3 font-medium">Hesab</th>
-                <th className="px-5 py-3 font-medium">İstifadə müddəti</th>
-                <th className="px-5 py-3 font-medium">Drive qovluğu</th>
-                <th className="px-5 py-3 font-medium">AI</th>
-                <th className="px-5 py-3 font-medium">AI istifadəsi (tarixə görə)</th>
-                <th className="px-5 py-3 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((t) => {
-                const accessOn = (t.isAccessEnabled ?? t.IsAccessEnabled) !== false;
-                const aiOn = isAiEnabled(t) || localDb.getTeacherAi(t.id);
-                const plan = teacherPlanOf(t);
-                const end = endsFor(t, toDateInput(t.trialStartsAt || t.createdAt), plan, teacherTrialDaysOf(t));
-                const left = remainingUsageLabel(t.trialEndsAt || end);
-                const events = filterEventsByRange(eventsFromTeacher(t), usageFrom, usageTo);
-                const totals = totalsByFeature(events);
-                return (
-                  <tr key={t.id} className={`border-b border-gray-100 align-top last:border-0 dark:border-slate-800 ${accessOn ? '' : 'bg-rose-50/70 dark:bg-rose-950/20'}`}>
-                    <td className="px-5 py-3 font-medium">{t.firstName || t.fullName?.split(' ')[0] || '—'}</td>
-                    <td className="px-5 py-3 font-medium">{t.lastName || '—'}</td>
-                    <td className="px-5 py-3 text-gray-500">{t.phone || '—'}</td>
-                    <td className="px-5 py-3">
-                      <Button
-                        variant={accessOn ? 'danger' : 'success'}
+      ) : null}
+
+      <div className="space-y-4 pb-24">
+        <p className="rounded-[22px] bg-[#171a22] px-4 py-3 text-sm font-semibold leading-snug text-white/55 ring-1 ring-white/[0.06]">
+          Qeydiyyat avtomatik açılır. İstəmədiyiniz müəllimi kənarlaşdıra bilərsiniz — o zaman hesab daxil ola bilməz. Drive qovluğu və istifadə müddəti burada qalır.
+        </p>
+
+        <label className="flex min-h-12 items-center gap-2 rounded-full bg-[#171a22] px-4 ring-1 ring-white/[0.06]">
+          <Search size={16} className="text-white/35" />
+          <input
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+            placeholder="Müəllimin adı"
+            className="h-11 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-white/35"
+          />
+        </label>
+
+        <div className="flex rounded-full bg-[#171a22] p-1 ring-1 ring-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => setSortDir('desc')}
+            className={`min-h-10 flex-1 rounded-full text-sm font-extrabold ${sortDir === 'desc' ? 'bg-[#7c6aff] text-white' : 'text-white/40'}`}
+          >
+            Yeni → köhnə
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortDir('asc')}
+            className={`min-h-10 flex-1 rounded-full text-sm font-extrabold ${sortDir === 'asc' ? 'bg-[#7c6aff] text-white' : 'text-white/40'}`}
+          >
+            Köhnə → yeni
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#7c6aff] text-sm font-extrabold"
+        >
+          <Plus size={16} /> Müəllim qeydə al
+        </button>
+
+        {error && !open ? <p className="text-sm font-semibold text-[#ff8aa0]">{error}</p> : null}
+
+        <div className="flex items-end justify-between">
+          <p className="text-sm font-extrabold">Müəllimlər</p>
+          <p className="text-sm font-semibold text-white/40">{sorted.length} nəfər</p>
+        </div>
+
+        {loading ? <p className="text-sm text-white/40">Yüklənir...</p> : null}
+        {!loading && !sorted.length ? (
+          <p className="rounded-[24px] bg-[#171a22] px-4 py-8 text-center text-sm font-semibold text-white/40">Müəllim yoxdur.</p>
+        ) : null}
+
+        <ul className="space-y-3">
+          {sorted.map((t) => {
+            const accessOn = (t.isAccessEnabled ?? t.IsAccessEnabled) !== false;
+            const plan = teacherPlanOf(t);
+            const end = endsFor(t, toDateInput(t.trialStartsAt || t.createdAt), plan, teacherTrialDaysOf(t));
+            const left = remainingUsageLabel(t.trialEndsAt || end);
+            const openCard = String(expandedId) === String(t.id);
+            const shortLeft = left.days != null && left.days > 0 ? `${left.days} gün qalıb` : left.text;
+            return (
+              <li key={t.id} className="overflow-hidden rounded-[26px] bg-[#171a22] p-4 ring-1 ring-white/[0.06]">
+                <button type="button" className="flex w-full items-start gap-3 text-left" onClick={() => setExpandedId(openCard ? null : t.id)}>
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#7c6aff] text-lg font-black">
+                    {initials(t)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-lg font-black">{displayName(t)}</p>
+                    <p className="text-sm font-semibold text-white/40">Nömrə: {t.phone || '—'}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {accessOn ? <Chip tone="ok">Aktiv</Chip> : <Chip tone="bad">Kənarlaşdırılıb</Chip>}
+                      <Chip tone="warn">{plan === 'Monthly' ? 'Aylıq' : 'Free-trial'}</Chip>
+                      {accessOn ? <Chip tone="ok">{shortLeft}</Chip> : null}
+                    </div>
+                  </div>
+                  <ChevronDown size={18} className={`mt-1 text-white/35 transition ${openCard ? 'rotate-180' : ''}`} />
+                </button>
+
+                {openCard ? (
+                  <div className="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
+                    <TeacherPlanFields teacher={t} onError={setError} onSaved={patchTeacher} />
+                    <DriveFolderFields teacher={t} onError={setError} onSaved={patchTeacher} />
+                    {accessOn ? (
+                      <button
+                        type="button"
+                        disabled={busyId === t.id}
+                        onClick={() => setPendingBan(t)}
+                        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full ring-1 ring-[#e11d48]/50 text-sm font-extrabold text-[#ff8aa0]"
+                      >
+                        <Ban size={16} /> Kənarlaşdır
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
                         disabled={busyId === t.id}
                         onClick={() => toggleAccess(t)}
+                        className="min-h-12 w-full rounded-full bg-[#7c6aff] text-sm font-extrabold"
                       >
-                        {accessOn ? <Ban size={14} /> : <CheckCircle2 size={14} />}
-                        {accessOn ? 'Kənarlaşdır' : 'Geri qaytar'}
-                      </Button>
-                    </td>
-                    <td className="px-5 py-3">
-                      <TeacherPlanCell
-                        teacher={t}
-                        onError={setError}
-                        onSaved={(updated) => {
-                          setTeachers((prev) => prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
-                        }}
-                      />
-                      <p className="mt-1 text-xs text-gray-400">{formatDateTime(t.createdAt)}</p>
-                    </td>
-                    <td className="px-5 py-3">
-                      <DriveFolderCell
-                        teacher={t}
-                        onError={setError}
-                        onSaved={(updated) => {
-                          setTeachers((prev) => prev.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
-                        }}
-                      />
-                    </td>
-                    <td className="px-5 py-3">
-                      <Button
-                        variant={aiOn ? 'success' : 'secondary'}
-                        disabled={busyId === `ai-${t.id}`}
-                        onClick={() => toggleAi(t)}
+                        Bərpa et
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setExpandedId(t.id)} className="min-h-11 rounded-full bg-white/[0.06] text-sm font-extrabold">
+                      Düzəliş
+                    </button>
+                    {accessOn ? (
+                      <button
+                        type="button"
+                        onClick={() => setPendingBan(t)}
+                        className="inline-flex min-h-11 items-center justify-center gap-1 rounded-full ring-1 ring-[#e11d48]/50 text-sm font-extrabold text-[#ff8aa0]"
                       >
-                        <Sparkles size={14} />
-                        {aiOn ? 'AI aktiv' : 'AI yoxdur'}
-                      </Button>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="min-w-[180px] space-y-1 text-xs">
-                        {AI_FEATURES.map((f) => (
-                          <p key={f.key} className="flex justify-between gap-3">
-                            <span className="text-gray-500">{f.label}</span>
-                            <span className="font-bold tabular-nums">{totals[f.key] || 0}</span>
-                          </p>
-                        ))}
-                        <Button variant="secondary" className="mt-2 w-full py-1.5 text-xs" onClick={() => setUsageTeacher(t)}>
-                          Günbəgün
-                        </Button>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex flex-col items-end gap-2">
-                        <span className={left.className}>{left.text}</span>
-                        {t.trialNotifiedAt ? (
-                          <Badge>Mail göndərilib</Badge>
-                        ) : (t.trialEndsAt || end) && new Date(t.trialEndsAt || end).getTime() <= Date.now() ? (
-                          <Badge tone="danger">Vaxt bitib</Badge>
-                        ) : (
-                          <Badge tone="success">{plan === 'Monthly' ? 'Aylıq' : 'Free-trial'}</Badge>
-                        )}
-                        <Button variant="secondary" onClick={() => openEdit(t)}>Düzəliş</Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
-      )}
+                        <Ban size={14} /> Kənarlaşdır
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => toggleAccess(t)} className="min-h-11 rounded-full bg-[#7c6aff] text-sm font-extrabold">
+                        Bərpa et
+                      </button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <Modal open={open} title={edit ? 'Müəllim məlumatı' : 'Yeni müəllim'} onClose={() => !saving && setOpen(false)} className="max-w-2xl">
         <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
@@ -506,31 +594,13 @@ export default function AdminTeachers() {
               <Input label="Şifrə" type="password" required minLength={4} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </>
           )}
-          <Input
-            label="Başlanğıc tarixi"
-            type="date"
-            required
-            value={form.startDate}
-            onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-          />
-          <Select
-            label="İstifadə növü"
-            value={form.billingPlan}
-            onChange={(e) => setForm({ ...form, billingPlan: e.target.value })}
-          >
+          <Input label="Başlanğıc tarixi" type="date" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+          <Select label="İstifadə növü" value={form.billingPlan} onChange={(e) => setForm({ ...form, billingPlan: e.target.value })}>
             <option value="FreeTrial">Free-trial</option>
             <option value="Monthly">Aylıq (30 gün)</option>
           </Select>
           {form.billingPlan !== 'Monthly' && (
-            <Input
-              label="Free-trial gün sayı"
-              type="number"
-              min={1}
-              max={365}
-              required
-              value={form.trialDays}
-              onChange={(e) => setForm({ ...form, trialDays: e.target.value })}
-            />
+            <Input label="Free-trial gün sayı" type="number" min={1} max={365} required value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: e.target.value })} />
           )}
           <div className="sm:col-span-2">
             <Input
@@ -539,75 +609,18 @@ export default function AdminTeachers() {
               onChange={(e) => setForm({ ...form, driveFolderUrl: e.target.value })}
               placeholder="https://drive.google.com/drive/folders/..."
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Drive-da müəllimə qovluq açın, “linki olanlar düzəldə bilər” paylaşın, linki bura yapışdırın.
-              Qovluğu avtomatik yaratmaq Google hesabı (API) tələb edir — hazırda əl ilə.
-            </p>
           </div>
-          <label className="flex items-center gap-3 rounded-xl border border-gray-200 px-3 py-3 text-sm dark:border-slate-700">
-            <input
-              type="checkbox"
-              checked={form.aiEnabled === true}
-              onChange={(e) => setForm({ ...form, aiEnabled: e.target.checked })}
-            />
-            <span>
-              <span className="font-medium">AI aktiv</span>
-              <span className="mt-0.5 block text-gray-500">Hazırda AI heç kimə açıq deyil — kod qalır, menyu gizlidir</span>
-            </span>
-          </label>
           <div className="sm:col-span-2">
-            <Textarea
-              label="Vaxt bitəndə gələcək mesaj"
-              rows={4}
-              value={form.trialMessage}
-              onChange={(e) => setForm({ ...form, trialMessage: e.target.value })}
-            />
+            <Textarea label="Vaxt bitəndə gələcək mesaj" rows={4} value={form.trialMessage} onChange={(e) => setForm({ ...form, trialMessage: e.target.value })} />
           </div>
-          {error && <p className="sm:col-span-2 text-sm text-red-600">{error}</p>}
+          {error && <p className="sm:col-span-2 text-sm text-[#ff8aa0]">{error}</p>}
           <div className="sm:col-span-2 flex justify-end gap-2">
             <Button variant="secondary" disabled={saving} onClick={() => setOpen(false)}>Ləğv et</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Saxlanılır...' : 'Saxla'}</Button>
+            <Button type="submit" disabled={saving} className="!bg-[#7c6aff] !bg-none">{saving ? 'Saxlanılır...' : 'Saxla'}</Button>
           </div>
         </form>
       </Modal>
 
-      <Modal
-        open={Boolean(usageTeacher)}
-        title={usageTeacher ? `AI istifadəsi · ${usageTeacher.firstName || ''} ${usageTeacher.lastName || ''}`.trim() : 'AI istifadəsi'}
-        onClose={() => setUsageTeacher(null)}
-        className="max-w-2xl"
-      >
-        {usageTeacher && (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-500">
-              {formatDate(usageFrom)} — {formatDate(usageTo)}
-            </p>
-            {(() => {
-              const days = groupUsageByDate(filterEventsByRange(eventsFromTeacher(usageTeacher), usageFrom, usageTo));
-              if (!days.length) {
-                return <p className="text-sm text-gray-400">Bu tarix aralığında istifadə yoxdur.</p>;
-              }
-              return days.map((row) => (
-                <div key={row.day} className="rounded-xl border border-gray-200 px-4 py-3 dark:border-slate-700">
-                  <p className="mb-2 font-bold">{formatDate(row.day)}</p>
-                  <div className="space-y-1 text-sm">
-                    {AI_FEATURES.map((f) => (
-                      <p key={f.key} className="flex justify-between">
-                        <span className="text-gray-500">{f.label}</span>
-                        <span className="font-semibold tabular-nums">{row.counts[f.key] || 0}</span>
-                      </p>
-                    ))}
-                    <p className="flex justify-between border-t border-gray-100 pt-1 dark:border-slate-800">
-                      <span>Cəmi</span>
-                      <span className="font-bold tabular-nums">{row.total}</span>
-                    </p>
-                  </div>
-                </div>
-              ));
-            })()}
-          </div>
-        )}
-      </Modal>
     </AppShell>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Menu, Moon, Sun, UserRound, X } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { ArrowLeft, Menu, X } from 'lucide-react';
 import { goToHash, scrollToHash } from '../../lib/scrollToHash';
 import BrandLogo from '../BrandLogo';
 
@@ -13,7 +12,6 @@ const LINKS = [
 ];
 
 export default function Header({ hideAuth = false, overlay = false }) {
-  const { dark, toggle } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -49,7 +47,7 @@ export default function Header({ hideAuth = false, overlay = false }) {
       if (event.key === 'Escape') setOpen(false);
     };
     const onResize = () => {
-      if (window.matchMedia('(min-width: 900px)').matches) setOpen(false);
+      if (window.matchMedia('(min-width: 768px)').matches) setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);
@@ -94,17 +92,17 @@ export default function Header({ hideAuth = false, overlay = false }) {
             </button>
           ) : null}
           <Link to="/" className="hp-brand flex min-w-0 items-center gap-2 font-extrabold" onClick={close}>
-          <BrandLogo />
-        </Link>
+            <BrandLogo nameClassName="text-white" />
+          </Link>
         </div>
 
-        <nav className="hp-desktop-nav hidden items-center gap-7 min-[900px]:flex" aria-label="İctimai menyu">
+        <nav className="hp-desktop-nav hidden items-center gap-8 min-[768px]:flex" aria-label="İctimai menyu">
           {LINKS.map((item) => (
             <Link
-              key={item.href}
+              key={item.label}
               to={item.href}
               onClick={goLink(item)}
-              className="font-semibold text-[var(--hp-text)] hover:text-[var(--hp-accent)]"
+              className="text-sm font-semibold text-white/70 hover:text-white"
             >
               {item.label}
             </Link>
@@ -112,26 +110,17 @@ export default function Header({ hideAuth = false, overlay = false }) {
         </nav>
 
         <div className="hp-header-actions">
-          <button
-            type="button"
-            onClick={toggle}
-            className="hp-header-icon"
-            aria-label="Tema"
-          >
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
           {hideAuth ? null : (
             <>
-              <Link to="/login" className="hp-header-login hidden text-sm font-extrabold text-[var(--hp-text)] min-[520px]:inline">Daxil ol</Link>
+              <Link to="/login" className="hp-header-login hidden text-sm font-extrabold text-white/80 min-[520px]:inline">Daxil ol</Link>
               <Link to="/register" className="hp-btn hp-btn-sm hp-btn-gold hp-lift hp-header-register">
-                <UserRound size={16} aria-hidden="true" />
                 <span className="hp-header-register-label">Qeydiyyat</span>
               </Link>
             </>
           )}
           <button
             type="button"
-            className="hp-header-icon hp-header-menu min-[900px]:hidden"
+            className="hp-header-icon hp-header-menu min-[768px]:hidden"
             aria-expanded={open}
             aria-controls={menuId}
             aria-label={open ? 'Menyunu bağla' : 'Menyu'}
@@ -157,7 +146,7 @@ export default function Header({ hideAuth = false, overlay = false }) {
             aria-label="İctimai menyu"
           >
             {LINKS.map((item) => (
-              <Link key={item.href} to={item.href} onClick={goLink(item)}>
+              <Link key={item.label} to={item.href} onClick={goLink(item)}>
                 {item.label}
               </Link>
             ))}

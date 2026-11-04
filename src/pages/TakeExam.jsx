@@ -359,7 +359,6 @@ export default function TakeExam() {
         studentName: user?.fullName,
         answers: serializeAnswers(answersRef.current, paperQuestionsOf(questionsRef.current)),
       });
-      if (user?.id && exam) localDb.ensureSavedExam(user.id, exam);
       if (studentResultsReady(exam, user)) {
         navigate(`/student/exams/${examKey}/review`, { replace: true });
       } else {

@@ -107,8 +107,24 @@ export function allSyllabusTopics() {
   return syllabusSubjects().flatMap((subject) => syllabusTopics(subject));
 }
 
+export function catchAllTopic(subject) {
+  const titles = SYLLABUS_BY_SUBJECT[subject] || [];
+  return {
+    id: `${slug(subject)}__diger`,
+    subject,
+    title: 'Digər',
+    order: titles.length + 1,
+    catchAll: true,
+  };
+}
+
 export function findSyllabusTopic(id) {
-  return allSyllabusTopics().find((topic) => topic.id === id) || null;
+  let raw = String(id || '');
+  try { raw = decodeURIComponent(raw); } catch { /* keep */ }
+  const found = allSyllabusTopics().find((topic) => topic.id === raw);
+  if (found) return found;
+  const subject = syllabusSubjects().find((name) => `${slug(name)}__diger` === raw);
+  return subject ? catchAllTopic(subject) : null;
 }
 
 function normalize(value) {
@@ -179,11 +195,34 @@ export function studentCanSeeExam(user, exam) {
   return subscribedTeacherIds(user.id).includes(String(owner));
 }
 
-export function syllabusExamsForTopic(exams, topic, user) {
-  if (!topic) return [];
+function examSubjectName(exam) {
+  return String(exam?.subjectName || exam?.subject || exam?.SubjectName || '').trim();
+}
+
+export function unmatchedSyllabusExams(exams, subject, user) {
   return (exams || []).filter((exam) => {
     if (user && !studentCanSeeExam(user, exam)) return false;
-    const subject = String(exam?.subjectName || exam?.subject || '').trim();
+    const sub = examSubjectName(exam);
+    if (sub !== subject) return false;
+    if (isMixedMarked(exam)) return false;
+    return examSyllabusTopics(exam).length === 0;
+  });
+}
+
+export function syllabusTopicsForList(subject, exams, user) {
+  const topics = syllabusTopics(subject);
+  if (unmatchedSyllabusExams(exams, subject, user).length) {
+    return [...topics, catchAllTopic(subject)];
+  }
+  return topics;
+}
+
+export function syllabusExamsForTopic(exams, topic, user) {
+  if (!topic) return [];
+  if (topic.catchAll) return unmatchedSyllabusExams(exams, topic.subject, user);
+  return (exams || []).filter((exam) => {
+    if (user && !studentCanSeeExam(user, exam)) return false;
+    const subject = examSubjectName(exam);
     if (subject && subject !== topic.subject) return false;
     const matched = examSyllabusTopics(exam);
     if (matched.some((row) => row.id === topic.id)) return true;
@@ -199,13 +238,21 @@ export function teacherSyllabusState(exams, subject) {
     const list = published.filter((exam) => {
       const matched = examSyllabusTopics(exam);
       if (matched.some((row) => row.id === topic.id)) return true;
-      return isMixedMarked(exam) && matched.length === 0 && String(exam.subjectName || exam.subject || '') === subject;
+      return isMixedMarked(exam) && matched.length === 0 && examSubjectName(exam) === subject;
     });
     const latest = list
       .slice()
       .sort((a, b) => new Date(b.startTime || b.createdAt || 0) - new Date(a.startTime || a.createdAt || 0))[0];
     return { ...topic, exams: list, latest };
   });
+  const leftover = unmatchedSyllabusExams(published, subject);
+  if (leftover.length) {
+    const extra = catchAllTopic(subject);
+    const latest = leftover
+      .slice()
+      .sort((a, b) => new Date(b.startTime || b.createdAt || 0) - new Date(a.startTime || a.createdAt || 0))[0];
+    rows.push({ ...extra, exams: leftover, latest });
+  }
   const current = [...rows].reverse().find((row) => row.exams.length) || rows[0] || null;
   const done = rows.filter((row) => row.exams.length).length;
   return { topics: rows, current, done, total: rows.length };

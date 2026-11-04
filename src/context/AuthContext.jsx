@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { isAiEnabled, normalizeRole, TRIAL_ENDED_MESSAGE } from '../lib/utils';
@@ -63,11 +64,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     const demo = practiceUser(role);
     setPracticeRole(role);
-    if (role === 'Teacher') ensurePracticeTeacherData();
+    if (role === 'Teacher' || role === 'Admin') ensurePracticeTeacherData();
     localStorage.setItem('user', JSON.stringify(demo));
     localStorage.setItem('userId', String(demo.id));
     setAccessClosed(false);
-    setUser(demo);
+    flushSync(() => setUser(demo));
     return demo;
   };
 
@@ -78,8 +79,9 @@ export const AuthProvider = ({ children }) => {
       if (storedUser && storedUser !== 'undefined') {
         const parsed = JSON.parse(storedUser);
         if (parsed?.practice) {
-          setPracticeRole(parsed.practiceRole || 'Student');
-          setUser(parsed);
+          clearPractice();
+          localStorage.removeItem('user');
+          localStorage.removeItem('userId');
         } else if (token) {
           setUser(normalizeUser(parsed));
         }

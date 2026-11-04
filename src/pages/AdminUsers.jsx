@@ -4,8 +4,11 @@ export default function AdminUsers() {
   return (
     <AccessUsersPanel
       title="Hesablar"
-      description="Qeydiyyat avtomatik açılır. İstəmədiyiniz müəllimi kənarlaşdıra və ya hesabı silə bilərsiniz. Tələbəyə admin icazəsi yoxdur."
       toggleAccessRoles={['Teacher']}
+      descriptions={{
+        Teacher: 'Qeydiyyat avtomatik açılır. İstəmədiyiniz müəllimi kənarlaşdıra və ya hesabı silə bilərsiniz.',
+        Student: 'Qeydiyyat avtomatik açılır. Tələbəyə admin icazəsi yoxdur.',
+      }}
       roles={[
         { id: 'Teacher', label: 'Müəllimlər' },
         { id: 'Student', label: 'Tələbələr' },

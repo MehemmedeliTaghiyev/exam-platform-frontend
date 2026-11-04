@@ -15,9 +15,10 @@ import {
   studentCanSeeExam,
   syllabusExamsForTopic,
   syllabusSubjects,
-  syllabusTopics,
+  syllabusTopicsForList,
 } from '../lib/syllabus';
 import { canEnterExam } from '../lib/teacherAccess';
+import { enteredExamIds } from '../lib/publicExams';
 import { examRetakeReady, isExamEnded, isExamScheduled, resolveExamStatus, studentResultsReady } from '../lib/utils';
 
 export default function StudentSyllabus() {
@@ -71,8 +72,9 @@ export default function StudentSyllabus() {
     });
     return map;
   }, [history]);
+  const entered = useMemo(() => enteredExamIds(history), [history]);
 
-  const topics = syllabusTopics(subject);
+  const topics = syllabusTopicsForList(subject, exams, user);
   const topic = findSyllabusTopic(topicId);
 
   const openExam = (exam) => {
@@ -116,12 +118,13 @@ export default function StudentSyllabus() {
             {list.map((exam) => {
               const attempt = attemptByExam.get(String(exam.id));
               const done = Boolean(attempt);
+              const started = entered.has(String(exam.id));
               return (
                 <ExamCard
                   key={exam.id}
                   exam={exam}
-                  progress={done ? 'done' : 'missed'}
-                  entered={done}
+                  progress={done ? 'done' : undefined}
+                  entered={started}
                   resultText={resultLabel(attempt, exam, user)}
                   teacherName={exam.teacherName}
                   actionLabel={
@@ -172,8 +175,10 @@ export default function StudentSyllabus() {
       {loading ? <Skeleton className="h-40" /> : (
         <div className="grid gap-3">
           {topics.map((row) => {
-            const count = syllabusExamsForTopic(exams, row, user).length;
-            const done = syllabusExamsForTopic(exams, row, user).filter((exam) => attemptByExam.has(String(exam.id))).length;
+            const list = syllabusExamsForTopic(exams, row, user);
+            const count = list.length;
+            const started = list.filter((exam) => entered.has(String(exam.id))).length;
+            const pending = Math.max(0, count - started);
             return (
               <Card
                 key={row.id}
@@ -187,10 +192,20 @@ export default function StudentSyllabus() {
                   <div className="min-w-0 flex-1">
                     <p className="font-extrabold text-[var(--text)]">{row.title}</p>
                     <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                      {count ? `${done}/${count} sınağa daxil olub` : 'Hələ sınaq yoxdur'}
+                      {pending > 0
+                        ? <span className="font-black text-[#f0b429]">+{pending}</span>
+                        : count
+                          ? `${started}/${count} sınağa daxil olub`
+                          : 'Hələ sınaq yoxdur'}
                     </p>
                   </div>
-                  <ChevronRight size={18} className="text-[var(--muted)]" />
+                  {pending > 0 ? (
+                    <span className="shrink-0 rounded-full bg-[#f0b429]/15 px-2.5 py-1 text-sm font-black text-[#f0b429]">
+                      +{pending}
+                    </span>
+                  ) : (
+                    <ChevronRight size={18} className="text-[var(--muted)]" />
+                  )}
                 </div>
               </Card>
             );

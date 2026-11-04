@@ -3,26 +3,20 @@ import {
   ArrowRight,
   BookOpen,
   Calculator,
-  Check,
   Clock,
   FlaskConical,
   GraduationCap,
-  Hexagon,
-  Landmark,
   Languages,
-  Leaf,
-  Play,
   Shield,
   Target,
-  TriangleAlert,
   Users,
   Brain,
 } from 'lucide-react';
 
 const TOPICS = [
-  { name: 'Funksiyalar', value: 92, color: '#2f9e62', icon: Check, tint: '#e5f6ea' },
-  { name: 'Triqonometriya', value: 74, color: '#e2a31a', icon: TriangleAlert, tint: '#fff4d6' },
-  { name: 'Həndəsə', value: 41, color: '#e15b4a', icon: Hexagon, tint: '#fde8e4' },
+  { name: 'Funksiyalar', value: 92, color: '#3dcc78' },
+  { name: 'Triqonometriya', value: 74, color: '#3dcc78' },
+  { name: 'Həndəsə', value: 41, color: '#e07a3d' },
 ];
 
 const CHOICES = [
@@ -33,41 +27,34 @@ const CHOICES = [
   ['E', '(0, 3)'],
 ];
 
-const BOOKS = [
-  { name: 'Riyaziyyat', icon: Calculator, tone: 'b1' },
-  { name: 'Azərbaycan dili', icon: BookOpen, tone: 'b2' },
-  { name: 'İngilis dili', icon: Languages, tone: 'b3' },
-  { name: 'Kimya', icon: FlaskConical, tone: 'b4' },
-  { name: 'Biologiya', icon: Leaf, tone: 'b5' },
-  { name: 'Tarix', icon: Landmark, tone: 'b6' },
-];
+const SUBJECTS = ['Riyaziyyat', 'Azərbaycan dili', 'İngilis dili', 'Kimya', 'Fizika'];
 
 const STRIP = [
   {
     icon: Target,
-    tint: '#e5f6ea',
-    color: '#2f7a45',
+    tint: '#163a28',
+    color: '#4ade80',
     title: 'Zəif və güclü tərəflərini gör',
     text: 'Nələrdə güclü olduğunu kəşf et, daha çox məşq etməli olduğun mövzuları müəyyənləşdir.',
   },
   {
     icon: Brain,
-    tint: '#fff1df',
+    tint: '#3a2a18',
     color: '#e07a3d',
     title: 'Məhz sənə uyğun öyrənmə planı',
     text: 'Öz ehtiyaclarına uyğun hazırlaş və hədəfinə doğru inamla irəlilə.',
   },
   {
     icon: Users,
-    tint: '#eee9fb',
-    color: '#6d63e8',
+    tint: '#2a2158',
+    color: '#9d8cff',
     title: 'Sənə ən uyğun müəllimi kəşf et',
     text: 'Öyrənmə yolunda sənə dəstək olacaq müəllimi tap.',
   },
   {
     icon: Shield,
-    tint: '#e5f0fb',
-    color: '#3d78e0',
+    tint: '#163a38',
+    color: '#4ecdc4',
     title: 'Tam güvenli təhsil mühiti',
     text: 'Məlumatlarının qorunmasına və etibarlı öyrənmə təcrübəsinə önəm veririk.',
   },
@@ -77,71 +64,60 @@ export default function Hero({ onPractice, onTeacherPractice }) {
   return (
     <>
       <section className="hp-hero" aria-label="İmtahana hazırlıq">
-        <img className="hp-hero-bg" src="/hero-room.jpg" alt="" />
-        <div className="hp-hero-shade" aria-hidden="true" />
         <div className="hp-hero-inner">
           <div className="hp-hero-copy">
             <p className="hp-hero-badge">
               <GraduationCap size={16} aria-hidden="true" />
               Daha yaxşı nəticələr üçün
             </p>
-            <h1 className="hp-h1">İmtahana hazırlığı ölç, anla, irəlilə.</h1>
+            <h1 className="hp-h1">
+              İmtahana hazırlığı <span className="hp-gold-word">ölç</span>, anla, irəlilə.
+            </h1>
             <p className="hp-hero-lead">
               ExamPulse test nəticələrini anlamağa, zəif mövzularını kəşf etməyə və hədəfinə addım-addım çatmağa kömək edir.
             </p>
             <div className="hp-hero-actions">
               <button type="button" onClick={onPractice} className="hp-btn hp-btn-gold hp-lift">
-                <Play size={16} aria-hidden="true" />
                 Şagird kimi məşq et
+                <ArrowRight size={16} aria-hidden="true" />
               </button>
               {onTeacherPractice ? (
-                <button type="button" onClick={onTeacherPractice} className="hp-btn hp-btn-teacher-try hp-lift">
+                <button type="button" onClick={onTeacherPractice} className="hp-btn hp-btn-ghost hp-lift">
                   Müəllim kimi sınaq iştirakı et
                 </button>
               ) : null}
             </div>
-            <p className="hp-hero-check">
-              <Check size={16} aria-hidden="true" />
-              Öz tempində öyrən, hər gün bir addım irəlilə.
-            </p>
-            <div className="book-stack" aria-hidden="true">
-              {BOOKS.map((book) => {
-                const Icon = book.icon;
-                return (
-                  <div key={book.name} className={`book ${book.tone}`}>
-                    <span>{book.name}</span>
-                    <Icon size={16} aria-hidden="true" />
-                  </div>
-                );
-              })}
+            <div className="hp-chips" aria-label="Fənlər">
+              {SUBJECTS.map((name) => (
+                <span key={name} className="hp-chip">
+                  {name === 'Riyaziyyat' ? <Calculator size={13} aria-hidden="true" /> : null}
+                  {name === 'Azərbaycan dili' ? <BookOpen size={13} aria-hidden="true" /> : null}
+                  {name === 'İngilis dili' ? <Languages size={13} aria-hidden="true" /> : null}
+                  {name === 'Kimya' ? <FlaskConical size={13} aria-hidden="true" /> : null}
+                  {name}
+                </span>
+              ))}
+              <span className="hp-chip hp-chip-more">+ digər fənlər</span>
             </div>
           </div>
 
           <div className="hp-hero-cards">
-            <article className="hp-glass" aria-label="Nümunə nəticə">
+            <article className="hp-glass hp-result-card" aria-label="Nümunə nəticə">
               <div className="hp-result">
                 <div className="hp-result-score">
                   <div className="hp-ring" aria-hidden="true"><span>78%</span></div>
-                  <p>Ümumi nəticə</p>
-                  <p className="hp-sample">Nümunə</p>
                 </div>
                 <div className="hp-topics">
-                  <p className="hp-topics-title">Mövzular üzrə nəticələr</p>
-                  {TOPICS.map((topic) => {
-                    const Icon = topic.icon;
-                    return (
-                      <div key={topic.name}>
-                        <div className="hp-topic-row">
-                          <span className="hp-topic-icon" style={{ background: topic.tint, color: topic.color }}>
-                            <Icon size={14} aria-hidden="true" />
-                          </span>
-                          <span>{topic.name}</span>
-                          <b>{topic.value}%</b>
-                        </div>
-                        <div className="hp-bar"><i style={{ width: `${topic.value}%`, background: topic.color }} /></div>
+                  <p className="hp-topics-title">Ümumi nəticə · mövzular üzrə</p>
+                  {TOPICS.map((topic) => (
+                    <div key={topic.name}>
+                      <div className="hp-topic-row">
+                        <span>{topic.name}</span>
+                        <b>{topic.value}%</b>
                       </div>
-                    );
-                  })}
+                      <div className="hp-bar"><i style={{ width: `${topic.value}%`, background: topic.color }} /></div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </article>
@@ -159,7 +135,7 @@ export default function Hero({ onPractice, onTeacherPractice }) {
                 </p>
               </div>
               <p className="hp-quiz-q">
-                f(x) = x² − 4x + 3 funksiyasının minimum nöqtəsi hansı nöqtədədir?
+                f(x) = x² − 4x + 5 funksiyasının minimum nöqtəsi hansı nöqtədədir?
               </p>
               <div className="hp-quiz-options">
                 {CHOICES.map(([letter, pair]) => (
@@ -178,7 +154,7 @@ export default function Hero({ onPractice, onTeacherPractice }) {
         </div>
       </section>
 
-      <section className="hp-strip" aria-label="Əsas imkanlar">
+      <section id="imkanlar" className="hp-strip scroll-mt-24" aria-label="Əsas imkanlar">
         <div className="hp-strip-grid">
           {STRIP.map((item) => {
             const Icon = item.icon;

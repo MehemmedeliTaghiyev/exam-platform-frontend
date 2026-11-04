@@ -2,16 +2,18 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
-import { Button, Card, EmptyState, Input } from '../components/ui';
+import { EmptyState } from '../components/ui';
 import { createExam } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import {
   canUseStorageSelection,
-  STORAGE_QUIZZES_PER_WEEK,
+  STORAGE_PRICE,
+  STORAGE_PRICE_BLOK,
+  WATERMARK_PRICE,
   weeklyPipelineQuizzes,
 } from '../lib/storageAccess';
-import { Bell, Download } from 'lucide-react';
-import { PREFERENCE_OPTIONS, catalogPacks, defaultPreferences, driveDownloadUrl, driveViewUrl, packLatexSource, pickStoragePacks, STORAGE_PACK_LIMIT, teacherSubjectOf } from '../lib/storageCatalog';
+import { Bell, Club, Download, Droplet, Eye, Gift, Minus, Package, Plus } from 'lucide-react';
+import { PREFERENCE_OPTIONS, catalogPacks, defaultPreferences, driveDownloadUrl, driveViewUrl, gradeLabel, kindsForGrade, packLatexSource, pickStoragePacks, teacherSubjectOf } from '../lib/storageCatalog';
 import { loadQuizCatalog } from '../lib/quizPipeline';
 import { compileLatexPdf, saveAndOpenPdf } from '../lib/latexPdf';
 import LatexText from '../components/LatexText';
@@ -43,6 +45,75 @@ function resolveTeacherSubject(user) {
   return teacherSubjectOf(user) || localDb.getTeacherSubject(user?.id, user?.email) || '';
 }
 
+function Seg({ options, value, onChange }) {
+  return (
+    <div className="flex rounded-full bg-[#12141a] p-1">
+      {options.map(([id, label]) => {
+        const on = String(value) === String(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            className={`min-h-10 flex-1 rounded-full px-2 text-[13px] font-extrabold ${
+              on ? 'bg-[#7c6aff] text-white' : 'text-white/40'
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ShareChoice({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-10 flex-1 rounded-full px-2 text-[13px] font-extrabold ${
+        active ? 'bg-[#7c6aff] text-white' : 'text-white/40'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Stepper({ label, hint, value, onChange }) {
+  const n = Math.max(0, Number(value) || 0);
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 min-[768px]:flex-col min-[768px]:items-stretch min-[768px]:rounded-[20px] min-[768px]:bg-[#12141a] min-[768px]:px-4 min-[768px]:py-4">
+      <div>
+        <p className="text-[17px] font-black">{label}</p>
+        <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-[#f0b429]">
+          <Club size={11} fill="currentColor" /> {hint}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 min-[768px]:mt-3 min-[768px]:justify-between">
+        <button
+          type="button"
+          aria-label="Azalt"
+          onClick={() => onChange(Math.max(0, n - 1))}
+          className="grid h-10 w-10 place-items-center rounded-full bg-[#12141a] text-white/80 ring-1 ring-white/10 min-[768px]:bg-[#171a22]"
+        >
+          <Minus size={16} />
+        </button>
+        <span className="w-6 text-center text-lg font-black tabular-nums">{n}</span>
+        <button
+          type="button"
+          aria-label="Artır"
+          onClick={() => onChange(n + 1)}
+          className="grid h-10 w-10 place-items-center rounded-full bg-[#7c6aff] text-white"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherStorage() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -60,14 +131,20 @@ export default function TeacherStorage() {
   const [payWall, setPayWall] = useState(false);
   const [sending, setSending] = useState(false);
   const [downloadId, setDownloadId] = useState('');
+  const [allNotes, setAllNotes] = useState(false);
   const [catalog, setCatalog] = useState({ packs: [], weekly: [], connected: false });
   const tokens = useTeacherTokens(user);
   const unlocked = canUseStorageSelection(user);
+  const allowedKinds = useMemo(() => kindsForGrade(prefs.grade), [prefs.grade]);
   const packs = useMemo(
     () => pickStoragePacks({ ...prefs, subject }, catalog.packs.length ? catalog.packs : catalogPacks()),
     [prefs, subject, catalog.packs],
   );
   const requestCost = tokenCostForMix(mix);
+  const availableJetons = tokens.unlimited
+    ? (user?.practice ? WEEKLY_TOKENS : Number.POSITIVE_INFINITY)
+    : Number(tokens.balance || 0);
+  const overBudget = Number.isFinite(availableJetons) && requestCost > availableJetons;
   const requests = teacherTokenRequests(user);
   const quizzes = catalog.weekly.length ? catalog.weekly : weeklyPipelineQuizzes();
 
@@ -81,8 +158,18 @@ export default function TeacherStorage() {
   }, [subject]);
 
   useEffect(() => {
+    if (allowedKinds.includes(prefs.kind)) return;
+    setPrefs((prev) => ({ ...prev, kind: allowedKinds[0] }));
+  }, [allowedKinds, prefs.kind]);
+
+  useEffect(() => {
     localStorage.setItem(prefKey(user?.id), JSON.stringify({ ...prefs, subject }));
   }, [prefs, subject, user?.id]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('jeton-over', overBudget);
+    return () => document.documentElement.classList.remove('jeton-over');
+  }, [overBudget]);
 
   const setPref = (key, value) => setPrefs((prev) => ({ ...prev, [key]: value }));
 
@@ -129,7 +216,6 @@ export default function TeacherStorage() {
 
   const keep = (pack) => {
     if (!unlocked) return;
-    if (!window.confirm('Bu PDF anbarda qalsın? Şagirdlər görməyəcək.')) return;
     remember({
       ...shared,
       [pack.id]: { examId: '', visibility: 'held', at: new Date().toISOString() },
@@ -171,6 +257,11 @@ export default function TeacherStorage() {
 
   const sendRequest = async () => {
     if (!unlocked || sending) return;
+    if (overBudget) {
+      setPayWall(false);
+      setError(`Jetonunuz artıqdır. Bu tələb ${requestCost} jetondur, sizdə ${availableJetons} jeton var.`);
+      return;
+    }
     setSending(true);
     setError('');
     setPayWall(false);
@@ -208,215 +299,280 @@ export default function TeacherStorage() {
     }
   };
 
+  const questionCount = (Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0);
+  const notes = requests.map((row) => ({
+    id: row.id,
+    title: row.asan != null
+      ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin`
+      : row.title,
+    lang: String(row.language || 'az').toUpperCase(),
+    waiting: row.status !== 'ready',
+    cost: row.cost,
+    row,
+  }));
+  const weeklyPacks = useMemo(
+    () => quizzes.map((quiz, index) => ({
+      id: `weekly-${quiz.id || index + 1}`,
+      title: quiz.title || `Həftəlik sınaq ${index + 1}`,
+      subject: subject || 'Riyaziyyat',
+      grade: prefs.grade || '11',
+      kind: 'Sınaq',
+      durationMinutes: 90,
+      totalQuestions: 25,
+      weeklyGift: true,
+      week: quiz.week,
+      driveFileId: quiz.driveFileId || '',
+      pdfUrl: quiz.pdfUrl || '',
+    })),
+    [quizzes, subject, prefs.grade],
+  );
+  const shownNotes = allNotes ? notes : notes.slice(0, 3);
+
   return (
     <AppShell title="Anbar">
-      <div className="mx-auto max-w-3xl space-y-5">
-        <div>
-          <h2 className="text-2xl font-extrabold">İmtahan anbarı</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Fənn qeydiyyatdan avtomatik gəlir — burada seçmək lazım deyil. İstəyə uyğun ən çox {STORAGE_PACK_LIMIT} PDF görünür.
-            Quiz tələb edəndə jeton düşür: asan {TOKEN_COSTS.asan}, orta {TOKEN_COSTS.orta}, çətin {TOKEN_COSTS.çətin}.
-            İlk {WEEKLY_TOKENS} jeton pulsuzdur. Bitəndə 30 ₼ buraxılış / 40 ₼ blok paketi bir dəfəlikdir. Watermark +5 ₼.
-          </p>
-        </div>
-
-        {!subject ? (
-          <Card className="space-y-3">
-            <p className="font-extrabold">Fənn hələ qeyd olunmayıb</p>
-            <p className="text-sm text-[var(--muted)]">
-              Anbar qeydiyyatda seçdiyiniz fənnə görə açılır. Fənni kabinetdəki şəxsi məlumatlardan yazın.
-            </p>
-            <Link to="/teacher/cabinet" className="inline-flex text-sm font-extrabold text-[#1f7a3a] underline">
-              Kabinetə keç
-            </Link>
-          </Card>
-        ) : (
-          <Card className="space-y-4">
-            <div>
-              <p className="text-sm font-bold text-[var(--muted)]">Sizin fənn (qeydiyyatdan)</p>
-              <p className="mt-1 text-lg font-extrabold">{subject} müəllimi</p>
-            </div>
+      <div className="desk-page space-y-4 text-white">
+        <section className={`rounded-[28px] p-4 min-[768px]:p-6 ${overBudget ? 'bg-[#4a1d24]' : 'bg-[#171a22]'} ring-1 ring-white/[0.06]`}>
+          <p className="text-[17px] font-black">Quiz tələbi üçün jeton qiyməti</p>
+          <p className="mt-1 text-sm font-semibold text-white/45">Hər sual üçün</p>
+          <div className="mt-4 grid grid-cols-3 gap-2 min-[1100px]:max-w-xl">
             {[
-              ['grade', 'Sinif', PREFERENCE_OPTIONS.grades],
-              ['kind', 'İmtahan növü', PREFERENCE_OPTIONS.kinds],
-            ].map(([key, label, options]) => (
-              <div key={key}>
-                <p className="mb-2 text-sm font-bold">{label}</p>
-                <div className="flex flex-wrap gap-2">
-                  {options.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setPref(key, option)}
-                      className={`rounded-full px-4 py-2 text-sm font-bold ${prefs[key] === option ? 'bg-[#2f7a45] text-white' : 'bg-[#f3ecdf] text-[#1d2430] dark:bg-[#243028] dark:text-[#f3f0ea]'}`}
-                    >
-                      {key === 'grade' ? `${option}-ci` : option}
-                    </button>
-                  ))}
-                </div>
+              [TOKEN_COSTS.asan, 'Asan'],
+              [TOKEN_COSTS.orta, 'Orta'],
+              [TOKEN_COSTS.çətin, 'Çətin'],
+            ].map(([n, label]) => (
+              <div key={label} className="rounded-[20px] bg-[#12141a] py-4 text-center ring-1 ring-white/[0.04]">
+                <p className="inline-flex items-center gap-1 text-3xl font-black tabular-nums text-[#f0b429]">
+                  {n} <Club size={16} fill="currentColor" />
+                </p>
+                <p className="mt-1 text-xs font-bold text-white/55">{label}</p>
               </div>
             ))}
-          </Card>
-        )}
+          </div>
+          <ul className="mt-4 grid gap-2 text-sm font-semibold text-white/70 min-[768px]:grid-cols-3">
+            <li className="flex items-center gap-2"><Gift size={16} className="text-[#f0b429]" /> İlk {WEEKLY_TOKENS} jeton pulsuzdur</li>
+            <li className="flex items-center gap-2"><Package size={16} className="text-[#f0b429]" /> Buraxılış paketi {STORAGE_PRICE}, blok paketi {STORAGE_PRICE_BLOK} jetondur</li>
+            <li className="flex items-center gap-2"><Droplet size={16} className="text-[#f0b429]" /> Watermark +{WATERMARK_PRICE} jeton</li>
+          </ul>
+        </section>
 
-        {subject ? (
-          <Card className="space-y-4">
-            <div>
-              <p className="font-extrabold">Quiz tələb et</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Asan, orta və çətin sayını özünüz seçirsiniz. Quiz bazadan Anbara bildiriş kimi gəlir, sonra LaTeX çevrilir.
-                Hesabda {tokens.unlimited ? 'limitsiz' : `${tokens.balance} jeton`} var.
-              </p>
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-bold">İmtahanın dili</p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  ['az', 'Azərbaycan'],
-                  ['ru', 'Rus'],
-                  ['en', 'İngilis'],
-                ].map(([code, label]) => (
-                  <button
-                    key={code}
-                    type="button"
-                    onClick={() => setLanguage(code)}
-                    className={`rounded-full px-4 py-2 text-sm font-bold ${language === code ? 'bg-[#2f7a45] text-white' : 'bg-[#f3ecdf] text-[#1d2430] dark:bg-[#243028] dark:text-[#f3f0ea]'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
+        <div className="desk-split desk-split-anbar">
+        {!subject ? (
+          <section className="rounded-[28px] bg-[#171d27] p-4 ring-1 ring-white/10">
+            <p className="font-extrabold">Fənn hələ qeyd olunmayıb</p>
+            <p className="mt-1 text-sm font-semibold text-white/50">Anbar qeydiyyatdakı fənnə görə açılır.</p>
+            <Link to="/teacher/cabinet" className="mt-3 inline-flex text-sm font-extrabold text-[#f0b429]">
+              Kabinetə keç
+            </Link>
+          </section>
+        ) : (
+          <section className="rounded-[28px] bg-[#171a22] p-4 ring-1 ring-white/[0.06] min-[768px]:p-5">
+            <h2 className="text-xl font-black">Quiz tələb et</h2>
+            <div className="mt-4 grid gap-4 min-[768px]:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/40">Sinif</p>
+                <div className="mt-2">
+                  <Seg
+                    value={prefs.grade}
+                    onChange={(grade) => setPref('grade', grade)}
+                    options={PREFERENCE_OPTIONS.grades.map((grade) => [grade, gradeLabel(grade)])}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/40">İmtahan növü</p>
+                <div className="mt-2">
+                  <Seg
+                    value={prefs.kind}
+                    onChange={(kind) => setPref('kind', kind)}
+                    options={allowedKinds.map((kind) => [kind, kind])}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/40">Dil</p>
+                <div className="mt-2">
+                  <Seg
+                    value={language}
+                    onChange={setLanguage}
+                    options={[
+                      ['az', 'Azərbaycan'],
+                      ['ru', 'Rus'],
+                      ['en', 'İngilis'],
+                    ]}
+                  />
+                </div>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Input
-                label={`Asan (${TOKEN_COSTS.asan} jeton)`}
-                type="number"
-                min={0}
+            <div className="mt-3 divide-y divide-white/[0.06] min-[768px]:mt-4 min-[768px]:grid min-[768px]:grid-cols-3 min-[768px]:gap-3 min-[768px]:divide-y-0">
+              <Stepper
+                label="Asan"
+                hint={`${TOKEN_COSTS.asan} / sual`}
                 value={mix.asan}
-                onChange={(e) => setMix((prev) => ({ ...prev, asan: e.target.value }))}
+                onChange={(n) => setMix((prev) => ({ ...prev, asan: n }))}
               />
-              <Input
-                label={`Orta (${TOKEN_COSTS.orta} jeton)`}
-                type="number"
-                min={0}
+              <Stepper
+                label="Orta"
+                hint={`${TOKEN_COSTS.orta} / sual`}
                 value={mix.orta}
-                onChange={(e) => setMix((prev) => ({ ...prev, orta: e.target.value }))}
+                onChange={(n) => setMix((prev) => ({ ...prev, orta: n }))}
               />
-              <Input
-                label={`Çətin (${TOKEN_COSTS.çətin} jeton)`}
-                type="number"
-                min={0}
+              <Stepper
+                label="Çətin"
+                hint={`${TOKEN_COSTS.çətin} / sual`}
                 value={mix.çətin}
-                onChange={(e) => setMix((prev) => ({ ...prev, çətin: e.target.value }))}
+                onChange={(n) => setMix((prev) => ({ ...prev, çətin: n }))}
               />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-extrabold">Bu göndəriş: {requestCost} jeton</p>
-              <Button disabled={!unlocked || sending || requestCost <= 0} onClick={sendRequest}>
-                {sending ? 'Tələb edilir...' : 'Quiz tələb et'}
-              </Button>
-            </div>
-            {payWall ? (
-              <div className="rounded-2xl border border-[#ead9a8] bg-[#fff8e8] px-4 py-3 text-sm font-semibold text-[#3a2a00]">
-                Pulsuz jeton bitib. Paketləri görmək və bir dəfəlik ödəmək üçün kabinetə keçin.
-                <Link to="/teacher/cabinet#odenis" className="ml-2 font-extrabold underline">Ödənişə keç</Link>
+            <div className="mt-4 flex items-center gap-3">
+              <div className="min-w-0 flex-1 rounded-[22px] bg-[#12141a] px-4 py-3">
+                <p className="text-xs font-semibold text-white/45">Bu göndəriş · {questionCount} sual</p>
+                <p className={`mt-1 inline-flex items-center gap-1 text-3xl font-black tabular-nums ${overBudget ? 'text-[#fb7185]' : 'text-[#f0b429]'}`}>
+                  {requestCost} <Club size={18} fill="currentColor" />
+                </p>
               </div>
-            ) : !tokens.subscribed && !tokens.unlimited ? (
-              <p className="text-xs font-semibold text-[#6d655c]">
-                {WEEKLY_TOKENS} pulsuz jeton bitəndə{' '}
-                <Link to="/teacher/cabinet#odenis" className="font-extrabold text-[#1f7a3a] underline">ödəniş pəncərəsi</Link> açılır.
+              <button
+                type="button"
+                disabled={!unlocked || sending || requestCost <= 0}
+                onClick={sendRequest}
+                className={`shrink-0 rounded-full px-5 py-4 text-sm font-extrabold disabled:opacity-50 ${
+                  overBudget
+                    ? 'bg-[#3a3230] text-white/35 shadow-inner'
+                    : 'bg-[#7c6aff] text-white'
+                }`}
+              >
+                {sending ? 'Göndərilir...' : 'Quiz tələb et'}
+              </button>
+            </div>
+            {error ? <p className="mt-3 text-sm font-semibold text-[#fb7185]">{error}</p> : null}
+            {payWall ? (
+              <p className="mt-3 text-sm font-semibold text-[#f0b429]">
+                Pulsuz jeton bitib.{' '}
+                <Link to="/teacher/cabinet#odenis" className="underline">Ödənişə keç</Link>
               </p>
             ) : null}
-          </Card>
-        ) : null}
+          </section>
+        )}
 
-        {requests.length || quizzes.length ? (
-          <Card>
-            <p className="flex items-center gap-2 font-extrabold"><Bell size={16} /> Anbar bildirişləri</p>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Tələb etdiyiniz quizlər bazadan bura düşür. LaTeX suallar çevrilir.
-            </p>
-            <ul className="mt-3 space-y-2">
-              {requests.map((row) => (
-                <li key={row.id} className={`rounded-2xl px-4 py-3 text-sm ${row.seen ? 'bg-[#f3ecdf]' : 'bg-[#e7f6ea]'}`}>
-                  <button type="button" className="flex w-full items-start justify-between gap-3 text-left" onClick={() => markStorageRequestSeen(user, row.id)}>
-                    <span>
-                      <span className="block font-bold">{row.title}</span>
-                      <span className="mt-1 block text-xs font-semibold text-[var(--muted)]">
-                        {row.language?.toUpperCase() || 'AZ'} · {row.status === 'ready' ? 'bazadan gəldi' : row.status === 'waiting' ? 'pipeline gözlənilir' : row.status === 'error' ? (row.error || 'xəta') : 'gözlənilir'}
-                      </span>
+        <section className="rounded-[28px] bg-[#171a22] p-4 ring-1 ring-white/[0.06]">
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex items-center gap-2 font-extrabold"><Bell size={16} /> Bildirişlər</p>
+            {notes.length > 3 ? (
+              <button type="button" onClick={() => setAllNotes((on) => !on)} className="text-sm font-extrabold text-white/50">
+                {allNotes ? 'Gizlət' : 'Hamsına bax'}
+              </button>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm font-semibold text-white/45">
+            Tələb etdiyiniz quizlər hazır olanda burada görünür.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {shownNotes.length ? shownNotes.map((note) => (
+              <li key={note.id} className="rounded-[20px] bg-[#12141a] px-4 py-3">
+                <button
+                  type="button"
+                  className="flex w-full items-start justify-between gap-3 text-left"
+                  onClick={() => note.row && markStorageRequestSeen(user, note.row.id)}
+                >
+                  <span>
+                    <span className="block font-extrabold leading-snug">{note.title}</span>
+                    <span className="mt-2 inline-flex items-center gap-2">
+                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-extrabold text-white/70">{note.lang}</span>
+                      {note.waiting ? (
+                        <span className="rounded-full bg-[#f0b429]/15 px-2 py-0.5 text-[11px] font-extrabold text-[#f0b429]">Gözlənilir</span>
+                      ) : (
+                        <span className="rounded-full bg-[#7c6aff]/20 px-2 py-0.5 text-[11px] font-extrabold text-[#b4abff]">{note.cost} jeton</span>
+                      )}
                     </span>
-                    <span className="shrink-0 text-xs font-extrabold text-[#2f7a45]">{row.cost} jeton</span>
-                  </button>
-                  {(row.paper?.questions || []).slice(0, 8).map((q, qi) => (
-                    <div key={q.id || qi} className="mt-2 text-xs font-medium text-[var(--text)]">
-                      <LatexText text={q.latex || q.text} />
+                  </span>
+                </button>
+                {note.row?.paper?.questions?.slice(0, 4).map((q, qi) => (
+                  <div key={q.id || qi} className="mt-2 text-xs font-medium text-white/70">
+                    <LatexText text={q.latex || q.text} />
+                  </div>
+                ))}
+              </li>
+            )) : (
+              <li className="rounded-[20px] bg-[#1c2430] px-4 py-3 text-sm font-semibold text-white/40">
+                Hələ bildiriş yoxdur.
+              </li>
+            )}
+          </ul>
+        </section>
+        </div>
+
+        <section>
+          <h2 className="text-2xl font-black tracking-tight">Hazır imtahanlar</h2>
+          <p className="mt-1 mb-4 text-sm font-semibold text-white/45">PDF-ə bax, yüklə və paylaşım səviyyəsini seç.</p>
+          {subject && !packs.length && !weeklyPacks.length ? (
+            <EmptyState title="PDF tapılmadı" text="Bu fənn üçün uyğun PDF hələ bağlanmayıb." />
+          ) : null}
+          <div className="grid gap-3 min-[768px]:grid-cols-2 min-[1100px]:grid-cols-3">
+            {[...weeklyPacks, ...packs].map((pack) => {
+              const state = shared[pack.id];
+              const sharedOut = state?.examId;
+              const vis = sharedOut ? state.visibility : state?.visibility;
+              const mixed = isMixedExamKind(pack.kind);
+              const shortTitle = pack.weeklyGift
+                ? (pack.title || 'Həftəlik sınaq')
+                : `${pack.kind} ${String(pack.id).split('-').pop() || ''}`.trim();
+              return (
+                <article key={pack.id} className="rounded-[26px] bg-[#171a22] p-4 ring-1 ring-white/[0.06]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      {pack.weeklyGift ? (
+                        <span className="mb-2 inline-flex rounded-full bg-[#7c6aff]/15 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#b4abff]">
+                          Hər həftə əlavə sınaq
+                        </span>
+                      ) : null}
+                      <p className={`text-[22px] font-black leading-none ${pack.weeklyGift ? 'mt-2' : ''}`}>{shortTitle}</p>
+                      <p className="mt-2 text-sm font-semibold text-white/45">
+                        {pack.subject} · {gradeLabel(pack.grade)} sinif · {pack.durationMinutes} dəq
+                      </p>
+                      {mixed ? (
+                        <p className="mt-2 text-sm font-semibold text-white/50">Qarışıq sınaq · yalnız öz tələbələr</p>
+                      ) : null}
                     </div>
-                  ))}
-                  {!row.paper?.questions?.length && row.paper?.latexSource ? (
-                    <div className="mt-2 text-xs font-medium text-[var(--text)]">
-                      <LatexText text={row.paper.latexSource} />
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-              {quizzes.slice(0, Math.max(0, STORAGE_QUIZZES_PER_WEEK - requests.length)).map((quiz) => (
-                <li key={quiz.id} className="flex items-center justify-between rounded-2xl bg-[#f3ecdf] px-4 py-3 text-sm font-bold">
-                  <span>{quiz.title}</span>
-                  <span className="text-xs text-[var(--muted)]">Gözlənilir</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
-
-        {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
-
-        {subject && !packs.length ? (
-          <EmptyState title="PDF tapılmadı" text="Bu fənn üçün uyğun PDF hələ bağlanmayıb." />
-        ) : null}
-
-        {packs.map((pack, index) => {
-          const state = shared[pack.id];
-          const sharedOut = state?.examId;
-          const held = state?.visibility === 'held';
-          return (
-            <Card key={pack.id}>
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-extrabold">{index + 1}. {pack.title}</p>
-                <p className="shrink-0 text-xs font-bold text-[var(--muted)]">{pack.totalQuestions} sual</p>
-              </div>
-              <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                {pack.durationMinutes} dəqiqə · {pack.driveFileId ? 'PDF bağlıdır' : 'PDF bazadan gələcək'}
-              </p>
-              {sharedOut ? (
-                <p className="mt-2 text-sm font-bold text-[#2f7a45]">
-                  Paylaşıldı · {state.visibility === 'public' ? 'Açıq zona' : 'Şəxsi'}
-                </p>
-              ) : null}
-              {held && !sharedOut ? <p className="mt-2 text-sm font-bold text-[var(--muted)]">Anbarda saxlanıldı</p> : null}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="secondary" disabled={!unlocked} onClick={() => openPdf(pack)}>PDF-ə bax</Button>
-                <Button variant="secondary" disabled={!unlocked || Boolean(downloadId)} onClick={() => downloadPack(pack)}>
-                  <Download size={16} /> {downloadId === pack.id ? 'Yüklənir...' : 'PDF yüklə'}
-                </Button>
-                {!sharedOut ? (
-                  <>
-                    <Button variant="secondary" disabled={!unlocked || Boolean(busyId)} onClick={() => share(pack, 'private')}>
-                      {busyId === pack.id ? 'Paylaşılır...' : 'Şəxsi paylaş'}
-                    </Button>
-                    {isMixedExamKind(pack.kind) ? (
-                      <p className="w-full text-xs font-semibold text-[var(--muted)]">Qarışıq sınaq — yalnız öz tələbələr</p>
-                    ) : (
-                      <Button variant="secondary" disabled={!unlocked || Boolean(busyId)} onClick={() => share(pack, 'public')}>Hamı ilə paylaş</Button>
+                    <span className="shrink-0 rounded-full bg-white/[0.06] px-3 py-1 text-sm font-extrabold text-white/55">
+                      {pack.totalQuestions} sual
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      disabled={!unlocked}
+                      onClick={() => openPdf(pack)}
+                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[18px] bg-[#7c6aff] text-sm font-extrabold text-white disabled:opacity-50"
+                    >
+                      <Eye size={16} /> PDF-ə bax
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!unlocked || Boolean(downloadId)}
+                      onClick={() => downloadPack(pack)}
+                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[18px] bg-[#12141a] text-sm font-extrabold text-[#9d93ff] ring-1 ring-white/[0.06] disabled:opacity-50"
+                    >
+                      <Download size={16} /> {downloadId === pack.id ? 'Yüklənir...' : 'PDF yüklə'}
+                    </button>
+                  </div>
+                  <p className="mt-4 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white/35">Paylaşım</p>
+                  <div className="mt-2 flex rounded-full bg-[#12141a] p-1">
+                    <ShareChoice active={vis === 'held'} onClick={() => unlocked && keep(pack)}>
+                      Paylaşma
+                    </ShareChoice>
+                    <ShareChoice active={vis === 'private' && Boolean(sharedOut)} onClick={() => unlocked && share(pack, 'private')}>
+                      {busyId === pack.id ? '...' : 'Şəxsi'}
+                    </ShareChoice>
+                    {mixed ? null : (
+                      <ShareChoice active={vis === 'public' && Boolean(sharedOut)} onClick={() => unlocked && share(pack, 'public')}>
+                        Hamı ilə
+                      </ShareChoice>
                     )}
-                    <Button variant="secondary" disabled={!unlocked || Boolean(busyId)} onClick={() => keep(pack)}>Paylaşma</Button>
-                  </>
-                ) : null}
-              </div>
-            </Card>
-          );
-        })}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </AppShell>
   );

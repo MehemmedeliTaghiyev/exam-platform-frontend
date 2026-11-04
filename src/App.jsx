@@ -27,7 +27,6 @@ import PromoAd from './pages/PromoAd';
 import Home from './pages/Home';
 import BrowseTeachers from './pages/BrowseTeachers';
 import PublicExamZone from './pages/PublicExamZone';
-import SavedExams from './pages/SavedExams';
 import TakePipelineExam from './pages/TakePipelineExam';
 import StudentSubscriptions from './pages/StudentSubscriptions';
 import RepublicExam from './pages/RepublicExam';
@@ -80,6 +79,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/admin/exams" element={<Navigate to="/teacher" replace />} />
       <Route
         path="/admin/exams/:id"
         element={
@@ -236,11 +236,7 @@ function App() {
       />
       <Route
         path="/student/saved"
-        element={
-          <ProtectedRoute allowedRoles={['Student']}>
-            <SavedExams />
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/student/public?saved=1" replace />}
       />
       <Route
         path="/student/republic"

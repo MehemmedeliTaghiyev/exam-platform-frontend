@@ -89,9 +89,112 @@ export function winnerSlotsFor(participantCount) {
   return Math.min(12, Math.floor(n / 15));
 }
 
+const PLAN_KEY = 'exampulse_republic_plan';
+
+export function republicNextMonthKey(date = new Date()) {
+  return monthKey(new Date(date.getFullYear(), date.getMonth() + 1, 1));
+}
+
+export function republicTopicOptions() {
+  return SYLLABUS_BY_SUBJECT.Riyaziyyat || [];
+}
+
+export function defaultRepublicPlan(month = monthKey()) {
+  const topics = republicTopicOptions();
+  return {
+    month,
+    difficulty: 'orta',
+    grade: '11',
+    questionCount: REPUBLIC_QUESTION_COUNT,
+    topicFrom: 0,
+    topicTo: Math.max(0, topics.length - 1),
+    pdfName: '',
+    pdfDataUrl: '',
+    pdfArrived: false,
+    memorizedAt: '',
+  };
+}
+
+export function republicPlan(month = monthKey()) {
+  const stored = read(PLAN_KEY, {})[month] || {};
+  const levels = read('exampulse_monthly_difficulty', {});
+  return {
+    ...defaultRepublicPlan(month),
+    ...stored,
+    month,
+    difficulty: stored.difficulty || levels[month] || 'orta',
+  };
+}
+
+export function saveRepublicPlan(month, patch) {
+  const next = { ...republicPlan(month), ...patch, month };
+  const map = read(PLAN_KEY, {});
+  map[month] = next;
+  write(PLAN_KEY, map);
+  if (next.difficulty) {
+    const levels = read('exampulse_monthly_difficulty', {});
+    levels[month] = next.difficulty;
+    write('exampulse_monthly_difficulty', levels);
+  }
+  return next;
+}
+
+export function memorizeRepublicPlan(month) {
+  return saveRepublicPlan(month, {
+    pdfArrived: true,
+    memorizedAt: new Date().toISOString(),
+  });
+}
+
+export function republicQuestionCount(month = monthKey()) {
+  const n = Number(republicPlan(month).questionCount);
+  return Math.max(5, Math.min(50, Number.isFinite(n) ? n : REPUBLIC_QUESTION_COUNT));
+}
+
+export function republicMonthList(date = new Date()) {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const keys = [];
+  for (let i = -11; i <= 1; i += 1) keys.push(monthKey(new Date(y, m + i, 1)));
+  return keys.reverse();
+}
+
+export function republicAdminExams(date = new Date()) {
+  const current = monthKey(date);
+  const next = republicNextMonthKey(date);
+  return republicMonthList(date).map((month) => {
+    const plan = republicPlan(month);
+    const [y, m] = String(month).split('-').map(Number);
+    const start = new Date(y, (m || 1) - 1, 1, 10, 0, 0);
+    const end = new Date(y, m || 1, 0, 23, 59, 59);
+    let status = 'Finished';
+    if (month === current) status = 'Live';
+    if (month === next) status = plan.memorizedAt ? 'Scheduled' : 'Draft';
+    const count = republicQuestionCount(month);
+    return {
+      id: `republic-${month}`,
+      month,
+      title: `Respublika sınağı · ${monthLabel(month)}`,
+      subjectName: 'Respublika',
+      teacherName: '—',
+      createdAt: start.toISOString(),
+      startTime: start.toISOString(),
+      endTime: end.toISOString(),
+      status,
+      totalQuestions: count,
+      questionCount: count,
+      durationMinutes: REPUBLIC_DURATION_MIN,
+      grade: plan.grade || '11',
+      source: 'republic',
+    };
+  });
+}
+
 export function monthlyDifficulty(month = monthKey()) {
   const map = read('exampulse_monthly_difficulty', {});
-  return map[month] || 'orta';
+  if (map[month]) return map[month];
+  const stored = read(PLAN_KEY, {})[month];
+  return stored?.difficulty || 'orta';
 }
 
 export function setMonthlyDifficulty(level, month = monthKey()) {
@@ -100,6 +203,7 @@ export function setMonthlyDifficulty(level, month = monthKey()) {
   const map = read('exampulse_monthly_difficulty', {});
   map[month] = value;
   write('exampulse_monthly_difficulty', map);
+  saveRepublicPlan(month, { difficulty: value });
   return value;
 }
 
@@ -110,22 +214,30 @@ export function difficultyLabelAz(level = monthlyDifficulty()) {
 }
 
 export function republicQuestions(month = monthKey()) {
-  const level = monthlyDifficulty(month);
+  const plan = republicPlan(month);
+  const level = plan.difficulty || monthlyDifficulty(month);
+  const topics = republicTopicOptions();
+  const from = Math.max(0, Number(plan.topicFrom) || 0);
+  const to = Math.min(topics.length - 1, Number.isFinite(Number(plan.topicTo)) ? Number(plan.topicTo) : topics.length - 1);
+  const slice = topics.slice(Math.min(from, to), Math.max(from, to) + 1);
   const monthIndex = Math.max(0, Number(String(month).split('-')[1] || 1) - 1);
   const pool = [];
-  Object.entries(SYLLABUS_BY_SUBJECT).forEach(([subject, topics], sIdx) => {
-    const topic = topics[(monthIndex + sIdx) % topics.length];
+  Object.entries(SYLLABUS_BY_SUBJECT).forEach(([subject, subjectTopics], sIdx) => {
+    const topic = slice.length
+      ? slice[(monthIndex + sIdx) % slice.length]
+      : subjectTopics[(monthIndex + sIdx) % subjectTopics.length];
     pool.push({
-      text: `${subject} · ${topic}. Bu mövzuya uyğun qarışıq sınaq sualı (${difficultyLabelAz(level)}).`,
+      text: `${subject} · ${topic}. ${plan.grade}-ci sinif qarışıq sınaq sualı (${difficultyLabelAz(level)}).`,
       options: ['A', 'B', 'C', 'D', 'E'],
       correct: 0,
       difficulty: level,
       topic,
       subject,
+      grade: plan.grade,
     });
   });
   if (!pool.length) return [];
-  return Array.from({ length: REPUBLIC_QUESTION_COUNT }, (_, index) => {
+  return Array.from({ length: republicQuestionCount(month) }, (_, index) => {
     const src = pool[index % pool.length];
     return { ...src, id: `m-${month}-${index}` };
   });

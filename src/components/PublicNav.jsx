@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Moon, Sun, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import BrandLogo from './BrandLogo';
-import { useTheme } from '../context/ThemeContext';
 import { goToHash, scrollToHash } from '../lib/scrollToHash';
 
 const LINKS = [
@@ -13,7 +12,6 @@ const LINKS = [
 ];
 
 export default function PublicNav({ darkOnNavy = false, appearance }) {
-  const { dark, toggle } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -67,17 +65,11 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
               {item.label}
             </Link>
           ))}
-          <button type="button" onClick={toggle} className={iconBtn} title="Tema">
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
           <Link to="/login" className={ghost}>Daxil ol</Link>
           <Link to="/register" className={primary}>Qeydiyyat</Link>
         </nav>
 
         <div className="flex items-center gap-1 md:hidden">
-          <button type="button" onClick={toggle} className={iconBtn} title="Tema">
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
           <button
             type="button"
             className={iconBtn}

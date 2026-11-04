@@ -13,7 +13,7 @@ import {
   payRepublic,
   REPUBLIC_DURATION_MIN,
   REPUBLIC_PRICE,
-  REPUBLIC_QUESTION_COUNT,
+  republicQuestionCount,
   isRepublicWinner,
   republicHistoryForUser,
   republicMonthBadge,
@@ -43,12 +43,14 @@ function StatBox({ label, value, hint }) {
 function Fold({ title, icon: Icon, open, onToggle, children }) {
   return (
     <div className="overflow-hidden rounded-[22px] bg-[var(--card)] ring-1 ring-[var(--line)]">
-      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-4 text-left">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-4 text-left min-[768px]:pointer-events-none">
         <Icon size={18} className="text-[#f0b429]" />
         <span className="flex-1 font-extrabold">{title}</span>
-        <ChevronDown size={18} className={`text-[var(--muted)] transition ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={18} className={`text-[var(--muted)] transition min-[768px]:hidden ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open ? <div className="border-t border-[var(--line)] px-4 py-4">{children}</div> : null}
+      <div className={`${open ? 'block' : 'hidden'} border-t border-[var(--line)] px-4 py-4 min-[768px]:block`}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -110,23 +112,24 @@ export default function RepublicExam() {
   };
 
   return (
-    <AppShell title="">
-      <div className="mx-auto max-w-lg space-y-3">
-        <div className="rounded-[28px] bg-[#151b24] p-5 text-white ring-1 ring-white/10">
+    <AppShell title="Respublika">
+      <div className="desk-page">
+        <div className="desk-split">
+        <div className="rounded-[28px] bg-[#151b24] p-5 text-white ring-1 ring-white/10 min-[768px]:p-7">
           <p className="text-sm font-semibold text-white/70">{republicMonthBadge()}</p>
-          <h2 className="mt-2 text-[32px] font-black leading-none tracking-tight">Respublika sınağı</h2>
+          <h2 className="mt-2 text-[32px] font-black leading-none tracking-tight min-[768px]:text-4xl">Respublika sınağı</h2>
           <p className="mt-3 text-sm font-semibold leading-6 text-white/75">
             Ay sonu sillabus mövzularından qarışıq sınaq. Hər ay bir dəfə keçirilir.
           </p>
           <div className="mt-5 flex gap-2">
             <StatBox label="Müddət" value={REPUBLIC_DURATION_MIN} hint="dəq" />
-            <StatBox label="Suallar" value={REPUBLIC_QUESTION_COUNT} hint="sual" />
+            <StatBox label="Suallar" value={republicQuestionCount()} hint="sual" />
             <StatBox label="Giriş" value={REPUBLIC_PRICE} hint="₼" />
           </div>
           <p className="mt-5 text-sm font-semibold leading-6 text-white/80">
             🏆 Birinci yerə çıxan növbəti ayın imtahanına pulsuz daxil olur.
           </p>
-          <Button className="mt-6 w-full bg-[#2f7a45] text-base" onClick={startOrPay}>
+          <Button className="mt-6 w-full bg-[#2f7a45] text-base min-[768px]:w-auto min-[768px]:min-w-[240px]" onClick={startOrPay}>
             {canEnter
               ? (freePass && !paid ? 'Pulsuz daxil ol →' : 'İmtahana başla →')
               : `${formatManat(REPUBLIC_PRICE)} ödə, sonra başla`}
@@ -143,6 +146,7 @@ export default function RepublicExam() {
           {msg ? <p className="mt-3 text-center text-sm font-bold text-[#8fd4a4]">{msg}</p> : null}
         </div>
 
+        <div className="space-y-3">
         <Fold
           title="Qalib kuponun var?"
           icon={Trophy}
@@ -201,6 +205,8 @@ export default function RepublicExam() {
             <p className="text-sm text-[var(--muted)]">Hələ nəticə yoxdur. İmtahanı bitirəndən sonra burada görünəcək.</p>
           )}
         </Fold>
+        </div>
+        </div>
       </div>
       <PaymentCheckoutModal open={payOpen} plan={PLAN} busy={busy} onClose={() => setPayOpen(false)} onConfirm={confirmPay} />
     </AppShell>

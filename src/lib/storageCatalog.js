@@ -17,6 +17,18 @@ function pack(subject, grade, kind, index) {
 
 export const PREFERENCE_OPTIONS = { subjects: SUBJECTS, grades: GRADES, kinds: KINDS };
 
+export function kindsForGrade(grade) {
+  const value = String(grade || '');
+  if (value === '9') return ['Sınaq', 'Buraxılış'];
+  if (value === '10') return ['Sınaq'];
+  return ['Sınaq', 'Buraxılış', 'Blok'];
+}
+
+export function gradeLabel(grade) {
+  const value = String(grade || '');
+  return value === '11' ? '11-ci' : `${value}-cu`;
+}
+
 export function defaultPreferences() {
   return { subject: '', grade: '11', kind: 'Sınaq' };
 }
@@ -25,7 +37,7 @@ export function catalogPacks() {
   const rows = [];
   SUBJECTS.forEach((subject) => {
     GRADES.forEach((grade) => {
-      KINDS.forEach((kind) => {
+      kindsForGrade(grade).forEach((kind) => {
         [1, 2, 3].forEach((index) => rows.push(pack(subject, grade, kind, index)));
       });
     });
@@ -50,16 +62,11 @@ export function teacherSubjectOf(user) {
 export function pickStoragePacks(preferences, source = catalogPacks()) {
   const subject = preferences?.subject || '';
   const grade = String(preferences?.grade || '11');
-  const kind = preferences?.kind || 'Sınaq';
-  const matched = subject ? source.filter((item) => item.subject === subject) : [];
-  const score = (item) => {
-    let n = 0;
-    if (String(item.grade) === grade) n += 4;
-    if (item.kind === kind) n += 3;
-    return n;
-  };
-  return [...matched]
-    .sort((a, b) => score(b) - score(a) || a.title.localeCompare(b.title, 'az'))
+  const allowed = kindsForGrade(grade);
+  const kind = allowed.includes(preferences?.kind) ? preferences.kind : allowed[0];
+  return (subject ? source.filter((item) => item.subject === subject) : source)
+    .filter((item) => String(item.grade) === grade && item.kind === kind)
+    .sort((a, b) => a.title.localeCompare(b.title, 'az'))
     .slice(0, STORAGE_PACK_LIMIT);
 }
 

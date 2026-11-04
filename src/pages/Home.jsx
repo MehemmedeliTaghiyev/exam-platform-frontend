@@ -3,10 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Header from '../components/home/Header';
 import Hero from '../components/home/Hero';
-import RoleCards from '../components/home/RoleCards';
+import RepublicBanner from '../components/home/RepublicBanner';
 import CtaBand from '../components/home/CtaBand';
 import Footer from '../components/home/Footer';
-import MonthlyExamAd from '../components/MonthlyExamAd';
 import '../components/home/home.css';
 import { scrollToHash } from '../lib/scrollToHash';
 
@@ -31,6 +30,11 @@ export default function Home() {
     navigate('/teacher');
   };
 
+  const practiceAdmin = () => {
+    enterPractice('Admin');
+    navigate('/admin');
+  };
+
   const real = user && !user.practice;
 
   return (
@@ -49,13 +53,10 @@ export default function Home() {
       ) : null}
       <main>
         <Hero onPractice={practiceStudent} onTeacherPractice={practiceTeacher} />
-        <div className="mx-auto max-w-[1120px] px-5">
-          <MonthlyExamAd />
-        </div>
-        <RoleCards />
+        <RepublicBanner />
         <CtaBand />
       </main>
-      <Footer />
+      <Footer onAdminPractice={practiceAdmin} />
     </div>
   );
 }

@@ -4,47 +4,17 @@ import AppShell from '../components/AppShell';
 import DualExamRanking from '../components/DualExamRanking';
 import QuestionReviewList from '../components/QuestionReviewList';
 import { Button, Card, Skeleton, StatCard } from '../components/ui';
-import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions, fetchOwnProfile, fetchOwnStudentIdsForTeacher, fetchQuestions, fetchUserById } from '../lib/examApi';
+import { fetchExam, fetchExamReview, fetchExamReviewByExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, fetchQuestions } from '../lib/examApi';
 import { splitExamLeaderboards } from '../lib/stats';
 import { AuthContext } from '../context/AuthContext';
 import { Award, CheckCircle2, Percent, XCircle } from 'lucide-react';
 import { durationSecondsBetween, examRetakeReady, formatDateTime, formatHms, isExamEnded, studentResultsReady } from '../lib/utils';
-import { localDb } from '../lib/localDb';
 import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
 import { examTeacherId } from '../lib/teacherAccess';
 import { teacherWatermarkText } from '../lib/storageAccess';
 import { isPublicExam } from '../lib/examVisibility';
 import ScreenGuard from '../components/ScreenGuard';
-import { buildExamResultMessage, openParentWhatsapp } from '../lib/whatsappResult';
-
-function messageFor({ review, paper, examMeta, rank, studentName }) {
-  const result = review?.result || review || {};
-  const questions = paper.length ? paper : toReviewQuestions(review?.questions || []);
-  const total = result.totalQuestions || questions.length || 1;
-  const blank = questions.filter((q) => q.unanswered).length;
-  const correct = questions.length
-    ? questions.filter((q) => q.isCorrect && !q.unanswered).length
-    : (result.correctAnswersCount ?? 0);
-  const wrong = questions.length
-    ? questions.filter((q) => !q.unanswered && q.isCorrect === false).length
-    : (result.wrongAnswersCount ?? Math.max(total - correct - blank, 0));
-  const score = Math.round(Number(result.percent ?? result.score ?? (total ? (correct / total) * 100 : 0)));
-  return buildExamResultMessage({
-    studentName: result.studentName || studentName,
-    examTitle: result.examTitle || examMeta?.title,
-    subjectName: examMeta?.subjectName || examMeta?.subject,
-    submittedAt: result.submittedAt ? formatDateTime(result.submittedAt) : '',
-    percent: score,
-    correct,
-    wrong,
-    blank,
-    total,
-    rank,
-    passed: score >= 50,
-    questions,
-  });
-}
 
 function toReviewQuestions(list = []) {
   return list.map((q, index) => {
@@ -90,9 +60,6 @@ export default function ExamResult() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [boards, setBoards] = useState({ own: [], general: [] });
-  const [parentPhone, setParentPhone] = useState('');
-  const [phoneReady, setPhoneReady] = useState(false);
-  const [whatsappNote, setWhatsappNote] = useState('');
 
   useEffect(() => {
     const run = async () => {
@@ -183,43 +150,6 @@ export default function ExamResult() {
       cancelled = true;
     };
   }, [examMeta, examId, review]);
-
-  useEffect(() => {
-    const target = examMeta || { id: examId || review?.result?.examId, title: review?.result?.examTitle };
-    if ((user?.role === 'Student' || user?.practice) && user?.id && target.id != null) {
-      localDb.ensureSavedExam(user.id, target);
-    }
-  }, [examId, examMeta, review, user]);
-
-  useEffect(() => {
-    const studentId = (user?.role === 'Student' || user?.practice)
-      ? user?.id
-      : (review?.result?.studentId || review?.studentId || queryStudentId);
-    if (!studentId || loading) return undefined;
-    let cancelled = false;
-    setPhoneReady(false);
-    (async () => {
-      let phone = (user?.role === 'Student' || user?.practice) ? (user?.phone || '') : '';
-      if (!phone && !user?.practice) {
-        try {
-          const person = (user?.role === 'Student')
-            ? await fetchOwnProfile()
-            : await fetchUserById(studentId);
-          phone = person?.phone || person?.Phone || '';
-        } catch {
-          phone = '';
-        }
-      }
-      phone = phone || localDb.getParentPhone(studentId);
-      if (cancelled) return;
-      setParentPhone(phone);
-      setPhoneReady(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loading, queryStudentId, review, user]);
-
 
   if (loading) {
     return (
@@ -316,31 +246,7 @@ export default function ExamResult() {
                   Yenidən həll et
                 </Button>
               ) : null}
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  if (!parentPhone) {
-                    setWhatsappNote('Valideynin WhatsApp nömrəsi yoxdur. Qeydiyyatda və ya şagird kartında yazın.');
-                    return;
-                  }
-                  const targetId = result?.studentId || user?.id;
-                  const rank = boards.general.find((row) => String(row.studentId) === String(targetId))?.rank;
-                  const opened = openParentWhatsapp(parentPhone, messageFor({
-                    review,
-                    paper,
-                    examMeta,
-                    rank,
-                    studentName: result?.studentName || user?.fullName,
-                  }));
-                  setWhatsappNote(opened
-                    ? 'Ətraflı nəticə valideynin WhatsApp-ına açıldı. Mesajı orada göndərin.'
-                    : 'WhatsApp nömrəsi tanınmadı. 0501234567 formatında yazın.');
-                }}
-              >
-                Valideynə göndər
-              </Button>
             </div>
-            {whatsappNote ? <p className="mt-3 text-sm text-gray-500">{whatsappNote}</p> : null}
           </Card>
         )}
 

@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Bookmark, CalendarDays, Search } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Bookmark, CalendarDays, ChevronDown, Search } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import Header from '../components/home/Header';
 import '../components/home/home.css';
@@ -20,29 +20,16 @@ function shortDay(iso) {
   return `${d} ${MONTHS[m - 1]}`;
 }
 
-function Chip({ active, children, onClick, onClear }) {
+function DayTab({ active, children, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-extrabold ${
-        active ? 'bg-[#6d5efc] text-white' : 'bg-[#252d38] text-white/70'
+      className={`min-h-10 min-w-0 flex-1 truncate rounded-full px-2 text-[13px] font-extrabold ${
+        active ? 'bg-[#f0b429] text-[#2a2208]' : 'text-white/55'
       }`}
     >
       {children}
-      {onClear ? (
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClear();
-          }}
-          className="grid h-4 w-4 place-items-center rounded-full bg-white/20 text-[10px] leading-none"
-        >
-          ×
-        </span>
-      ) : null}
     </button>
   );
 }
@@ -50,13 +37,14 @@ function Chip({ active, children, onClick, onClear }) {
 export default function PublicExamZone({ embedded = false }) {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const dateRef = useRef(null);
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateMode, setDateMode] = useState('all');
   const [pickDate, setPickDate] = useState('');
   const [subject, setSubject] = useState('all');
-  const [savedOnly, setSavedOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(() => searchParams.get('saved') === '1');
   const [savedRev, setSavedRev] = useState(0);
 
   useEffect(() => {
@@ -150,62 +138,79 @@ export default function PublicExamZone({ embedded = false }) {
   };
 
   const board = (
-    <div className="exam-board rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip active={dateMode === 'all' && !pickDate} onClick={() => setDay('all')}>Hamısı</Chip>
-        <Chip active={dateMode === 'today'} onClick={() => setDay('today')}>Bu gün</Chip>
-        <Chip active={dateMode === 'yesterday'} onClick={() => setDay('yesterday')}>Dünən</Chip>
-        {pickDate ? (
-          <Chip active onClick={() => dateRef.current?.showPicker?.() || dateRef.current?.click()} onClear={() => setDay('all')}>
-            {shortDay(pickDate)}
-          </Chip>
-        ) : (
+    <div className="exam-board min-w-0 overflow-hidden text-white">
+      <div className="rounded-[28px] bg-[#15241c] p-3 ring-1 ring-white/[0.06]">
+        <div className="flex min-w-0 items-center gap-1 overflow-hidden rounded-[22px] bg-[#1b2c23] p-1">
+          <DayTab active={dateMode === 'all' && !pickDate} onClick={() => setDay('all')}>Hamısı</DayTab>
+          <DayTab active={dateMode === 'today'} onClick={() => setDay('today')}>Bu gün</DayTab>
+          <DayTab active={dateMode === 'yesterday'} onClick={() => setDay('yesterday')}>Dünən</DayTab>
           <button
             type="button"
-            aria-label="Tarix seç"
+            aria-label={pickDate ? shortDay(pickDate) : 'Tarix seç'}
+            title={pickDate ? shortDay(pickDate) : 'Tarix seç'}
             onClick={() => dateRef.current?.showPicker?.() || dateRef.current?.click()}
-            className="grid h-9 w-9 place-items-center rounded-full bg-[#252d38] text-white/70"
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-[14px] ${
+              pickDate ? 'bg-[#f0b429] text-[#2a2208]' : 'text-white/45'
+            }`}
           >
-            <CalendarDays size={16} />
+            <CalendarDays size={18} />
           </button>
-        )}
-        {student ? (
-          <Chip active={savedOnly} onClick={() => setSavedOnly((on) => !on)}>
-            <Bookmark size={14} />
-            Saxlanılanlar
-          </Chip>
-        ) : null}
-        <input
-          ref={dateRef}
-          type="date"
-          value={pickDate}
-          onChange={(e) => {
-            const value = e.target.value;
-            setPickDate(value);
-            setDateMode(value ? 'pick' : 'all');
-          }}
-          aria-hidden
-          tabIndex={-1}
-          className="sr-only"
-        />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Chip active={subject === 'all'} onClick={() => setSubject('all')}>Bütün fənlər</Chip>
-        {subjects.map((name) => (
-          <Chip key={name} active={subject === name} onClick={() => setSubject(name)}>{name}</Chip>
-        ))}
+          <input
+            ref={dateRef}
+            type="date"
+            value={pickDate}
+            onChange={(e) => {
+              const value = e.target.value;
+              setPickDate(value);
+              setDateMode(value ? 'pick' : 'all');
+            }}
+            aria-hidden
+            tabIndex={-1}
+            className="sr-only"
+          />
+        </div>
+
+        <div className="mt-2 flex items-center gap-2">
+          <label className="relative min-w-0 flex-1">
+            <select
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="h-12 w-full appearance-none rounded-[18px] bg-[#1b2c23] px-4 pr-10 text-[15px] font-extrabold text-white outline-none"
+            >
+              <option value="all">Bütün fənlər</option>
+              {subjects.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-3 grid place-items-center text-white/40">
+              <ChevronDown size={18} />
+            </span>
+          </label>
+          {student ? (
+            <button
+              type="button"
+              aria-label="Saxlanılanlar"
+              onClick={() => setSavedOnly((on) => !on)}
+              className={`grid h-12 w-12 shrink-0 place-items-center rounded-[18px] ${
+                savedOnly ? 'bg-[#f0b429] text-[#2a2208]' : 'bg-[#1b2c23] text-white/50'
+              }`}
+            >
+              <Bookmark size={18} fill={savedOnly ? 'currentColor' : 'none'} />
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between px-1 text-[13px] font-extrabold">
+          <span className="text-white/40">{loading ? '…' : `${filtered.length} imtahan`}</span>
+          {filteredOn ? (
+            <button type="button" onClick={clearFilters} className="text-[#f0b429]">
+              Təmizlə
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-xs font-bold text-white/45">
-        <span>{loading ? '…' : `${filtered.length} imtahan`}</span>
-        {filteredOn ? (
-          <button type="button" onClick={clearFilters} className="font-extrabold text-[#9d8cff]">
-            Təmizlə
-          </button>
-        ) : null}
-      </div>
-
-      <div className="mt-3 space-y-2">
+      <div className="exam-board-list mt-4">
         {loading ? (
           <>
             <Skeleton className="h-16 rounded-[22px]" />
@@ -220,12 +225,12 @@ export default function PublicExamZone({ embedded = false }) {
             />
           ))
         ) : (
-          <div className="px-4 py-12 text-center">
-            <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-white/5 text-white/40">
-              <Search size={22} />
+          <div className="px-4 py-10 text-center">
+            <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white/[0.06] text-white/35">
+              <Search size={26} />
             </span>
-            <p className="mt-4 font-extrabold">{emptyHint()}</p>
-            <p className="mt-1 text-sm font-semibold text-white/45">
+            <p className="mt-5 text-[22px] font-black leading-snug">{emptyHint()}</p>
+            <p className="mt-2 text-sm font-semibold text-white/40">
               {savedOnly && savedIds.size === 0
                 ? 'İmtahanın yanındakı əlfəcinə basanda burada görünür.'
                 : 'Başqa gün və ya fənn seçin.'}
@@ -234,7 +239,7 @@ export default function PublicExamZone({ embedded = false }) {
               <button
                 type="button"
                 onClick={clearFilters}
-                className="mt-5 rounded-full bg-[#6d5efc] px-4 py-2 text-sm font-extrabold"
+                className="mt-6 rounded-full bg-[#f0b429] px-6 py-3 text-sm font-extrabold text-[#2a2208]"
               >
                 Bütün imtahanlara bax
               </button>

@@ -7,6 +7,7 @@ import { Badge, Button, ConfirmDialog, Skeleton } from '../components/ui';
 import { examOwnerId, fetchExam, fetchExamSubmissions, fetchOwnStudentIdsForTeacher, deleteExam } from '../lib/examApi';
 import { errorMessage, formatDate } from '../lib/utils';
 import { buildExamStats, splitExamLeaderboards } from '../lib/stats';
+import { republicAdminExams, republicResults } from '../lib/republicExam';
 
 export default function AdminExamDetail() {
   const { id } = useParams();
@@ -20,6 +21,18 @@ export default function AdminExamDetail() {
   useEffect(() => {
     const run = async () => {
       setLoading(true);
+      if (String(id).startsWith('republic-')) {
+        const e = republicAdminExams().find((row) => String(row.id) === String(id)) || null;
+        setExam(e);
+        setRows(republicResults(e?.month).map((row) => ({
+          ...row,
+          studentName: row.fullName,
+          percent: row.percent,
+        })));
+        setOwnIds([]);
+        setLoading(false);
+        return;
+      }
       const [e, s] = await Promise.all([fetchExam(id), fetchExamSubmissions(id)]);
       setExam(e);
       setRows(s);
@@ -39,8 +52,8 @@ export default function AdminExamDetail() {
 
   return (
     <AppShell title="İmtahan nəticələri">
-      <Button variant="ghost" onClick={() => navigate('/admin')}>
-        <ArrowLeft size={16} /> Admin panel
+      <Button variant="ghost" onClick={() => navigate('/teacher')}>
+        <ArrowLeft size={16} /> İmtahanlar
       </Button>
 
       {loading ? (
@@ -52,20 +65,24 @@ export default function AdminExamDetail() {
             <p className="mt-1 text-sm text-gray-500">
               Fənn: {exam?.subjectName || '—'} · Status: {exam?.status || '—'} · Tarix: {formatDate(exam?.createdAt || exam?.startTime)}
             </p>
-            <p className="mt-2 text-sm font-medium">
-              İmtahanı keçirən müəllim: <span className="text-brand-700 dark:text-brand-300">{teacherName}</span>
-            </p>
+            {exam?.source === 'republic' ? null : (
+              <p className="mt-2 text-sm font-medium">
+                İmtahanı keçirən müəllim: <span className="text-brand-700 dark:text-brand-300">{teacherName}</span>
+              </p>
+            )}
           </div>
 
           <div className="mb-4 flex flex-wrap gap-2">
             <Badge tone="brand">{stats.participants} iştirakçı</Badge>
             <Badge>Orta uğur {stats.avg}%</Badge>
+            {exam?.source === 'republic' ? null : (
             <Button
               variant="danger"
               onClick={() => setConfirmDelete(true)}
             >
               İmtahanı sil
             </Button>
+            )}
             <ConfirmDialog
               open={confirmDelete}
               text="Bu imtahan silinəcək."
@@ -82,7 +99,7 @@ export default function AdminExamDetail() {
             />
           </div>
 
-          <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
+          <DualExamRanking ownRows={boards.own} generalRows={boards.general} generalOnly />
         </>
       )}
     </AppShell>

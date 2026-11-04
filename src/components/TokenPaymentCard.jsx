@@ -63,15 +63,15 @@ export default function TokenPaymentCard({ user }) {
 
   return (
     <>
-      <Card id="odenis" className="mb-8 overflow-hidden border-[var(--line)] bg-[var(--card)] p-0">
-        <div className="bg-[linear-gradient(135deg,#2f7a45,#1f5c34)] px-5 py-5 text-white">
+      <Card id="odenis" className="overflow-hidden border-white/[0.06] bg-[#171a22] p-0 text-white ring-1 ring-white/[0.06]">
+        <div className="bg-[#12141a] px-5 py-5">
           <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-white/15">
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-[#7c6aff]">
               <Coins size={22} />
             </span>
             <div>
-              <p className="text-sm font-semibold text-white/80">Anbar ödənişi</p>
-              <p className="text-2xl font-extrabold">
+              <p className="text-sm font-semibold text-white/50">Anbar ödənişi</p>
+              <p className="text-2xl font-extrabold text-[#f0b429]">
                 {account.unlimited ? 'Limitsiz' : `${account.balance} jeton`}
               </p>
             </div>
@@ -87,7 +87,7 @@ export default function TokenPaymentCard({ user }) {
               `Watermark istəsəniz əlavə ${formatManat(WATERMARK_PRICE)}`,
             ].map((line) => (
               <li key={line} className="flex items-start gap-2">
-                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#e7f6ea] text-[#1f7a3a] dark:bg-[#1f3d2a] dark:text-[#4ade80]">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#7c6aff]/20 text-[#b4abff]">
                   <Check size={12} strokeWidth={3} />
                 </span>
                 <span>{line}</span>
@@ -105,8 +105,8 @@ export default function TokenPaymentCard({ user }) {
                   onClick={() => setPlanId(row.id)}
                   className={`relative rounded-2xl border px-4 py-4 text-left transition ${
                     on
-                      ? 'border-[#2f7a45] bg-[#eef8f1] dark:border-[#4cae6e] dark:bg-[#163022]'
-                      : 'border-[var(--line)] bg-[var(--bg)]'
+                      ? 'border-[#7c6aff] bg-[#7c6aff]/10'
+                      : 'border-white/10 bg-[#12141a]'
                   }`}
                 >
                   <p className="font-extrabold text-[var(--text)]">{row.title}</p>
@@ -123,7 +123,7 @@ export default function TokenPaymentCard({ user }) {
           <label className="flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-4 py-3">
             <input
               type="checkbox"
-              className="mt-1 h-4 w-4 accent-[#2f7a45]"
+              className="mt-1 h-4 w-4 accent-[#7c6aff]"
               checked={watermark}
               onChange={(e) => setWatermark(e.target.checked)}
             />
@@ -150,7 +150,7 @@ export default function TokenPaymentCard({ user }) {
           <p className="text-sm font-extrabold text-[var(--text)]">Cəmi: {formatManat(total)}</p>
 
           {account.subscribed ? (
-            <p className="text-sm font-extrabold text-[#1f7a3a] dark:text-[#4ade80]">
+            <p className="text-sm font-extrabold text-[#b4abff]">
               {activePlan?.title || 'Abunə'} aktivdir
               {sub?.endsAt ? ` · ${new Date(sub.endsAt).toLocaleDateString('az-AZ')} tarixinədək` : ''}.
               {sub?.watermark && sub?.watermarkText ? ` Watermark: «${sub.watermarkText}».` : ''}
@@ -159,7 +159,7 @@ export default function TokenPaymentCard({ user }) {
 
           {note ? <p className="text-sm font-semibold text-red-600">{note}</p> : null}
 
-          <Button className="w-full bg-[#2f7a45] hover:brightness-110" disabled={busy} onClick={openCheckout}>
+          <Button className="w-full !bg-[#7c6aff] !bg-none hover:brightness-110" disabled={busy} onClick={openCheckout}>
             {account.subscribed ? 'Paketi yenilə' : 'Ödənişə keç'} · {formatManat(total)}
           </Button>
         </div>

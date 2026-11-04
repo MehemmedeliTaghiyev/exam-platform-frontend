@@ -98,7 +98,7 @@ export default function JoinStudent() {
       namedGroup,
       publicGroup,
     }));
-    navigate(row?.key ? `/student/subscriptions/${encodeURIComponent(row.key)}` : '/student/subscriptions', { replace: true });
+    navigate('/student', { replace: true });
   }, [user, preview, inviteCode, namedGroup, publicGroup, navigate]);
 
   const onChange = (e) => {
@@ -174,7 +174,7 @@ export default function JoinStudent() {
             namedGroup,
             publicGroup,
           }));
-          navigate(row?.key ? `/student/subscriptions/${encodeURIComponent(row.key)}` : '/student', { replace: true });
+          navigate('/student', { replace: true });
           return;
         } catch (err) {
           const apiMsg = err?.response?.data?.message;

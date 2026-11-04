@@ -1,0 +1,129 @@
+.ep-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  background: #020617;
+  color: #fff;
+  font-family: Manrope, Inter, system-ui, sans-serif;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  transition: opacity 0.4s ease;
+}
+
+.ep-boot.is-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ep-boot-main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.ep-boot-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.ep-boot-mark {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+
+.ep-boot-mark svg {
+  position: relative;
+  display: block;
+  overflow: visible;
+}
+
+.ep-boot-mark g {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+.ep-boot-glow {
+  position: absolute;
+  left: -54px;
+  top: -54px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  opacity: 0.4;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.3), rgba(167, 139, 250, 0.14) 45%, transparent 70%);
+}
+
+.ep-boot-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #22d3ee;
+  opacity: 0;
+}
+
+.ep-boot-face {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke: rgba(2, 6, 23, 0.35);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.ep-boot-word {
+  margin: 0;
+  font-size: clamp(32px, 9vw, 46px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ep-boot-letters {
+  display: inline-flex;
+}
+
+.ep-boot-clip {
+  display: inline-block;
+  clip-path: inset(-80% -10% -15% -10%);
+}
+
+.ep-boot-ch {
+  display: inline-block;
+  will-change: transform;
+}
+
+.ep-boot-dock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 24px;
+}
+
+.ep-boot-bar {
+  width: min(320px, 100%);
+  height: 4px;
+  border-radius: 2px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.ep-boot-bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa);
+}
+
+.ep-boot-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+  min-height: 18px;
+}

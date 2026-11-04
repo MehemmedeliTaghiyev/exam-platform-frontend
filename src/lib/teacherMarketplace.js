@@ -1,4 +1,5 @@
 import { examSubject } from './publicExams';
+import { examVisibility } from './examVisibility';
 import { startOfWeek, toKey, scoreOf } from './weeklyRanking';
 import { parseExamDate } from './utils';
 
@@ -34,6 +35,8 @@ export function decorateTeacher(teacher, exams = [], submissions = []) {
     weeklyExamCount,
     avgScore,
     examCount: exams.length,
+    hasPublic: exams.some((exam) => examVisibility(exam) === 'public'),
+    hasPrivate: exams.some((exam) => examVisibility(exam) === 'private'),
   };
 }
 

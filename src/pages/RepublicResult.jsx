@@ -189,8 +189,9 @@ export default function RepublicResult() {
 
   return (
     <AppShell title="">
-      <div className="mx-auto max-w-2xl space-y-4">
-        <Card className="text-center">
+      <div className="desk-page space-y-4">
+        <div className="desk-split">
+        <Card className="text-center min-[768px]:text-left">
           <p className="text-sm font-bold text-[var(--muted)]">{republicMonthLabel(row.month)} · Respublika sınağı</p>
           <p className="mt-3 text-5xl font-black">{row.percent}%</p>
           <p className="mt-2 text-sm font-semibold text-[var(--muted)]">
@@ -214,8 +215,10 @@ export default function RepublicResult() {
               <p className="mt-1 text-2xl font-black">{blank}</p>
             </div>
           </div>
-          <p className="mt-3 text-xs font-semibold text-[var(--muted)]">{total} sual · imtahan vərəqi aşağıdadır</p>
+          <p className="mt-3 text-xs font-semibold text-[var(--muted)]">{total} sual · imtahan vərəqi</p>
+          <Button variant="secondary" className="mt-5 min-[768px]:w-auto" onClick={() => navigate('/student/republic')}>Geri</Button>
         </Card>
+        <div className="min-w-0">
         <h2 className="px-1 text-lg font-extrabold">İmtahan vərəqi</h2>
         {paper.length ? (
           <RepublicPaper questions={paper} />
@@ -224,8 +227,7 @@ export default function RepublicResult() {
             <p className="text-sm font-semibold leading-6 text-[var(--muted)]">Bu imtahanın sualları tapılmadı.</p>
           </Card>
         )}
-        <div className="flex justify-center pb-4">
-          <Button variant="secondary" onClick={() => navigate('/student/republic')}>Geri</Button>
+        </div>
         </div>
       </div>
     </AppShell>

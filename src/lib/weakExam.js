@@ -20,6 +20,12 @@ function azDay(date) {
   return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+const SHORT_MONTHS = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avq', 'sen', 'okt', 'noy', 'dek'];
+
+function azShort(date) {
+  return `${date.getDate()} ${SHORT_MONTHS[date.getMonth()] || ''}`;
+}
+
 function localDayKey(date) {
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -40,21 +46,30 @@ export function periodBounds(mode, customFrom, customTo, now = new Date()) {
   if (mode === 'monthly') {
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const key = `monthly:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return { start, end, key, label: azMonth(start) };
+    return { start, end, key, label: 'Bu ay', range: azMonth(start) };
   }
   if (mode === 'custom') {
     const start = customFrom ? new Date(`${customFrom}T00:00:00`) : new Date(now);
     const stop = customTo ? new Date(`${customTo}T23:59:59`) : end;
     if (!customFrom) start.setHours(0, 0, 0, 0);
     const key = `custom:${localDayKey(start)}:${localDayKey(stop)}`;
-    const label = `${azDay(start)} – ${azDay(stop)}`;
-    return { start, end: stop, key, label };
+    const label = 'Öz tarixim';
+    const range = `${azDay(start)} – ${azDay(stop)}`;
+    return { start, end: stop, key, label, range };
   }
   const start = new Date(now);
   const day = start.getDay();
   start.setDate(start.getDate() + (day === 0 ? -6 : 1 - day));
   start.setHours(0, 0, 0, 0);
-  return { start, end, key: `weekly:${isoWeekKey(start)}`, label: 'Bu həftə' };
+  const weekEnd = new Date(start);
+  weekEnd.setDate(start.getDate() + 6);
+  return {
+    start,
+    end,
+    key: `weekly:${isoWeekKey(start)}`,
+    label: 'Bu həftə',
+    range: `${azShort(start)} – ${azShort(weekEnd)}`,
+  };
 }
 
 export function inWindow(value, start, end) {
@@ -126,8 +141,68 @@ export function rankWeakQuestions(map, limit = 10) {
         correctText: row.correctText || optionLabel(correct),
       };
     })
-    .sort((a, b) => b.wrong - a.wrong || b.topWrongCount - a.topWrongCount)
+    .sort((a, b) => {
+      const pa = a.asked ? a.wrong / a.asked : 0;
+      const pb = b.asked ? b.wrong / b.asked : 0;
+      return pb - pa || b.wrong - a.wrong || b.topWrongCount - a.topWrongCount;
+    })
     .slice(0, limit);
+}
+
+const DEMO_WEAK_TEXTS = [
+  ['log2(x − 1) = 3 tənliyini həll edin', 71],
+  ['f(x) = x² − 3x + 2 funksiyasının minimum qiyməti', 64],
+  ['Aritmetik silsilədə a1 = 3, d = 4 olduqda S10 neçədir?', 58],
+  ['2cos x = 1 tənliyinin ən kiçik müsbət kökü', 49],
+  ['Tərəfləri 5, 6, 7 olan üçbucağın sahəsi', 46],
+  ['|2x − 3| < 5 bərabərsizliyini həll edin', 44],
+  ['Radiusu 3 olan kürənin həcmi', 41],
+  ['sin 30° + cos 60° ifadəsinin qiyməti', 39],
+  ['x² − 5x + 6 = 0 bərabərsizliyinin həlli', 36],
+  ['Katetləri 6 və 8 olan üçbucağın hipotenuzu', 34],
+  ['3ˣ = 27 tənliyinin kökü', 31],
+  ['Dairənin sahəsi 25π olarsa, radiusu neçədir?', 27],
+  ['(x + 2)² = 16 tənliyinin kökləri', 25],
+  ['Handesi silsilədə b1 = 2, q = 3 olduqda b4 neçədir?', 24],
+  ['tg 45° + ctg 45° cəmi', 22],
+  ['Paralelogramın sahəsi a = 8, h = 5', 21],
+  ['5x − 2 = 3x + 8 tənliyinin kökü', 20],
+  ['Kvadrat tənliyin diskriminantı', 18],
+  ['Çevrənin uzunluğu R = 7', 17],
+  ['log 100 + log 10', 16],
+  ['Vektorların skalyar hasili', 15],
+  ['Arctg 1-in qiyməti', 14],
+  ['Pifaqor teoremi: 5, 12, ?', 13],
+  ['(a + b)² açılışı', 12],
+];
+
+export function practiceDemoWeakRows() {
+  return DEMO_WEAK_TEXTS.map(([text, pct], index) => {
+    const asked = 80 + ((index * 7) % 40);
+    const wrong = Math.max(1, Math.round((asked * pct) / 100));
+    return {
+      key: `demo-${index}-${text.toLowerCase()}`,
+      text,
+      subjectName: 'Riyaziyyat',
+      wrong,
+      asked,
+      options: [
+        { optionText: 'A', isCorrect: true },
+        { optionText: 'B', isCorrect: false },
+        { optionText: 'C', isCorrect: false },
+        { optionText: 'D', isCorrect: false },
+        { optionText: 'E', isCorrect: false },
+      ],
+      type: 'SingleChoice',
+      inputKind: 'Choice',
+      points: 1,
+      imageUrl: '',
+      difficultyLevel: '',
+      correctText: 'A',
+      topWrong: 'B',
+      topWrongCount: Math.max(1, Math.round(wrong * 0.6)),
+    };
+  }).sort((a, b) => (b.wrong / b.asked) - (a.wrong / a.asked));
 }
 
 export function rankWeakTopics(map) {

@@ -1,15 +1,12 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TrendingUp, Users } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import DreamUniversityCard from '../components/DreamUniversityCard';
 import ExamRow from '../components/ExamRow';
 import WeeklyRanking from '../components/WeeklyRanking';
-import WeeklyDimPapers from '../components/WeeklyDimPapers';
 import { Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
-import { subscribeToGroup, trendingGroups } from '../lib/groupSubscriptions';
 import { localDb } from '../lib/localDb';
 import { examSubject, subjectProgress } from '../lib/publicExams';
 import { isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
@@ -33,7 +30,6 @@ export default function StudentDashboard() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
-  const [savedRev, setSavedRev] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setTick((n) => n + 1), 1000);
@@ -59,12 +55,6 @@ export default function StudentDashboard() {
     if (user) run();
   }, [user]);
 
-  useEffect(() => {
-    const bump = () => setSavedRev((n) => n + 1);
-    window.addEventListener('exampulse-saved-exams', bump);
-    return () => window.removeEventListener('exampulse-saved-exams', bump);
-  }, []);
-
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
     const submitted = history.some((h) => {
@@ -79,14 +69,6 @@ export default function StudentDashboard() {
     }
     navigate(`/student/exams/${exam.id}/review`);
   };
-
-  const savedExams = useMemo(() => {
-    if (!user?.id) return [];
-    const pool = [...exams, ...publicExams];
-    return localDb.getSavedExams(user.id).map((stub) => (
-      pool.find((exam) => String(exam.id) === String(stub.id)) || stub
-    ));
-  }, [user?.id, exams, publicExams, savedRev]);
 
   const latestExams = useMemo(
     () => [...exams].sort((a, b) => examSortTime(b) - examSortTime(a)).slice(0, 5),
@@ -110,8 +92,6 @@ export default function StudentDashboard() {
     return subjectProgress(publicExams, history, Array.from(joined));
   }, [publicExams, history, exams, user?.id, user?.teacherId]);
 
-  const trending = useMemo(() => trendingGroups({ limit: 4 }), [user?.id, exams.length]);
-
   return (
     <AppShell title="">
       {submittedNotice ? (
@@ -123,51 +103,10 @@ export default function StudentDashboard() {
           <Button className="mt-4" variant="secondary" onClick={() => setSearchParams({})}>Bağla</Button>
         </Card>
       ) : null}
-      {trending.length ? (
-        <Card className="mb-8 hidden min-[860px]:block">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <TrendingUp size={18} /> Trending qruplar
-            </h2>
-            <Button variant="secondary" onClick={() => navigate('/student/subscriptions')}>Hamısına bax</Button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {trending.map((group) => (
-              <div
-                key={group.key}
-                className="rounded-2xl border border-[var(--line)] bg-[var(--bg)] px-4 py-3"
-              >
-                <p className="font-extrabold text-[var(--text)]">{group.groupName}</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Müəllim: {group.teacherName || 'Naməlum'}
-                  {group.teachingSubject ? ` · ${group.teachingSubject}` : ''}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#1f7a3a]">
-                    <Users size={14} /> {group.followers} izləyici
-                  </span>
-                  <Button
-                    variant="secondary"
-                    className="px-3 py-1.5 text-sm"
-                    onClick={() => {
-                      subscribeToGroup(user, group);
-                      navigate('/student/subscriptions');
-                    }}
-                  >
-                    Abunə ol
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
 
+      <div className="student-home">
+        <div className="student-home-primary">
       <DreamUniversityCard user={user} />
-      <WeeklyDimPapers />
-      <div className="hidden min-[860px]:block">
-        <WeeklyRanking variant="student" />
-      </div>
 
       <div className="mb-10">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -179,7 +118,7 @@ export default function StudentDashboard() {
             İmtahan yerində fənnə qoşulun (açıq imtahan açın və ya müəllim izləyin). Sonra burada həmin fənnin açıq imtahanlarından neçəsinə daxil olduğunuz görünəcək.
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">
             {fenStats.map((row) => {
               const pct = row.total ? Math.min(100, Math.round((row.entered / row.total) * 100)) : 0;
               return (
@@ -205,28 +144,13 @@ export default function StudentDashboard() {
         )}
       </div>
 
-      {savedExams.length ? (
-        <div className="mb-4 rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
-          <h2 className="mb-3 text-lg font-bold">Saxlanılanlar</h2>
-          <div className="space-y-2">
-            {savedExams.map((exam) => (
-              <ExamRow
-                key={`saved-${exam.id}`}
-                exam={exam}
-                onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
+      <div className="min-w-0 overflow-hidden rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold">Ən son imtahanlar</h2>
+          <h2 className="min-w-0 truncate text-lg font-bold">Ən son imtahanlar</h2>
           <button
             type="button"
             onClick={() => navigate('/student/public')}
-            className="text-xs font-extrabold text-[#9d8cff]"
+            className="shrink-0 text-xs font-extrabold text-[#9d8cff]"
           >
             Hamısı
           </button>
@@ -247,7 +171,7 @@ export default function StudentDashboard() {
             }
           />
         ) : (
-          <div className="space-y-2">
+          <div className="exam-board-list">
             {latestExams.map((exam) => (
               <ExamRow
                 key={exam.id}
@@ -257,6 +181,11 @@ export default function StudentDashboard() {
             ))}
           </div>
         )}
+      </div>
+        </div>
+        <aside className="student-home-aside">
+          <WeeklyRanking variant="student" />
+        </aside>
       </div>
     </AppShell>
   );

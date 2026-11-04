@@ -5,17 +5,14 @@ import { ArrowLeft, FileDown, BarChart3, Upload } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import PaperPreview from '../components/PaperPreview';
 import PdfViewer from '../components/PdfViewer';
-import QuestionCard, { splitQuestionOptions } from '../components/QuestionCard';
-import { Button, Card, Input, Select, Skeleton, Textarea } from '../components/ui';
-import { addQuestion, applyAiAnswers, extractDrivePdfText, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, tryGenerateAiQuestions, tryGradeAiQuestions, updateExam, updateQuestion } from '../lib/examApi';
+import { Button, Card, Input, Skeleton } from '../components/ui';
+import { addQuestion, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestionsOf, saveAnswerKey, saveDriveFileMarker, updateExam } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { errorMessage, examCanEdit, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
-import { AI_FEATURE_OPEN, driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
+import { driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
 import DrivePreview from '../components/DrivePreview';
-import { extractPdfText, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
-import LatexText from '../components/LatexText';
 
 const LETTERS = [
   { value: 'A', label: 'A' },
@@ -51,16 +48,6 @@ export default function QuestionBuilder() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('edit');
-  const [questionKind, setQuestionKind] = useState('choice');
-  const [text, setText] = useState('');
-  const [optionA, setOptionA] = useState('');
-  const [optionB, setOptionB] = useState('');
-  const [optionC, setOptionC] = useState('');
-  const [optionD, setOptionD] = useState('');
-  const [optionE, setOptionE] = useState('E');
-  const [openAnswer, setOpenAnswer] = useState('');
-  const [correctAnswer, setCorrectAnswer] = useState('A');
-  const [submitting, setSubmitting] = useState(false);
   const [pdfFile, setPdfFile] = useState(null);
   const [pdfCount, setPdfCount] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -71,7 +58,6 @@ export default function QuestionBuilder() {
   const [openKeys, setOpenKeys] = useState({});
   const [kinds, setKinds] = useState({});
   const [message, setMessage] = useState('');
-  const [editBusy, setEditBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -117,53 +103,6 @@ export default function QuestionBuilder() {
     return true;
   };
 
-  const handleAddQuestion = async (e) => {
-    e.preventDefault();
-    if (refuseEdit()) return;
-    setSubmitting(true);
-    try {
-      if (questionKind === 'choice') {
-        await addQuestion(id, {
-          text,
-          points: 1,
-          type: 'SingleChoice',
-          inputKind: 'Choice',
-          options: [
-            { optionText: optionA, isCorrect: correctAnswer === 'A' },
-            { optionText: optionB, isCorrect: correctAnswer === 'B' },
-            { optionText: optionC, isCorrect: correctAnswer === 'C' },
-            { optionText: optionD, isCorrect: correctAnswer === 'D' },
-            { optionText: optionE || 'E', isCorrect: correctAnswer === 'E' },
-            { optionText: 'Açıq', isCorrect: correctAnswer === 'OPEN' },
-          ],
-          correctText: correctAnswer === 'OPEN' ? openAnswer : null,
-        });
-      } else {
-        await addQuestion(id, {
-          text,
-          points: 1,
-          type: 'OpenEnded',
-          inputKind: questionKind === 'integer' ? 'Integer' : questionKind === 'decimal' ? 'Decimal' : 'Text',
-          correctText: openAnswer,
-          options: [],
-        });
-      }
-      setText('');
-      setOptionA('');
-      setOptionB('');
-      setOptionC('');
-      setOptionD('');
-      setOptionE('E');
-      setOpenAnswer('');
-      setCorrectAnswer('A');
-      await load();
-    } catch {
-      alert('Sual əlavə edilərkən xəta baş verdi.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleSaveDrive = async (e) => {
     if (refuseEdit()) {
       e?.preventDefault?.();
@@ -194,7 +133,7 @@ export default function QuestionBuilder() {
       await saveDriveFileMarker(id, fileId);
       setDriveLink(pdfFileUrl);
       await load();
-      setMessage('Drive faylı bağlandı. İndi “AI ilə kartlara çevir” — şagird telefonda yalnız kartları görəcək.');
+      setMessage('PDF bağlandı. Sual sayını yazıb hər sual üçün düzgün cavabı əl ilə daxil edin.');
     } catch (err) {
       setMessage(errorMessage(err, 'Drive linki saxlanılmadı.'));
     } finally {
@@ -202,60 +141,30 @@ export default function QuestionBuilder() {
     }
   };
 
-  const handleDriveAi = async () => {
-    if (refuseEdit()) return;
-    const fileId = parseDriveFileId(driveLink) || examDriveFileId(exam);
-    if (!fileId) {
-      setMessage('Əvvəl Drive fayl linkini bağlayın.');
-      return;
-    }
-    setPdfBusy(true);
-    setMessage('Drive PDF serverdə oxunur. Telefonda gözləyin — PDF cihazda açılmır.');
-    try {
-      const text = await extractDrivePdfText(fileId);
-      setMessage('AI sualları karta çevirir...');
-      let parsed = parseQuestionsFromText(text);
-      const wanted = parseInt(pdfCount, 10);
-      let aiError = '';
-      try {
-        const aiParsed = await tryGenerateAiQuestions({
-          title: exam?.title || 'PDF',
-          topic: 'PDF',
-          subjectName: exam?.subjectName,
-          brief: text,
-          questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-          source: 'pdf',
-        }, { soft: false });
-        if (aiParsed?.length) parsed = aiParsed;
-      } catch (err) {
-        aiError = errorMessage(err, '');
-        if (!parsed.length) throw err;
-      }
-      parsed = normalizeGeneratedQuestions(parsed);
-      if (!parsed.length) {
-        throw new Error(aiError || 'PDF mətni çıxdı, amma Exam API kart qaytarmadı. /Ai/questions işlək olmalıdır. Sualı əl ilə əlavə edə və ya faylı dərc edə bilərsiniz.');
-      }
-      try {
-        setMessage('Cavablar yoxlanılır...');
-        const grades = await tryGradeAiQuestions(parsed, { soft: true });
-        if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
-      } catch {
-        /* teacher can fix answers */
-      }
-      for (let i = 0; i < parsed.length; i += 1) {
-        setMessage(`Kartlar yazılır: ${i + 1} / ${parsed.length}`);
-        await addQuestion(id, toAddQuestionPayload(parsed[i]));
-      }
-      await load();
-      setMessage(`${parsed.length} sual AI ilə Drive PDF-dən kart oldu. Şagird telefonda yalnız bu kartları görür.`);
-    } catch (err) {
-      setMessage(errorMessage(err, 'AI PDF-i oxumadı.'));
-    } finally {
-      setPdfBusy(false);
+  const paperQuestions = () => questions.filter((q) => !String(q.text || '').includes('__DRIVE__'));
+
+  const seedAnswerSlots = async (count) => {
+    const wanted = Math.max(1, Math.min(200, Number(count) || 0));
+    const existing = paperQuestions();
+    for (let i = existing.length; i < wanted; i += 1) {
+      await addQuestion(id, {
+        text: `Sual ${i + 1}`,
+        points: 1,
+        type: 'SingleChoice',
+        inputKind: 'Choice',
+        options: [
+          { optionText: 'A', isCorrect: i === 0 },
+          { optionText: 'B', isCorrect: false },
+          { optionText: 'C', isCorrect: false },
+          { optionText: 'D', isCorrect: false },
+          { optionText: 'E', isCorrect: false },
+          { optionText: 'Açıq', isCorrect: false },
+        ],
+      });
     }
   };
 
-  const handlePdfUpload = async (e) => {
+  const handlePdfAttach = async (e) => {
     e.preventDefault();
     if (refuseEdit()) return;
     if (!pdfFile) {
@@ -265,36 +174,34 @@ export default function QuestionBuilder() {
     setPdfBusy(true);
     setMessage('');
     try {
-      const text = await extractPdfText(pdfFile);
-      let parsed = parseQuestionsFromText(text);
-      const wanted = parseInt(pdfCount, 10);
-      const aiParsed = await tryGenerateAiQuestions({
-        title: exam?.title || pdfFile.name.replace(/\.pdf$/i, ''),
-        topic: 'PDF',
-        subjectName: exam?.subjectName,
-        brief: text,
-        questionCount: Number.isFinite(wanted) ? wanted : Math.max(parsed.length, 10),
-        source: 'pdf',
-      }, { soft: true });
-      if (aiParsed?.length) parsed = aiParsed;
-      parsed = normalizeGeneratedQuestions(parsed);
-      if (!parsed.length) {
-        throw new Error('PDF-dən sual oxunmadı. Mətnli PDF yükləyin.');
-      }
-      try {
-        const grades = await tryGradeAiQuestions(parsed, { soft: true });
-        if (grades?.length) parsed = normalizeGeneratedQuestions(applyAiAnswers(parsed, grades));
-      } catch {
-        /* teacher can fix answers */
-      }
-      for (const q of parsed) {
-        await addQuestion(id, toAddQuestionPayload(q));
-      }
       stashTeacherPdf(id, pdfFile);
+      const wanted = parseInt(pdfCount, 10);
+      if (Number.isFinite(wanted) && wanted > 0) await seedAnswerSlots(wanted);
       await load();
-      setMessage(`${parsed.length} sual AI ilə oxundu. Solda PDF, sağda kartlar — səhv oxunubsa düzəldin, sonra dərc edin.`);
+      setMessage('PDF yükləndi. Suallar PDF-dən çıxarılmır — aşağıda hər sual üçün düzgün cavabı özünüz seçin.');
     } catch (err) {
-      setMessage(errorMessage(err, 'PDF oxunmadı.'));
+      setMessage(errorMessage(err, 'PDF saxlanılmadı.'));
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const handleOpenAnswerSlots = async (e) => {
+    e.preventDefault();
+    if (refuseEdit()) return;
+    const wanted = parseInt(pdfCount, 10);
+    if (!Number.isFinite(wanted) || wanted < 1) {
+      setMessage('Əvvəl sual sayını yazın.');
+      return;
+    }
+    setPdfBusy(true);
+    setMessage('');
+    try {
+      await seedAnswerSlots(wanted);
+      await load();
+      setMessage(`${wanted} sual yeri açıldı. Hər sualın düzgün variantını əl ilə seçin.`);
+    } catch (err) {
+      setMessage(errorMessage(err, 'Cavab yerləri açılmadı.'));
     } finally {
       setPdfBusy(false);
     }
@@ -336,57 +243,6 @@ export default function QuestionBuilder() {
     }
   };
 
-  const handleSaveCard = async (question, payload) => {
-    if (refuseEdit()) return;
-    setEditBusy(true);
-    setMessage('');
-    try {
-      await updateQuestion(id, question.id, toAddQuestionPayload({
-        text: payload.text,
-        correctLetter: payload.correctLetter,
-        difficultyLevel: payload.difficultyLevel,
-        imageUrl: payload.imageUrl !== undefined ? payload.imageUrl : question.imageUrl,
-        options: payload.options,
-      }));
-      const nextKey = { ...answerKey, [question.id]: payload.correctLetter };
-      setAnswerKey(nextKey);
-      await persistKey(nextKey);
-      await load();
-      setMessage('Sual yeniləndi.');
-    } catch (err) {
-      setMessage(errorMessage(err, 'Sual yenilənmədi.'));
-    } finally {
-      setEditBusy(false);
-    }
-  };
-
-  const handleQuestionImage = async (question, dataUrl) => {
-    if (refuseEdit()) return;
-    setEditBusy(true);
-    setMessage('');
-    try {
-      const letter = answerKey[question.id] || letterOf(question);
-      const split = splitQuestionOptions(question);
-      await updateQuestion(id, question.id, toAddQuestionPayload({
-        text: question.text,
-        correctLetter: letter,
-        difficultyLevel: question.difficultyLevel || 'orta',
-        imageUrl: dataUrl || '',
-        options: split.options.map((opt) => ({
-          letter: opt.letter,
-          text: opt.text,
-          isCorrect: opt.letter === letter,
-        })),
-      }));
-      await load();
-      setMessage(dataUrl ? 'Şəkil karta əlavə olundu.' : 'Şəkil silindi.');
-    } catch (err) {
-      setMessage(errorMessage(err, 'Şəkil saxlanılmadı.'));
-    } finally {
-      setEditBusy(false);
-    }
-  };
-
   const publishDraft = async (visibility = 'private') => {
     if (refuseEdit()) return;
     if (!exam) return;
@@ -398,7 +254,7 @@ export default function QuestionBuilder() {
       const paperCount = paperQuestionsOf(questions).length;
       const fileId = examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl });
       if (!paperCount && !fileId) {
-        setMessage('Əvvəl Drive faylını bağlayın və ya sual kartı əlavə edin, sonra dərc edin. AI işləməsə belə faylı paylaşa bilərsiniz.');
+        setMessage('Əvvəl PDF-i bağlayın və ya sual sayını yazıb cavabları daxil edin, sonra dərc edin.');
         return;
       }
       if (fileId) await saveDriveFileMarker(id, fileId);
@@ -436,8 +292,8 @@ export default function QuestionBuilder() {
             ? 'İmtahan açıq dərc olundu. Ümumi zonada fənninizə görə görünür.'
             : 'İmtahan özəl dərc olundu. Yalnız sizin şagirdləriniz görəcək.')
           : (visibility === 'public'
-            ? 'İmtahan açıq dərc olundu (ümumi zona). AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'
-            : 'İmtahan özəl dərc olundu. AI kart yaratmadı — şagirdlər Drive PDF-i görəcək.'),
+            ? 'İmtahan açıq dərc olundu. Şagirdlər PDF-i görəcək, cavablar sizin daxil etdiyiniz açardır.'
+            : 'İmtahan özəl dərc olundu. Şagirdlər PDF-i görəcək, cavablar sizin daxil etdiyiniz açardır.'),
       );
       await load();
     } catch (err) {
@@ -487,7 +343,7 @@ export default function QuestionBuilder() {
       )}
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100">
-        AI lazım deyil. Faylı bağlayın və ya sual yazın, sonra yuxarıdan <strong>Özəl dərc et</strong> və ya <strong>Açıq dərc et</strong> seçin.
+        Öz sınağınızda PDF yükləyin və hər sualın düzgün cavabını əl ilə seçin. AI ilə kartlara çevirmə yoxdur.
       </div>
 
       {exam && !examCanEdit(exam) ? (
@@ -530,10 +386,10 @@ export default function QuestionBuilder() {
       ) : (
         <div className="space-y-8">
           <Card>
-            <h3 className="mb-2 text-base font-bold">1. Faylı imtahana bağla</h3>
+            <h3 className="mb-2 text-base font-bold">1. PDF-i imtahana bağla</h3>
             <p className="mb-4 text-sm text-gray-500">
               Faylı “linki olanlar baxa bilər” edin, sonra <strong>faylın</strong> (qovluq yox) linkini yazın.
-              AI işləməsə belə buradan bağlayıb yuxarıda dərc edə bilərsiniz — şagird Drive PDF-i görəcək.
+              Suallar PDF-dən çıxarılmır — şagird PDF-i görür, düzgün cavabları siz əl ilə yazırsınız.
             </p>
             {folderUrl ? (
               <a
@@ -559,36 +415,11 @@ export default function QuestionBuilder() {
           </Card>
 
           <Card>
-            <h3 className="mb-2 text-base font-bold">2. AI ilə kartlara çevir</h3>
+            <h3 className="mb-2 text-base font-bold">2. PDF yüklə və cavabları əl ilə yaz</h3>
             <p className="mb-4 text-sm text-gray-500">
-              Mətnli PDF birbaşa kart olur. Skan PDF-i server GPT-4o ilə oxuyur (Vercel OPENAI_API_KEY). Olmasa faylı dərc edin — şagird Drive görür.
+              PDF-dən sual çıxarılmır. Sual sayını yazın, hər sual üçün A–E və ya Açıq düzgün cavabı seçin.
             </p>
-            <div className="space-y-4">
-              <Input
-                label="Sual sayı (istəyə bağlı)"
-                type="number"
-                min="1"
-                max="200"
-                value={pdfCount}
-                onChange={(e) => setPdfCount(e.target.value)}
-              />
-              <Button type="button" disabled={pdfBusy} onClick={handleDriveAi}>
-                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'AI ilə kartlara çevir'}
-              </Button>
-            </div>
-          </Card>
-
-          {examDriveFileId({ ...exam, pdfFileUrl: driveLink }) ? (
-            <DrivePreview exam={{ ...exam, pdfFileUrl: driveLink }} title="Bu imtahanın PDF-i" />
-          ) : null}
-
-          {AI_FEATURE_OPEN ? (
-          <Card>
-            <h3 className="mb-2 text-base font-bold">PDF-dən clickable suallar</h3>
-            <p className="mb-4 text-sm text-gray-500">
-              PDF yükləyin — AI sualları çıxarır. Eyni səhifədə PDF qalır ki, səhv oxunuşu düzəldəsiniz. Dərcdən sonra PDF bağlanır, şagird yalnız kartları görür.
-            </p>
-            <form onSubmit={handlePdfUpload} className="space-y-4">
+            <form onSubmit={handlePdfAttach} className="space-y-4">
               <input
                 type="file"
                 accept="application/pdf,.pdf"
@@ -596,18 +427,26 @@ export default function QuestionBuilder() {
                 className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-4 file:py-2 file:text-white"
               />
               <Input
-                label="Sual sayı (istəyə bağlı)"
+                label="Sual sayı"
                 type="number"
                 min="1"
                 max="200"
                 value={pdfCount}
                 onChange={(e) => setPdfCount(e.target.value)}
               />
-              <Button type="submit" disabled={pdfBusy}>
-                <Upload size={16} /> {pdfBusy ? 'AI oxuyur...' : 'PDF-dən sualları çıxar'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={pdfBusy}>
+                  <Upload size={16} /> {pdfBusy ? 'Saxlanılır...' : 'PDF-i yüklə'}
+                </Button>
+                <Button type="button" variant="secondary" disabled={pdfBusy} onClick={handleOpenAnswerSlots}>
+                  Cavab yerlərini aç
+                </Button>
+              </div>
             </form>
           </Card>
+
+          {examDriveFileId({ ...exam, pdfFileUrl: driveLink }) ? (
+            <DrivePreview exam={{ ...exam, pdfFileUrl: driveLink }} title="Bu imtahanın PDF-i" />
           ) : null}
 
           {loading ? (
@@ -621,105 +460,49 @@ export default function QuestionBuilder() {
                 <PdfViewer file={pdfFile} title="Orijinal PDF — yalnız müəllim" />
               ) : null}
               <div className="space-y-4">
-          {questions.length === 0 ? (
+          {questions.filter((q) => !String(q.text || '').includes('__DRIVE__')).length === 0 ? (
             <Card className="text-sm text-gray-500">
-              Drive faylını bağlayın. AI kart yarada bilsə əlavə olunur; olmasa imtahanı yenə dərc edə bilərsiniz.
+              PDF-i yükləyin və sual sayını yazın. Sonra hər sualın düzgün cavabını əl ilə seçin.
             </Card>
           ) : (
             questions.filter((q) => !String(q.text || '').includes('__DRIVE__')).map((q, idx) => (
-                isOpenQuestion(q) ? (
-                  <Card key={q.id || idx}>
-                    <p className="text-sm font-semibold text-gray-500">Sual {idx + 1}</p>
-                    <p className="mt-2 font-medium"><LatexText text={q.text} /></p>
-                    <p className="mt-2 text-sm text-emerald-600">Düzgün: {q.correctText || '—'}</p>
-                  </Card>
-                ) : (
-                  <QuestionCard
-                    key={q.id || idx}
-                    mode="teacher"
-                    index={idx}
-                    question={{ ...q, correctLetter: answerKey[q.id] || letterOf(q), difficultyLevel: q.difficultyLevel || 'orta' }}
-                    onMarkCorrect={(letter) => handleMarkCorrect(q, letter)}
-                    onSaveEdit={(payload) => handleSaveCard(q, payload)}
-                    onImageChange={(dataUrl) => handleQuestionImage(q, dataUrl)}
+              <Card key={q.id || idx} className="space-y-3">
+                <p className="text-sm font-extrabold">Sual {idx + 1}</p>
+                <div className="flex flex-wrap gap-2">
+                  {LETTERS.map((letter) => {
+                    const current = answerKey[q.id] || letterOf(q);
+                    const on = current === letter.value;
+                    return (
+                      <button
+                        key={letter.value}
+                        type="button"
+                        onClick={() => handleMarkCorrect(q, letter.value)}
+                        className={`min-h-10 min-w-10 rounded-full px-3 text-sm font-extrabold ${
+                          on ? 'bg-[#7c6aff] text-white' : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-300'
+                        }`}
+                      >
+                        {letter.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(answerKey[q.id] || letterOf(q)) === 'OPEN' ? (
+                  <Input
+                    label="Açıq düzgün cavab"
+                    value={openKeys[q.id] || ''}
+                    onChange={(e) => {
+                      const nextOpen = { ...openKeys, [q.id]: e.target.value };
+                      setOpenKeys(nextOpen);
+                    }}
+                    onBlur={() => persistKey(answerKey, { ...openKeys })}
                   />
-                )
+                ) : null}
+              </Card>
             ))
           )}
               </div>
             </div>
           )}
-
-          <Card>
-              <h3 className="mb-4 text-base font-bold">Əl ilə yeni sual</h3>
-              <form onSubmit={handleAddQuestion} className="space-y-4">
-                <Select label="Sual tipi" value={questionKind} onChange={(e) => setQuestionKind(e.target.value)}>
-                  <option value="choice">Variantlı (A–E + Açıq)</option>
-                  <option value="text">Açıq mətn</option>
-                  <option value="integer">Tam ədəd</option>
-                  <option value="decimal">Onluq ədəd</option>
-                </Select>
-                <Textarea
-                  label="Sualın mətni"
-                  rows={3}
-                  required
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                />
-                {questionKind === 'choice' ? (
-                  <>
-                    <p className="text-xs text-gray-500">
-                      Tək seçim: 5 variant + 6-cı Açıq. Şagird Açıq-ı basanda öz cavabını yazır.
-                    </p>
-                    <div className="space-y-2">
-                      {[
-                        ['A', optionA, setOptionA, true],
-                        ['B', optionB, setOptionB, true],
-                        ['C', optionC, setOptionC, true],
-                        ['D', optionD, setOptionD, true],
-                        ['E', optionE, setOptionE, false],
-                      ].map(([letter, value, setter, required]) => (
-                        <label key={letter} className="flex items-center gap-2">
-                          <input type="radio" name="correct-new" checked={correctAnswer === letter} onChange={() => setCorrectAnswer(letter)} />
-                          <span className="w-5 text-sm font-semibold">{letter}</span>
-                          <input
-                            required={required}
-                            value={value}
-                            onChange={(e) => setter(e.target.value)}
-                            className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
-                          />
-                        </label>
-                      ))}
-                      <label className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-2 py-2 dark:border-slate-600">
-                        <input type="radio" name="correct-new" checked={correctAnswer === 'OPEN'} onChange={() => setCorrectAnswer('OPEN')} />
-                        <span className="text-sm font-semibold">Açıq</span>
-                        <span className="text-xs text-gray-500">6-cı variant — şagird özü yazır</span>
-                      </label>
-                    </div>
-                    {correctAnswer === 'OPEN' && (
-                      <Input
-                        label="Açıq düzgün cavab"
-                        value={openAnswer}
-                        onChange={(e) => setOpenAnswer(e.target.value)}
-                        required
-                      />
-                    )}
-                  </>
-                ) : (
-                  <Input
-                    label="Düzgün cavab"
-                    type={questionKind === 'text' ? 'text' : 'number'}
-                    step={questionKind === 'decimal' ? 'any' : '1'}
-                    value={openAnswer}
-                    onChange={(e) => setOpenAnswer(e.target.value)}
-                    required
-                  />
-                )}
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? 'Əlavə edilir...' : 'Sualı əlavə et'}
-                </Button>
-              </form>
-            </Card>
         </div>
       )}
     </AppShell>

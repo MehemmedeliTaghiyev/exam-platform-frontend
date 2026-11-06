@@ -1,12 +1,14 @@
 import { useContext, useEffect, useState } from 'react';
-import { BarChart3, Bookmark, MoreVertical, Trash2 } from 'lucide-react';
+import { BarChart3, Bookmark, Check, MoreVertical, Trash2 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { ConfirmDialog } from './ui';
 import { displayExamDescription } from '../lib/driveLinks';
 import { examVisibility } from '../lib/examVisibility';
 import { localDb } from '../lib/localDb';
 import { examSubject } from '../lib/publicExams';
-import { isExamLive, resolveExamStatus } from '../lib/utils';
+import { isExamLive, resolveExamStatus, studentResultsReady } from '../lib/utils';
+import { readExamOutcome } from '../lib/examOutcomes';
+import { isNewExam, markExamSeen } from '../lib/examFresh';
 
 export function examRowTitle(exam) {
   const note = displayExamDescription(exam);
@@ -34,7 +36,7 @@ function ActionSheet({ open, title, onClose, children }) {
   );
 }
 
-export default function ExamRow({ exam, onOpen, onDelete, onStats }) {
+export default function ExamRow({ exam, onOpen, onDelete, onStats, mine }) {
   const { user } = useContext(AuthContext);
   const canSave = Boolean(user?.id) && (user?.role === 'Student' || user?.practiceRole === 'Student');
   const [saved, setSaved] = useState(() => localDb.isExamSaved(user?.id, exam?.id));
@@ -57,6 +59,15 @@ export default function ExamRow({ exam, onOpen, onDelete, onStats }) {
         : status === 'Draft'
           ? 'Qaralama'
           : '';
+  const storedOutcome = readExamOutcome(user?.id, exam?.id);
+  const localSub = localDb.getSubmissions().find((row) => (
+    String(row.examId) === String(exam?.id) && String(row.studentId) === String(user?.id)
+  ));
+  const resultsReady = studentResultsReady(exam, user);
+  const resultPercent = storedOutcome?.percent ?? mine?.percent ?? mine?.score ?? localSub?.percent ?? localSub?.score;
+  const resultRank = storedOutcome?.rank ?? mine?.rank ?? mine?.Rank;
+  const submittedMine = Boolean(storedOutcome || mine?.submittedAt || mine?.SubmittedAt || localSub?.submittedAt);
+  const fresh = isNewExam(exam, { userId: user?.id, submitted: submittedMine });
 
   useEffect(() => {
     setSaved(localDb.isExamSaved(user?.id, exam?.id));
@@ -181,16 +192,35 @@ export default function ExamRow({ exam, onOpen, onDelete, onStats }) {
   }
 
   return (
-    <article className="exam-row min-w-0 overflow-hidden rounded-[22px] bg-[#1c2430] p-3.5">
+    <article className={`exam-row card-vector min-w-0 overflow-hidden rounded-[22px] p-3.5 ${
+      submittedMine
+        ? 'bg-[var(--card)] ring-1 ring-[#2ee07a]/40'
+        : fresh
+          ? 'exam-row-new bg-[var(--card)] ring-1 ring-[var(--accent)]/55'
+          : 'bg-[var(--card)] ring-1 ring-[var(--line)]'
+    }`}
+    >
       <div className="flex items-start gap-2">
         <button
           type="button"
-          onClick={onOpen}
+          onClick={() => {
+            if (fresh) markExamSeen(user?.id, exam?.id);
+            onOpen?.();
+          }}
           disabled={!onOpen}
           className="min-w-0 flex-1 text-left disabled:opacity-60"
         >
-          <span className="line-clamp-2 font-extrabold leading-snug text-white">{title}</span>
-          <span className="mt-1 block truncate text-xs font-semibold text-white/45">
+          {submittedMine ? (
+            <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-[#2ee07a]/18 px-2 py-0.5 text-[11px] font-extrabold text-[#8fd4a4]">
+              <Check size={12} strokeWidth={3} /> İşlənib
+            </span>
+          ) : fresh ? (
+            <span className="exam-new-badge mb-1.5 inline-flex items-center rounded-full bg-[#f5a623] px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-[#3a2200]">
+              Yeni
+            </span>
+          ) : null}
+          <span className={`line-clamp-2 font-extrabold leading-snug ${submittedMine ? 'text-[var(--success-text)]' : 'text-[var(--text)]'}`}>{title}</span>
+          <span className="mt-1 block truncate text-xs font-semibold text-[var(--muted)]">
             {examSubject(exam)}
             {questions ? ` · ${questions} sual` : ''}
             {minutes ? ` · ${minutes} dəq` : ''}
@@ -216,16 +246,23 @@ export default function ExamRow({ exam, onOpen, onDelete, onStats }) {
             title={saved ? 'Saxlanıldı' : 'Saxla'}
             onClick={toggleSave}
             className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-              saved ? 'bg-[#f0b429]/15 text-[#f0b429]' : 'bg-white/5 text-white/45'
+              saved ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'bg-[var(--bg)] text-[var(--muted)]'
             }`}
           >
             <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
           </button>
         ) : null}
       </div>
-      {badge ? (
+      {resultsReady && (resultPercent != null || resultRank) ? (
+        <p className="mt-3 text-sm font-extrabold text-[#8fd4a4]">
+          Nəticə: {resultPercent != null ? `${Math.round(Number(resultPercent))}%` : '—'}
+          {resultRank ? ` · Yer: #${resultRank}` : ''}
+        </p>
+      ) : submittedMine && !live ? (
+        <p className="mt-3 text-xs font-extrabold text-[var(--muted)]">Təhvil verildi · nəticə imtahan bitəndə açılır</p>
+      ) : badge ? (
         <span className={`mt-3 inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-          live ? 'bg-[#1f7a3a] text-[#b6f0c8]' : 'bg-white/10 text-white/70'
+          live ? 'bg-[#1f7a3a] text-[#b6f0c8]' : 'bg-[var(--bg)] text-[var(--muted)]'
         }`}
         >
           {live ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#86efac]" /> : null}

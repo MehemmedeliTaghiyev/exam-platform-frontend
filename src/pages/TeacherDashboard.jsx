@@ -4,7 +4,6 @@ import { BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, Plus, Search 
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamRow from '../components/ExamRow';
-import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
 import { errorMessage, examCanEdit, isExamDraft, isExamLive, normalizeRole, resolveExamStatus } from '../lib/utils';
@@ -449,8 +448,8 @@ export default function TeacherDashboard() {
       )}
 
       <div className="teacher-home">
-      <div className="exam-board rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
-        <div className="flex rounded-full bg-[#1c212c] p-1">
+      <div className="exam-board teacher-board rounded-[28px] p-4 ring-1 ring-[var(--line)]">
+        <div className="flex rounded-full bg-black/25 p-1">
           {STATUS_FILTERS.map((item) => {
             const on = examFilter === item.id;
             return (
@@ -459,7 +458,7 @@ export default function TeacherDashboard() {
                 type="button"
                 onClick={() => setExamFilter(item.id)}
                 className={`min-h-9 flex-1 rounded-full px-2 text-[13px] font-extrabold ${
-                  on ? 'bg-[#6d5efc] text-white' : 'text-white/45'
+                  on ? 'bg-[#c4a35a] text-[#1a160e]' : 'text-white/50'
                 }`}
               >
                 {item.label}
@@ -473,7 +472,7 @@ export default function TeacherDashboard() {
               type="button"
               onClick={() => setSheet(sheet === 'month' ? '' : 'month')}
               className={`mt-3 inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full px-3 text-sm font-extrabold ${
-                monthActive ? 'bg-[#6d5efc] text-white' : 'bg-[#1c212c] text-white/80'
+                monthActive ? 'bg-[#c4a35a] text-[#1a160e]' : 'bg-black/25 text-white/80'
               }`}
             >
               <CalendarDays size={16} />
@@ -511,7 +510,7 @@ export default function TeacherDashboard() {
                 type="button"
                 onClick={() => setSheet(sheet === 'date' ? '' : 'date')}
                 className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-extrabold ${
-                  dateActive ? 'bg-[#6d5efc] text-white' : 'bg-[#1c212c] text-white/80'
+                  dateActive ? 'bg-[#c4a35a] text-[#1a160e]' : 'bg-black/25 text-white/80'
                 }`}
               >
                 <CalendarDays size={16} />
@@ -522,7 +521,7 @@ export default function TeacherDashboard() {
                 type="button"
                 onClick={() => setSheet(sheet === 'fen' ? '' : 'fen')}
                 className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-sm font-extrabold ${
-                  fenActive ? 'bg-[#6d5efc] text-white' : 'bg-[#1c212c] text-white/80'
+                  fenActive ? 'bg-[#c4a35a] text-[#1a160e]' : 'bg-black/25 text-white/80'
                 }`}
               >
                 <BookOpen size={16} />
@@ -587,7 +586,7 @@ export default function TeacherDashboard() {
         <div className="mt-4 flex items-center justify-between text-xs font-bold text-white/45">
           <span>{loading ? '…' : `${visibleExams.length} imtahan`}</span>
           {filteredOn ? (
-            <button type="button" onClick={clearFilters} className="font-extrabold text-[#9d8cff]">
+            <button type="button" onClick={clearFilters} className="font-extrabold text-[#c4a35a]">
               Təmizlə
             </button>
           ) : null}
@@ -624,7 +623,7 @@ export default function TeacherDashboard() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="mt-5 rounded-full bg-[#6d5efc] px-4 py-2 text-sm font-extrabold"
+                  className="mt-5 rounded-full bg-[#c4a35a] px-4 py-2 text-sm font-extrabold text-[#1a160e]"
                 >
                   Bütün imtahanlara bax
                 </button>
@@ -650,11 +649,6 @@ export default function TeacherDashboard() {
         </div>
       </div>
 
-      {isAdmin ? null : (
-        <div className="teacher-home-aside">
-          <WeeklyRanking variant="teacher" />
-        </div>
-      )}
       </div>
 
       <Modal open={showModal} title="Yeni imtahan yarat" onClose={closeModal}>

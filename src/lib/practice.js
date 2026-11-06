@@ -1,3 +1,5 @@
+import { gradeExam } from './gradeExam';
+
 const FLAG = 'exampulse_practice_role';
 const TEACHER_EXAMS = 'exampulse_practice_texams';
 const TEACHER_QS = 'exampulse_practice_tqs';
@@ -383,47 +385,27 @@ export function practiceStartExam(examId) {
   return { id: `psess-${examId}`, studentExamId: `psess-${examId}`, examId };
 }
 
-export function practiceSubmitExam(payload) {
+export function practiceSubmitExam(payload, graded) {
   const questions = practiceQuestions(payload.examId);
-  let correct = 0;
-  const review = questions.map((q, index) => {
-    const a = (payload.answers || []).find((x) => String(x.questionId) === String(q.id)) || {};
-    const opt = (q.options || []).find((o) => String(o.id) === String(a.selectedOptionId));
-    const ok = Boolean(opt?.isCorrect);
-    if (ok) correct += 1;
-    return {
-      questionId: q.id,
-      index: index + 1,
-      text: q.text,
-      isCorrect: ok,
-      unanswered: !a.selectedOptionId && !a.textAnswer,
-      options: (q.options || []).filter((o) => String(o.letter || o.optionText) !== 'OPEN' && o.optionText !== 'Açıq').map((o) => ({
-        id: o.id,
-        text: o.text || o.optionText,
-        isCorrect: Boolean(o.isCorrect),
-        isSelected: String(o.id) === String(a.selectedOptionId),
-      })),
-    };
-  });
-  const total = questions.length || 1;
+  const result = graded?.questions?.length ? graded : gradeExam(questions, payload.answers);
   const exam = practiceFetchExam(payload.examId);
-  const pct = Math.round((correct / total) * 100);
   const item = {
     id: `psub-${Date.now()}`,
     examId: payload.examId,
     examTitle: exam?.title,
     teacherId: exam?.teacherId,
-    studentId: PRACTICE_STUDENT_ID,
+    studentId: payload.studentId || PRACTICE_STUDENT_ID,
     studentExamId: payload.studentExamId || `psess-${payload.examId}`,
-    score: pct,
-    percent: pct,
-    correctAnswersCount: correct,
-    wrongAnswersCount: Math.max(questions.length - correct, 0),
-    totalQuestions: questions.length,
+    score: result.percent,
+    percent: result.percent,
+    correctAnswersCount: result.correct,
+    wrongAnswersCount: Math.max(result.total - result.correct, 0),
+    totalQuestions: result.total,
     submittedAt: new Date().toISOString(),
     status: 'Submitted',
     examEnded: true,
-    questions: review,
+    answers: payload.answers || [],
+    questions: result.questions,
   };
   addPracticeSubmission(item);
   return item;

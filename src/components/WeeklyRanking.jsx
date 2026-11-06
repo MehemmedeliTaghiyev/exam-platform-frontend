@@ -249,13 +249,13 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
         : 'weekly-board'}
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 min-[640px]:mb-5">
-          <div className={`flex min-w-0 items-center gap-3 ${isTeacher ? 'text-white' : 'text-[#1d2430]'}`}>
+          <div className={`flex min-w-0 items-center gap-3 ${isTeacher ? 'text-white' : 'text-[var(--text)]'}`}>
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-md min-[640px]:h-12 min-[640px]:w-12 ${isTeacher ? 'bg-amber-400 text-amber-950' : 'bg-[#FABD2F] text-[#3a2a00]'}`}>
               <Trophy size={22} />
             </div>
             <div className="min-w-0">
               <h2 className="text-lg font-black sm:text-xl">{isTeacher ? 'Həftəlik sıralama' : 'Həftəlik Liderlər Lövhəsi 🏆'}</h2>
-              <p className={`text-sm ${isTeacher ? 'hidden text-white/80 min-[640px]:block' : 'text-[#5c564e]'}`}>
+              <p className={`text-sm ${isTeacher ? 'hidden text-white/80 min-[640px]:block' : 'text-[var(--muted)]'}`}>
                 {isTeacher
                   ? 'Keçən həftənin qalibi ön plandadır. Açıq yaşıl — sizin öz şagirdlərinizdir.'
                   : 'Bu bölmədə yalnız keçən həftənin ən yaxşı nəticələri, həftənin qalibi və sənin ümumi sıralamadakı yerin göstərilir.'}
@@ -289,8 +289,8 @@ export default function WeeklyRanking({ variant = 'teacher' }) {
           />
 
           {!isTeacher && (
-            <div className="rounded-[20px] bg-white p-5 text-[#1d2430] ring-1 ring-[#eadfce]">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#a16207]">Sənin yerin</p>
+            <div className="rounded-[20px] bg-[var(--card)] p-5 text-[var(--text)] ring-1 ring-[var(--line)]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Sənin yerin</p>
               {myRow ? (
                 <>
                   <p className="mt-3 text-4xl font-black">#{myRow.rank}</p>

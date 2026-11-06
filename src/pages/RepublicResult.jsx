@@ -1,17 +1,20 @@
-import { useContext, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle2, Circle, MinusCircle, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Download, MinusCircle, XCircle } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { Button, Card } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
+import RepublicTopTen from '../components/RepublicTopTen';
 import {
   REPUBLIC_DURATION_MIN,
+  openRepublicRankingPdf,
   republicMonthLabel,
   republicResultFor,
   republicResults,
   republicReviewPaper,
 } from '../lib/republicExam';
 import { formatDateTime, formatHms } from '../lib/utils';
+import { rememberExamOutcome } from '../lib/examOutcomes';
 
 function optionLabel(opt, index) {
   const letter = String.fromCharCode(65 + index);
@@ -72,7 +75,7 @@ function RepublicPaper({ questions }) {
             type="button"
             onClick={() => setFilter(tab.id)}
             className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${
-              filter === tab.id ? 'bg-[#2f7a45] text-white' : 'bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
+              filter === tab.id ? 'bg-[var(--accent)] text-[#3a2200]' : 'bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
             }`}
           >
             {tab.label}
@@ -83,7 +86,7 @@ function RepublicPaper({ questions }) {
         {questions.map((q) => {
           const status = statusOf(q);
           const tone = status === 'correct'
-            ? 'bg-[#2f7a45] text-white'
+            ? 'bg-[#2ee07a] text-[#062014]'
             : status === 'wrong'
               ? 'bg-[#e11d48] text-white'
               : 'bg-[#2a3340] text-white/80';
@@ -102,7 +105,7 @@ function RepublicPaper({ questions }) {
       {visible.map((q) => {
         const status = statusOf(q);
         const frame = status === 'correct'
-          ? 'ring-[#2f7a45]/50'
+          ? 'ring-[#2ee07a]/50'
           : status === 'wrong'
             ? 'ring-[#e11d48]/45'
             : 'ring-white/10';
@@ -110,7 +113,7 @@ function RepublicPaper({ questions }) {
           <article
             key={q.questionId || q.index}
             id={`republic-q-${q.index}`}
-            className={`scroll-mt-24 rounded-[24px] bg-[#151b24] p-4 text-white ring-1 ${frame}`}
+            className={`scroll-mt-24 rounded-[24px] bg-[var(--card)] p-4 ring-1 ${frame}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -171,6 +174,16 @@ export default function RepublicResult() {
     return index >= 0 ? index + 1 : null;
   }, [row, user?.id]);
 
+  useEffect(() => {
+    if (!row || !user?.id) return;
+    rememberExamOutcome(user.id, `republic:${row.month}`, {
+      percent: row.percent,
+      rank,
+      correct: row.correct,
+      total: row.total,
+    });
+  }, [row, user?.id, rank]);
+
   if (!row) {
     return (
       <AppShell title="Nəticə">
@@ -190,13 +203,17 @@ export default function RepublicResult() {
   return (
     <AppShell title="">
       <div className="desk-page space-y-4">
-        <div className="desk-split">
         <Card className="text-center min-[768px]:text-left">
-          <p className="text-sm font-bold text-[var(--muted)]">{republicMonthLabel(row.month)} · Respublika sınağı</p>
+          <p className="inline-flex rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-extrabold text-[var(--accent)]">
+            Sənin nəticən
+          </p>
+          <p className="mt-3 text-sm font-bold text-[var(--muted)]">{republicMonthLabel(row.month)} · Respublika sınağı</p>
           <p className="mt-3 text-5xl font-black">{row.percent}%</p>
+          <p className="mt-2 text-lg font-black text-[var(--accent)]">
+            {rank ? `Yer: #${rank}` : 'Sıra hesablanır'}
+          </p>
           <p className="mt-2 text-sm font-semibold text-[var(--muted)]">
-            {rank ? `Ümumi sıra: #${rank}` : 'Sıra hesablanır'}
-            {row.at ? ` · ${formatDateTime(row.at)}` : ''}
+            {row.at ? formatDateTime(row.at) : ''}
           </p>
           <p className="mt-2 text-sm font-extrabold">
             Vaxt: {formatHms(row.durationSeconds ?? 0)} / {formatHms((row.durationLimit || REPUBLIC_DURATION_MIN * 60))}
@@ -215,10 +232,26 @@ export default function RepublicResult() {
               <p className="mt-1 text-2xl font-black">{blank}</p>
             </div>
           </div>
-          <p className="mt-3 text-xs font-semibold text-[var(--muted)]">{total} sual · imtahan vərəqi</p>
+          <p className="mt-3 text-xs font-semibold text-[var(--muted)]">{total} sual · imtahan vərəqi aşağıdadır</p>
           <Button variant="secondary" className="mt-5 min-[768px]:w-auto" onClick={() => navigate('/student/republic')}>Geri</Button>
         </Card>
-        <div className="min-w-0">
+
+        <RepublicTopTen
+          month={row.month}
+          highlightId={user?.id}
+          padPractice={Boolean(user?.practice)}
+          limit={100}
+          title="Ümumi top 100"
+          hint="Sənin nəticən yuxarıdadır. Tam siyahını PDF kimi yükləyə bilərsən."
+        />
+        <button
+          type="button"
+          onClick={() => openRepublicRankingPdf(row.month, { highlightUserId: user?.id, padPractice: Boolean(user?.practice) })}
+          className="flex w-full items-center justify-center gap-2 rounded-full bg-[var(--card)] py-3 text-sm font-extrabold ring-1 ring-[var(--line)] min-[768px]:w-auto min-[768px]:px-6"
+        >
+          <Download size={16} /> Tam siyahını yüklə
+        </button>
+
         <h2 className="px-1 text-lg font-extrabold">İmtahan vərəqi</h2>
         {paper.length ? (
           <RepublicPaper questions={paper} />
@@ -227,8 +260,6 @@ export default function RepublicResult() {
             <p className="text-sm font-semibold leading-6 text-[var(--muted)]">Bu imtahanın sualları tapılmadı.</p>
           </Card>
         )}
-        </div>
-        </div>
       </div>
     </AppShell>
   );

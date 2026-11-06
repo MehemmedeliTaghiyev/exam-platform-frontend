@@ -34,11 +34,20 @@ import RepublicTake from './pages/RepublicTake';
 import RepublicResult from './pages/RepublicResult';
 import StudentSyllabus from './pages/StudentSyllabus';
 import StudentAccount from './pages/StudentAccount';
+import StudentWallet from './pages/StudentWallet';
+import DailyChallenge from './pages/DailyChallenge';
+import StudentProgress from './pages/StudentProgress';
+import WeekendWeak from './pages/WeekendWeak';
+import WeekendTake from './pages/WeekendTake';
+import WeekendResult from './pages/WeekendResult';
 import Legal from './pages/Legal';
+import UrgentBroadcastHost from './components/UrgentBroadcastHost';
 
 function App() {
   return (
-    <Routes>
+    <>
+      <UrgentBroadcastHost />
+      <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/exams" element={<PublicExamZone />} />
       <Route path="/teachers" element={<BrowseTeachers />} />
@@ -235,6 +244,54 @@ function App() {
         }
       />
       <Route
+        path="/student/wallet"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentWallet />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/progress"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <StudentProgress />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/daily"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <DailyChallenge />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/weekend"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <WeekendWeak />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/weekend/take"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <WeekendTake />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/weekend/result/:week"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <WeekendResult />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/student/saved"
         element={<Navigate to="/student/public?saved=1" replace />}
       />
@@ -345,6 +402,7 @@ function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 

@@ -1,54 +1,55 @@
-import { useContext, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight, History, Trophy } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, History, Trophy } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import PaymentCheckoutModal from '../components/PaymentCheckoutModal';
 import { Button, Input } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
+import RepublicTopTen from '../components/RepublicTopTen';
+import RepublicProgressChart from '../components/RepublicProgressChart';
 import {
   applyRepublicCoupon,
-  canEnterRepublic,
+  canTryRepublic,
   hasFreeNextRepublic,
   hasPaidRepublic,
+  openRepublicRankingPdf,
   payRepublic,
   REPUBLIC_DURATION_MIN,
   REPUBLIC_PRICE,
+  republicMonthKey,
   republicQuestionCount,
   isRepublicWinner,
   republicHistoryForUser,
+  republicResults,
   republicMonthBadge,
   republicMonthLabel,
   republicWinners,
 } from '../lib/republicExam';
+import { getMonthlyQuizPaper } from '../lib/monthlyQuizRam';
 import { applicantCode } from '../lib/studentCode';
 import { formatManat } from '../lib/teacherAccess';
+import { useStudentWallet } from '../lib/studentWallet';
 import { formatDateTime, formatHms } from '../lib/utils';
-
-const PLAN = {
-  id: 'republic',
-  title: 'Respublika sınağı',
-  price: REPUBLIC_PRICE,
-  days: 30,
-};
 
 function StatBox({ label, value, hint }) {
   return (
-    <div className="min-w-0 flex-1 rounded-2xl bg-black/25 px-3 py-3 text-center ring-1 ring-white/10">
-      <p className="text-[11px] font-bold text-white/55">{label}</p>
-      <p className="mt-1 text-lg font-black leading-tight">[{value}] {hint}</p>
+    <div className="min-w-0 flex-1 rounded-2xl bg-[var(--bg)] px-3 py-2.5 text-center ring-1 ring-[var(--line)]">
+      <p className="text-xs font-bold text-[var(--muted)]">{label}</p>
+      <p className="mt-1 whitespace-nowrap text-base font-black leading-none">
+        [{value}] <span className="text-sm font-extrabold">{hint}</span>
+      </p>
     </div>
   );
 }
 
 function Fold({ title, icon: Icon, open, onToggle, children }) {
   return (
-    <div className="overflow-hidden rounded-[22px] bg-[var(--card)] ring-1 ring-[var(--line)]">
-      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-4 text-left min-[768px]:pointer-events-none">
+    <div className="card-vector overflow-hidden rounded-[22px] bg-[var(--card)] ring-1 ring-[var(--line)]">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-4 text-left">
         <Icon size={18} className="text-[#f0b429]" />
         <span className="flex-1 font-extrabold">{title}</span>
-        <ChevronDown size={18} className={`text-[var(--muted)] transition min-[768px]:hidden ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={18} className={`text-[var(--muted)] transition ${open ? 'rotate-180' : ''}`} />
       </button>
-      <div className={`${open ? 'block' : 'hidden'} border-t border-[var(--line)] px-4 py-4 min-[768px]:block`}>
+      <div className={`${open ? 'block' : 'hidden'} border-t border-[var(--line)] px-4 py-4`}>
         {children}
       </div>
     </div>
@@ -58,16 +59,15 @@ function Fold({ title, icon: Icon, open, onToggle, children }) {
 export default function RepublicExam() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
-  const [payOpen, setPayOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [couponOpen, setCouponOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const myCode = applicantCode(user);
   const [coupon, setCoupon] = useState(() => applicantCode(user) || '');
   const [msg, setMsg] = useState('');
   const paid = hasPaidRepublic(user);
   const freePass = hasFreeNextRepublic(user);
-  const canEnter = canEnterRepublic(user);
+  const canEnter = canTryRepublic(user);
+  const wallet = useStudentWallet(user);
   const winners = useMemo(() => republicWinners(), [paid, msg]);
   const mine = winners.find((row) => String(row.userId) === String(user?.id));
   const myResults = useMemo(
@@ -75,29 +75,17 @@ export default function RepublicExam() {
     [user?.id, msg, paid],
   );
 
+  useEffect(() => {
+    getMonthlyQuizPaper().catch(() => {});
+  }, []);
+
   const startOrPay = () => {
-    if (freePass && !paid) {
-      payRepublic(user, 'winner-free');
+    if (canEnter) {
+      if (freePass && !paid) payRepublic(user, 'winner-free');
       navigate('/student/republic/take');
       return;
     }
-    if (!canEnter) {
-      setPayOpen(true);
-      setMsg('Əvvəlcə 2 ₼ ödəniş edilməlidir. Ödənişsiz imtahana girilmir.');
-      return;
-    }
-    navigate('/student/republic/take');
-  };
-
-  const confirmPay = () => {
-    setBusy(true);
-    try {
-      payRepublic(user);
-      setPayOpen(false);
-      setMsg('Ödəniş qəbul olundu. İndi «İmtahana başla» ilə daxil ola bilərsiniz.');
-    } finally {
-      setBusy(false);
-    }
+    setMsg('Aylıq imtahan ödənişi tezliklə açılacaq.');
   };
 
   const refund = (e) => {
@@ -114,11 +102,12 @@ export default function RepublicExam() {
   return (
     <AppShell title="Respublika">
       <div className="desk-page">
-        <div className="desk-split">
-        <div className="rounded-[28px] bg-[#151b24] p-5 text-white ring-1 ring-white/10 min-[768px]:p-7">
-          <p className="text-sm font-semibold text-white/70">{republicMonthBadge()}</p>
-          <h2 className="mt-2 text-[32px] font-black leading-none tracking-tight min-[768px]:text-4xl">Respublika sınağı</h2>
-          <p className="mt-3 text-sm font-semibold leading-6 text-white/75">
+        <div className="desk-split republic-desk">
+        <div className="republic-left">
+        <div className="republic-hero card-vector rounded-[28px] bg-[var(--card)] p-5 ring-1 ring-[var(--line)] min-[768px]:p-7">
+          <p className="text-sm font-semibold text-[var(--muted)]">{republicMonthBadge()}</p>
+          <h2 className="mt-2 text-[clamp(1.35rem,5vw,2.25rem)] font-black leading-tight tracking-tight">Respublika sınağı</h2>
+          <p className="mt-3 text-sm font-semibold leading-6 text-[var(--muted)]">
             Ay sonu sillabus mövzularından qarışıq sınaq. Hər ay bir dəfə keçirilir.
           </p>
           <div className="mt-5 flex gap-2">
@@ -126,17 +115,18 @@ export default function RepublicExam() {
             <StatBox label="Suallar" value={republicQuestionCount()} hint="sual" />
             <StatBox label="Giriş" value={REPUBLIC_PRICE} hint="₼" />
           </div>
-          <p className="mt-5 text-sm font-semibold leading-6 text-white/80">
+          <p className="mt-5 text-sm font-semibold leading-6">
             🏆 Birinci yerə çıxan növbəti ayın imtahanına pulsuz daxil olur.
           </p>
-          <Button className="mt-6 w-full bg-[#2f7a45] text-base min-[768px]:w-auto min-[768px]:min-w-[240px]" onClick={startOrPay}>
+          <p className="mt-4 text-sm font-semibold text-[var(--muted)]">Hesab: {formatManat(wallet.balance)}</p>
+          <Button className="mt-6 w-full text-base min-[768px]:w-auto min-[768px]:min-w-[240px]" onClick={startOrPay}>
             {canEnter
               ? (freePass && !paid ? 'Pulsuz daxil ol →' : 'İmtahana başla →')
-              : `${formatManat(REPUBLIC_PRICE)} ödə, sonra başla`}
+              : 'Tezliklə'}
           </Button>
           {!canEnter ? (
             <p className="mt-3 text-center text-xs font-bold text-[#f0b429]">
-              Ödəniş edilmədən imtahana giriş bağlıdır.
+              Aylıq imtahan ödənişi tezliklə açılacaq.
             </p>
           ) : freePass && !paid ? (
             <p className="mt-3 text-center text-xs font-bold text-[#f0b429]">
@@ -145,8 +135,23 @@ export default function RepublicExam() {
           ) : null}
           {msg ? <p className="mt-3 text-center text-sm font-bold text-[#8fd4a4]">{msg}</p> : null}
         </div>
+        <RepublicProgressChart
+          history={myResults}
+          onRegister={startOrPay}
+          registerLabel={canEnter ? undefined : 'Aylıq imtahan · Tezliklə'}
+        />
+        </div>
 
         <div className="space-y-3">
+        <RepublicTopTen month={republicMonthKey()} highlightId={user?.id} padPractice={Boolean(user?.practice)} />
+        <button
+          type="button"
+          onClick={() => openRepublicRankingPdf(republicMonthKey(), { highlightUserId: user?.id, padPractice: Boolean(user?.practice) })}
+          className="card-vector flex w-full items-center justify-center gap-2 rounded-full bg-[var(--card)] py-3 text-sm font-extrabold ring-1 ring-[var(--line)]"
+        >
+          <Download size={16} /> Tam siyahını yüklə
+        </button>
+        <div className="republic-folds">
         <Fold
           title="Qalib kuponun var?"
           icon={Trophy}
@@ -179,7 +184,9 @@ export default function RepublicExam() {
         >
           {myResults.length ? (
             <ul className="space-y-2">
-              {myResults.map((row) => (
+              {myResults.map((row) => {
+                const place = republicResults(row.month).findIndex((item) => String(item.userId) === String(row.userId));
+                return (
                 <li key={`${row.month}-${row.at}`}>
                   <button
                     type="button"
@@ -190,7 +197,8 @@ export default function RepublicExam() {
                     <span className="min-w-0 flex-1">
                       <span className="block font-extrabold">{republicMonthLabel(row.month)}</span>
                       <span className="text-xs font-semibold text-[var(--muted)]">
-                        {row.correct}/{row.total} düzgün
+                        Nəticə: {row.percent}%{place >= 0 ? ` · Yer: #${place + 1}` : ''}
+                        {row.correct != null ? ` · ${row.correct}/${row.total} düzgün` : ''}
                         {row.durationSeconds != null ? ` · vaxt ${formatHms(row.durationSeconds)}` : ''}
                         {row.at ? ` · ${formatDateTime(row.at)}` : ''}
                       </span>
@@ -199,7 +207,8 @@ export default function RepublicExam() {
                     <ChevronRight size={16} className="text-[var(--muted)]" />
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : (
             <p className="text-sm text-[var(--muted)]">Hələ nəticə yoxdur. İmtahanı bitirəndən sonra burada görünəcək.</p>
@@ -207,8 +216,8 @@ export default function RepublicExam() {
         </Fold>
         </div>
         </div>
+        </div>
       </div>
-      <PaymentCheckoutModal open={payOpen} plan={PLAN} busy={busy} onClose={() => setPayOpen(false)} onConfirm={confirmPay} />
     </AppShell>
   );
 }

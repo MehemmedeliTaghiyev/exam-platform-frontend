@@ -1,15 +1,26 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useLocale } from '../context/LocaleContext';
 import AppShell from '../components/AppShell';
 import DreamUniversityCard from '../components/DreamUniversityCard';
+import StudentAlerts from '../components/StudentAlerts';
 import ExamRow from '../components/ExamRow';
-import WeeklyRanking from '../components/WeeklyRanking';
 import { Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { examSubject, subjectProgress } from '../lib/publicExams';
 import { isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
+import {
+  ensureWeekendPaper,
+  isWeekendDay,
+  isWeekendOpen,
+  weekendResultFor,
+  weekendWindow,
+} from '../lib/weekendWeakExam';
+import { countStreak, dailyDoneDays, dailyKey, dailyMine, flameDying, flamePeak, todaysQuestion, weekDots } from '../lib/dailyChallenge';
+import StreakFlame from '../components/StreakFlame';
+import { Check } from 'lucide-react';
 
 function examSortTime(exam) {
   return (
@@ -22,6 +33,7 @@ function examSortTime(exam) {
 
 export default function StudentDashboard() {
   const { user } = useContext(AuthContext);
+  const { t } = useLocale();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const submittedNotice = searchParams.get('teslim') === '1';
@@ -29,7 +41,7 @@ export default function StudentDashboard() {
   const [publicExams, setPublicExams] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setTick((n) => n + 1), 1000);
@@ -75,6 +87,36 @@ export default function StudentDashboard() {
     [exams],
   );
 
+  const daily = useMemo(() => {
+    const q = todaysQuestion();
+    const days = dailyDoneDays(user?.id);
+    history.forEach((row) => {
+      const date = new Date(row.submittedAt || row.SubmittedAt);
+      if (!Number.isNaN(date.getTime())) days.add(dailyKey(date));
+    });
+    const now = new Date();
+    return {
+      q,
+      done: dailyMine(user?.id, q.day),
+      streak: countStreak(days, now),
+      peak: flamePeak(days),
+      dying: flameDying(days, now),
+      week: weekDots(days, now),
+    };
+  }, [user?.id, history, tick]);
+
+  const weekend = useMemo(() => {
+    const now = new Date();
+    const win = weekendWindow(now);
+    return {
+      win,
+      paper: ensureWeekendPaper(user),
+      done: weekendResultFor(user?.id, win.week),
+      open: isWeekendOpen(user, now),
+      visible: isWeekendDay(now),
+    };
+  }, [user?.id, tick]);
+
   const fenStats = useMemo(() => {
     const followed = new Set(localDb.followedTeacherIds(user?.id).map(String));
     const mine = user?.teacherId != null ? String(user.teacherId) : '';
@@ -96,63 +138,159 @@ export default function StudentDashboard() {
     <AppShell title="">
       {submittedNotice ? (
         <Card className="mb-6 text-center">
-          <p className="text-lg font-extrabold">İmtahan təhvil verildi</p>
+          <p className="text-lg font-extrabold">{t('student.submitted')}</p>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Nəticən avtomatik saxlanıldı. Düzgün/səhv cavablar və ümumi sıralama imtahan bitəndən sonra, yenidən daxil olanda açılacaq.
+            {t('student.submittedText')}
           </p>
-          <Button className="mt-4" variant="secondary" onClick={() => setSearchParams({})}>Bağla</Button>
+          <Button className="mt-4" variant="secondary" onClick={() => setSearchParams({})}>{t('common.close')}</Button>
         </Card>
       ) : null}
 
       <div className="student-home">
         <div className="student-home-primary">
+      <StudentAlerts variant="panel" />
       <DreamUniversityCard user={user} />
 
-      <div className="mb-10">
+      <button
+        type="button"
+        onClick={() => navigate('/student/daily')}
+        className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
+      >
+        <div className="flex items-center gap-2">
+          <StreakFlame streak={daily.peak || daily.streak} dying={daily.dying} size={36} />
+          <p className="text-xl font-black">{t('streak.title', { n: daily.streak })}</p>
+        </div>
+        <p className="mt-1 text-sm font-semibold text-[var(--muted)]">
+          {daily.dying > 0.12
+            ? t('streak.fade')
+            : daily.week.some((d) => d.today && d.done) || daily.done
+              ? t('streak.keep')
+              : t('streak.start')}
+        </p>
+        <div className="mt-4 grid grid-cols-7 gap-2">
+          {daily.week.map((day) => {
+            const labels = t('streak.days');
+            const name = Array.isArray(labels) ? labels[day.index] : '';
+            return (
+              <span key={day.key} className="grid justify-items-center gap-1.5">
+                <span
+                  className={`grid h-10 w-10 place-items-center rounded-full text-sm font-black ${
+                    day.done
+                      ? 'bg-[var(--accent)] text-[#3a2200]'
+                      : day.today
+                        ? 'ring-2 ring-[var(--accent)] text-[var(--accent)]'
+                        : 'ring-1 ring-[var(--line)] text-[var(--muted)]'
+                  }`}
+                >
+                  {day.done ? <Check size={18} strokeWidth={3} /> : ''}
+                </span>
+                <span className="text-[11px] font-bold text-[var(--muted)]">{name}</span>
+              </span>
+            );
+          })}
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => navigate('/student/daily')}
+        className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">{t('daily.badge')}</p>
+            <p className="mt-1 text-lg font-black">{t('daily.title')}</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--muted)]">{daily.q.subject}</p>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg)] px-2.5 py-1 text-sm font-black">
+            <StreakFlame streak={daily.peak || daily.streak} dying={daily.dying} size={18} /> {daily.streak}
+          </span>
+        </div>
+        <p className="mt-3 line-clamp-2 text-sm font-extrabold leading-snug">{daily.q.text.replace(/\$/g, '')}</p>
+        <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
+          {daily.done ? t('daily.answered') : t('daily.open')}
+        </span>
+      </button>
+
+      {weekend.visible ? (
+      <button
+        type="button"
+        onClick={() => navigate(weekend.done ? `/student/weekend/result/${encodeURIComponent(weekend.win.week)}` : '/student/weekend')}
+        className="card-vector mb-6 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
+      >
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">{t('student.weekend')}</p>
+        <p className="mt-2 text-lg font-black">{weekend.win.label}</p>
+        <p className="mt-1 text-sm font-semibold text-[var(--muted)]">
+          {weekend.done
+            ? t('student.weekendDone', { pct: weekend.done.percent })
+            : weekend.open
+              ? t('student.weekendOpen', { n: weekend.paper.questions?.length || 0 })
+              : t('student.weekendSoon')}
+        </p>
+        <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
+          {weekend.done ? t('student.viewResult') : weekend.open ? t('student.startChallenge') : t('student.soon')}
+        </span>
+      </button>
+      ) : null}
+        </div>
+        <aside className="student-home-aside">
+      <div className="mb-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold">Kabinet · fənnlər</h2>
-          <Button variant="secondary" onClick={() => navigate('/student/public')}>İmtahan yeri</Button>
+          <h2 className="text-lg font-bold">{t('student.subjects')}</h2>
+          <Button variant="secondary" onClick={() => navigate('/student/public')}>{t('nav.examPlace')}</Button>
         </div>
         {fenStats.length === 0 ? (
-          <div className="rounded-[22px] bg-[#171d27] px-4 py-5 text-sm font-semibold text-white/55 ring-1 ring-white/10">
-            İmtahan yerində fənnə qoşulun (açıq imtahan açın və ya müəllim izləyin). Sonra burada həmin fənnin açıq imtahanlarından neçəsinə daxil olduğunuz görünəcək.
+          <div className="card-vector rounded-[22px] bg-[var(--card)] px-4 py-5 text-sm font-semibold text-[var(--muted)] ring-1 ring-[var(--line)]">
+            {t('student.noSubjects')}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">
+          <div className="grid gap-3">
             {fenStats.map((row) => {
               const pct = row.total ? Math.min(100, Math.round((row.entered / row.total) * 100)) : 0;
+              const letter = String(row.subject || '?').trim().charAt(0).toUpperCase();
+              const bar = pct >= 70 ? 'bg-[#2ee07a]' : 'bg-[var(--accent)]';
+              const badge = pct >= 70 ? 'bg-[#2ee07a]/18 text-[#2ee07a]' : 'bg-[var(--accent)]/18 text-[var(--accent)]';
               return (
                 <button
                   key={row.subject}
                   type="button"
-                  onClick={() => navigate('/student/public')}
-                  className="rounded-[22px] bg-[#171d27] px-4 py-4 text-left text-white ring-1 ring-white/10"
+                  onClick={() => navigate(`/student/public?subject=${encodeURIComponent(row.subject)}`)}
+                  className="card-vector flex items-center gap-3 rounded-[22px] bg-[var(--card)] px-4 py-4 text-left ring-1 ring-[var(--line)]"
                 >
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/40">Fənn</p>
-                  <p className="mt-1 truncate text-[15px] font-extrabold leading-tight">{row.subject}</p>
-                  <p className="mt-3 text-2xl font-black tabular-nums leading-none">
-                    <span className="text-[#f0b429]">{row.entered}</span><span className="text-white">/{row.total}</span>
-                  </p>
-                  <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <span className="block h-full rounded-full bg-[#f0b429]" style={{ width: `${pct}%` }} />
-                  </span>
-                  <p className="mt-2 text-[11px] font-semibold leading-tight text-white/40">açıq imtahan tamamlandı</p>
+                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-sm font-black ${badge}`}>{letter}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-extrabold leading-tight">{row.subject}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-[var(--muted)]">{t('student.examCount', { entered: row.entered, total: row.total })}</p>
+                    <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <span className={`block h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-sm font-black text-[var(--muted)]">{pct}%</span>
                 </button>
               );
             })}
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => navigate('/student/progress')}
+          className="card-vector mt-3 w-full rounded-[22px] bg-[var(--card)] px-4 py-4 text-left ring-1 ring-[var(--line)]"
+        >
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">{t('student.progress')}</p>
+          <p className="mt-1 text-lg font-black">{t('progress.title')}</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--muted)]">{t('student.progressText')}</p>
+        </button>
       </div>
 
-      <div className="min-w-0 overflow-hidden rounded-[28px] bg-[#141a22] p-4 text-white ring-1 ring-white/10">
+      <div className="card-vector min-w-0 overflow-hidden rounded-[28px] bg-[var(--card)] p-4 ring-1 ring-[var(--line)]">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="min-w-0 truncate text-lg font-bold">Ən son imtahanlar</h2>
+          <h2 className="min-w-0 truncate text-lg font-bold">{t('student.latest')}</h2>
           <button
             type="button"
             onClick={() => navigate('/student/public')}
-            className="shrink-0 text-xs font-extrabold text-[#9d8cff]"
+            className="shrink-0 text-xs font-extrabold text-[var(--accent)]"
           >
-            Hamısı
+            {t('common.all')}
           </button>
         </div>
         {loading ? (
@@ -162,11 +300,11 @@ export default function StudentDashboard() {
           </div>
         ) : latestExams.length === 0 ? (
           <EmptyState
-            title="Hələ imtahan yoxdur"
-            text="Açıq imtahanlar İmtahan yerində görünür. Müəlliminiz dərc edəndə ən yeniləri burada da çıxacaq."
+            title={t('student.noExams')}
+            text={t('student.noExamsText')}
             action={
               <Button variant="secondary" onClick={() => navigate('/student/public')}>
-                İmtahan yeri
+                {t('nav.examPlace')}
               </Button>
             }
           />
@@ -176,15 +314,13 @@ export default function StudentDashboard() {
               <ExamRow
                 key={exam.id}
                 exam={exam}
+                mine={history.find((row) => String(row.examId) === String(exam.id))}
                 onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
               />
             ))}
           </div>
         )}
       </div>
-        </div>
-        <aside className="student-home-aside">
-          <WeeklyRanking variant="student" />
         </aside>
       </div>
     </AppShell>

@@ -5,10 +5,13 @@ import App from './App.jsx';
 import AppSplash from './components/LoadingScreen.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
+import { LocaleProvider } from './context/LocaleContext.jsx';
 import { applyNativeChrome, isNativeApp } from './lib/runtime';
+import { registerUrgentWorker } from './lib/pushNotify';
 import './index.css';
 
 applyNativeChrome();
+registerUrgentWorker();
 
 const Router = isNativeApp() ? HashRouter : BrowserRouter;
 
@@ -31,11 +34,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <Router>
       <ThemeProvider>
-        <AuthProvider>
-          <AppSplash>
-            <App />
-          </AppSplash>
-        </AuthProvider>
+        <LocaleProvider>
+          <AuthProvider>
+            <AppSplash>
+              <App />
+            </AppSplash>
+          </AuthProvider>
+        </LocaleProvider>
       </ThemeProvider>
     </Router>
   </React.StrictMode>,

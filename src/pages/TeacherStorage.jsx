@@ -259,7 +259,7 @@ export default function TeacherStorage() {
     if (!unlocked || sending) return;
     if (overBudget) {
       setPayWall(false);
-      setError(`Jetonunuz artıqdır. Bu tələb ${requestCost} jetondur, sizdə ${availableJetons} jeton var.`);
+      setError(`Qəpik çatmır. Bu tələb ${requestCost} qəpikdir, sizdə ${availableJetons} qəpik var.`);
       return;
     }
     setSending(true);
@@ -287,7 +287,7 @@ export default function TeacherStorage() {
     } catch (err) {
       if (err?.code === 'JETON_YOX') {
         setPayWall(true);
-        setError(`Pulsuz ${WEEKLY_TOKENS} jeton bitib. Bu tələb ${requestCost} jeton istəyir.`);
+        setError(`Həftəlik ${WEEKLY_TOKENS} qəpik bitib. Bu tələb ${requestCost} qəpik istəyir.`);
         navigate('/teacher/cabinet#odenis');
       } else if (err?.code === 'SUAL_YOX') {
         setError('Quiz tələb etmək üçün asan, orta və ya çətin sual sayını yazın.');
@@ -349,7 +349,7 @@ export default function TeacherStorage() {
             ))}
           </div>
           <ul className="mt-4 grid gap-2 text-sm font-semibold text-white/70 min-[768px]:grid-cols-3">
-            <li className="flex items-center gap-2"><Gift size={16} className="text-[#f0b429]" /> İlk {WEEKLY_TOKENS} jeton pulsuzdur</li>
+            <li className="flex items-center gap-2"><Gift size={16} className="text-[#f0b429]" /> Hər həftə {WEEKLY_TOKENS} qəpik</li>
             <li className="flex items-center gap-2"><Package size={16} className="text-[#f0b429]" /> Buraxılış paketi {STORAGE_PRICE}, blok paketi {STORAGE_PRICE_BLOK} jetondur</li>
             <li className="flex items-center gap-2"><Droplet size={16} className="text-[#f0b429]" /> Watermark +{WATERMARK_PRICE} jeton</li>
           </ul>

@@ -3,17 +3,19 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Menu, X } from 'lucide-react';
 import { goToHash, scrollToHash } from '../../lib/scrollToHash';
 import BrandLogo from '../BrandLogo';
+import { useLocale } from '../../context/LocaleContext';
 
 const LINKS = [
-  { href: '/#imkanlar', label: 'İmkanlar', hash: 'imkanlar' },
-  { href: '/#elaqe', label: 'Necə işləyir', hash: 'elaqe' },
-  { href: '/teachers', label: 'Müəllim tap' },
-  { href: '/#elaqe', label: 'Əlaqə', hash: 'elaqe' },
+  { href: '/#imkanlar', labelKey: 'auth.features', hash: 'imkanlar' },
+  { href: '/#elaqe', labelKey: 'auth.how', hash: 'elaqe' },
+  { href: '/teachers', labelKey: 'auth.findTeacher' },
+  { href: '/#elaqe', labelKey: 'auth.contact', hash: 'elaqe' },
 ];
 
 export default function Header({ hideAuth = false, overlay = false }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -99,12 +101,12 @@ export default function Header({ hideAuth = false, overlay = false }) {
         <nav className="hp-desktop-nav hidden items-center gap-8 min-[768px]:flex" aria-label="İctimai menyu">
           {LINKS.map((item) => (
             <Link
-              key={item.label}
+              key={item.labelKey}
               to={item.href}
               onClick={goLink(item)}
               className="text-sm font-semibold text-white/70 hover:text-white"
             >
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           ))}
         </nav>
@@ -112,9 +114,9 @@ export default function Header({ hideAuth = false, overlay = false }) {
         <div className="hp-header-actions">
           {hideAuth ? null : (
             <>
-              <Link to="/login" className="hp-header-login hidden text-sm font-extrabold text-white/80 min-[520px]:inline">Daxil ol</Link>
+              <Link to="/login" className="hp-header-login hidden text-sm font-extrabold text-white/80 min-[520px]:inline">{t('auth.login')}</Link>
               <Link to="/register" className="hp-btn hp-btn-sm hp-btn-gold hp-lift hp-header-register">
-                <span className="hp-header-register-label">Qeydiyyat</span>
+                <span className="hp-header-register-label">{t('auth.register')}</span>
               </Link>
             </>
           )}
@@ -146,14 +148,14 @@ export default function Header({ hideAuth = false, overlay = false }) {
             aria-label="İctimai menyu"
           >
             {LINKS.map((item) => (
-              <Link key={item.label} to={item.href} onClick={goLink(item)}>
-                {item.label}
+              <Link key={item.labelKey} to={item.href} onClick={goLink(item)}>
+                {t(item.labelKey)}
               </Link>
             ))}
             {hideAuth ? null : (
               <>
-                <Link to="/login" className="min-[520px]:hidden" onClick={close}>Daxil ol</Link>
-                <Link to="/register" className="hp-mobile-register" onClick={close}>Qeydiyyat</Link>
+                <Link to="/login" className="min-[520px]:hidden" onClick={close}>{t('auth.login')}</Link>
+                <Link to="/register" className="hp-mobile-register" onClick={close}>{t('auth.register')}</Link>
               </>
             )}
           </nav>

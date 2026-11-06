@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -5,18 +6,18 @@ import {
   Calculator,
   Clock,
   FlaskConical,
-  GraduationCap,
   Languages,
   Shield,
   Target,
   Users,
   Brain,
 } from 'lucide-react';
+import ExamProgressCard from '../ExamProgressCard';
 
-const TOPICS = [
-  { name: 'Funksiyalar', value: 92, color: '#3dcc78' },
-  { name: 'Triqonometriya', value: 74, color: '#3dcc78' },
-  { name: 'Həndəsə', value: 41, color: '#e07a3d' },
+const SAMPLE_PROGRESS = [
+  { id: 's1', title: 'Sınaq 1', subject: 'Riyaziyyat', at: new Date(2026, 9, 8), percent: 58, label: 'S1', delta: 0 },
+  { id: 's2', title: 'Sınaq 2', subject: 'Riyaziyyat', at: new Date(2026, 10, 5), percent: 65, label: 'S2', delta: 7 },
+  { id: 's3', title: 'Sınaq 3', subject: 'Riyaziyyat', at: new Date(2026, 10, 12), percent: 74, label: 'S3', delta: 9 },
 ];
 
 const CHOICES = [
@@ -61,17 +62,79 @@ const STRIP = [
 ];
 
 export default function Hero({ onPractice, onTeacherPractice }) {
+  const [sampleId, setSampleId] = useState('s3');
+  const [feat, setFeat] = useState(0);
+  const featRef = useRef(null);
+  const pauseUntil = useRef(0);
+  const glideRef = useRef(0);
+
+  const goFeat = (index) => {
+    const el = featRef.current;
+    if (!el) return;
+    const next = ((index % STRIP.length) + STRIP.length) % STRIP.length;
+    const from = el.scrollLeft;
+    const to = next * el.clientWidth;
+    const dist = Math.abs(to - from);
+    if (dist < 2) {
+      setFeat(next);
+      return;
+    }
+    window.cancelAnimationFrame(glideRef.current);
+    el.classList.add('is-gliding');
+    const start = performance.now();
+    const dur = Math.min(3400, Math.max(2400, dist * 3.6));
+    const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / dur);
+      el.scrollLeft = from + (to - from) * ease(t);
+      if (t < 1) {
+        glideRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+      el.classList.remove('is-gliding');
+    };
+    glideRef.current = window.requestAnimationFrame(step);
+    setFeat(next);
+  };
+
+  const holdFeat = () => {
+    pauseUntil.current = Date.now() + 7000;
+    window.cancelAnimationFrame(glideRef.current);
+    featRef.current?.classList.remove('is-gliding');
+  };
+
+  const onFeatScroll = () => {
+    const el = featRef.current;
+    if (!el) return;
+    const i = Math.round(el.scrollLeft / Math.max(el.clientWidth, 1));
+    setFeat(Math.max(0, Math.min(STRIP.length - 1, i)));
+  };
+
+  useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 767px)');
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (!mobile.matches || reduce.matches) return undefined;
+    const id = window.setInterval(() => {
+      if (Date.now() < pauseUntil.current) return;
+      const el = featRef.current;
+      if (!el || el.clientWidth < 40) return;
+      const current = Math.round(el.scrollLeft / el.clientWidth);
+      goFeat(current + 1);
+    }, 6200);
+    return () => {
+      window.clearInterval(id);
+      window.cancelAnimationFrame(glideRef.current);
+    };
+  }, []);
+
   return (
     <>
       <section className="hp-hero" aria-label="İmtahana hazırlıq">
         <div className="hp-hero-inner">
           <div className="hp-hero-copy">
-            <p className="hp-hero-badge">
-              <GraduationCap size={16} aria-hidden="true" />
-              Daha yaxşı nəticələr üçün
-            </p>
+            <p className="hp-hero-badge">Abituriyent və müəllimlər üçün</p>
             <h1 className="hp-h1">
-              İmtahana hazırlığı <span className="hp-gold-word">ölç</span>, anla, irəlilə.
+              İmtahana<br />hazırlığı <em>ölç, anla,<br />irəlilə.</em>
             </h1>
             <p className="hp-hero-lead">
               ExamPulse test nəticələrini anlamağa, zəif mövzularını kəşf etməyə və hədəfinə addım-addım çatmağa kömək edir.
@@ -99,27 +162,49 @@ export default function Hero({ onPractice, onTeacherPractice }) {
               ))}
               <span className="hp-chip hp-chip-more">+ digər fənlər</span>
             </div>
+            <div id="imkanlar" className="hp-features-wrap scroll-mt-24">
+              <div
+                ref={featRef}
+                className="hp-features"
+                aria-label="Əsas imkanlar"
+                onScroll={onFeatScroll}
+                onPointerDown={holdFeat}
+                onTouchStart={holdFeat}
+              >
+                {STRIP.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <article key={item.title}>
+                      <span className="hp-strip-icon" style={{ background: item.tint, color: item.color }}>
+                        <Icon size={20} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <h2>{item.title}</h2>
+                        <p>{item.text}</p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="hp-features-dots" aria-hidden="true">
+                {STRIP.map((item, index) => (
+                  <button
+                    key={item.title}
+                    type="button"
+                    className={index === feat ? 'is-on' : undefined}
+                    onClick={() => {
+                      holdFeat();
+                      goFeat(index);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="hp-hero-cards">
-            <article className="hp-glass hp-result-card" aria-label="Nümunə nəticə">
-              <div className="hp-result">
-                <div className="hp-result-score">
-                  <div className="hp-ring" aria-hidden="true"><span>78%</span></div>
-                </div>
-                <div className="hp-topics">
-                  <p className="hp-topics-title">Ümumi nəticə · mövzular üzrə</p>
-                  {TOPICS.map((topic) => (
-                    <div key={topic.name}>
-                      <div className="hp-topic-row">
-                        <span>{topic.name}</span>
-                        <b>{topic.value}%</b>
-                      </div>
-                      <div className="hp-bar"><i style={{ width: `${topic.value}%`, background: topic.color }} /></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <article className="hp-glass hp-result-card" aria-label="Nümunə irəliləyiş">
+              <ExamProgressCard rows={SAMPLE_PROGRESS} selectedId={sampleId} onSelect={setSampleId} />
             </article>
 
             <article className="hp-glass" aria-label="Nümunə sual">
@@ -151,23 +236,6 @@ export default function Hero({ onPractice, onTeacherPractice }) {
               </div>
             </article>
           </div>
-        </div>
-      </section>
-
-      <section id="imkanlar" className="hp-strip scroll-mt-24" aria-label="Əsas imkanlar">
-        <div className="hp-strip-grid">
-          {STRIP.map((item) => {
-            const Icon = item.icon;
-            return (
-              <article key={item.title}>
-                <span className="hp-strip-icon" style={{ background: item.tint, color: item.color }}>
-                  <Icon size={22} aria-hidden="true" />
-                </span>
-                <h2>{item.title}</h2>
-                <p>{item.text}</p>
-              </article>
-            );
-          })}
         </div>
       </section>
     </>

@@ -304,6 +304,14 @@ export function classNames(...parts) {
   return parts.filter(Boolean).join(' ');
 }
 
+export function timeGreeting(now = new Date()) {
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) return 'Sabahınız xeyir';
+  if (hour >= 12 && hour < 17) return 'Günortanız xeyir';
+  if (hour >= 17 && hour < 22) return 'Axşamınız xeyir';
+  return 'Gecəniz xeyir';
+}
+
 export function errorMessage(err, fallback = 'Xəta baş verdi') {
   if (err?.isDuplicateGroup && typeof err?.message === 'string') return err.message;
   if (err?.name === 'TimeoutError' || err?.name === 'AbortError' || err?.code === 'TIMEOUT') {

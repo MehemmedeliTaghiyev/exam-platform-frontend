@@ -13,7 +13,6 @@ export default function Footer({ onAdminPractice }) {
           <Link to="/privacy">Məxfilik</Link>
           <Link to="/terms">Şərtlər</Link>
           <Link to="/support">Dəstək</Link>
-          <Link to="/delete-account">Hesabı sil</Link>
           {onAdminPractice ? (
             <button type="button" onClick={onAdminPractice}>Admin paneli</button>
           ) : (

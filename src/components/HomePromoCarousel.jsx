@@ -36,7 +36,7 @@ function RepublicAd({ left }) {
   return (
     <Link
       to="/student/republic"
-      className="block h-full overflow-hidden rounded-[28px] bg-[linear-gradient(165deg,#163022_0%,#1f4a32_48%,#2a3a18_100%)] p-5 text-white no-underline ring-1 ring-[#4cae6e]/25"
+      className="block h-full overflow-hidden rounded-[28px] bg-[linear-gradient(165deg,#1a1633_0%,#2a2148_48%,#221c40_100%)] p-5 text-white no-underline ring-1 ring-[var(--accent)]/25"
     >
       <p className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide">
         <span className="h-1.5 w-1.5 rounded-full bg-[#4ade80]" /> Reklam · İmtahan açıqdır
@@ -81,7 +81,7 @@ function WinnerAd({ winner }) {
   const month = winner?.month || republicPrevMonthKey();
   const photo = winner?.photo || getStudentPhoto(winner?.userId);
   return (
-    <div className="flex h-full flex-col rounded-[28px] bg-[#171d27] p-4 text-white ring-1 ring-white/10">
+    <div className="flex h-full flex-col rounded-[28px] bg-[var(--card)] p-4 ring-1 ring-white/10">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#f0b429]">Son ayın qalibi</p>
@@ -112,7 +112,7 @@ function WinnerAd({ winner }) {
                   <User size={28} />
                 )}
               </span>
-              <span className="absolute -bottom-0.5 -right-0.5 grid h-6 w-6 place-items-center rounded-full bg-[#f0b429] text-[11px] font-black text-[#3a2a00] ring-2 ring-[#171d27]">
+              <span className="absolute -bottom-0.5 -right-0.5 grid h-6 w-6 place-items-center rounded-full bg-[#f0b429] text-[11px] font-black text-[#3a2a00] ring-2 ring-[var(--card)]">
                 1
               </span>
             </span>
@@ -133,11 +133,11 @@ function WinnerAd({ winner }) {
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-[18px] bg-[#121820] px-3 py-3 text-center">
+            <div className="rounded-[18px] bg-[#120e24] px-3 py-3 text-center">
               <p className="text-2xl font-black tabular-nums">{winner.percent != null ? `${winner.percent}%` : '—'}</p>
               <p className="mt-1 text-xs font-semibold text-white/45">Nəticə</p>
             </div>
-            <div className="rounded-[18px] bg-[#121820] px-3 py-3 text-center">
+            <div className="rounded-[18px] bg-[#120e24] px-3 py-3 text-center">
               <p className="text-2xl font-black tabular-nums">
                 {winner.correct != null && winner.total != null ? `${winner.correct}/${winner.total}` : '—'}
               </p>

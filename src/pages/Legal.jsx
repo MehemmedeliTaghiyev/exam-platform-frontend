@@ -194,7 +194,6 @@ export default function Legal() {
           <Link className={pathname === '/privacy' ? 'text-[#1d2430]' : ''} to="/privacy">Məxfilik</Link>
           <Link className={pathname === '/terms' ? 'text-[#1d2430]' : ''} to="/terms">Şərtlər</Link>
           <Link className={pathname === '/support' ? 'text-[#1d2430]' : ''} to="/support">Dəstək</Link>
-          <Link className={pathname === '/delete-account' ? 'text-[#1d2430]' : ''} to="/delete-account">Hesabı sil</Link>
         </nav>
       </div>
     </div>

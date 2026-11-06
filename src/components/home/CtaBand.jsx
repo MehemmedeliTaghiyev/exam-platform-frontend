@@ -9,7 +9,7 @@ export default function CtaBand() {
           <p>
             Qeydiyyat pulsuzdur. Telefonda da, kompüterdə də işləyir.
           </p>
-          <Link to="/register" className="hp-btn hp-btn-gold hp-lift">
+          <Link to="/register" className="hp-btn hp-cta-register hp-lift">
             Qeydiyyatdan keç
           </Link>
         </div>

@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { Calendar, Users, Clock, HelpCircle, Trash2, Sparkles, Lock, Bookmark } from 'lucide-react';
 import { Badge, Card, ConfirmDialog } from './ui';
 import { formatDateTime, resolveExamStatus } from '../lib/utils';
 import { examVisibility } from '../lib/examVisibility';
 import { isAiExam } from '../lib/questionDifficulty';
 import { displayExamDescription } from '../lib/driveLinks';
+import { isNewExam } from '../lib/examFresh';
+import { AuthContext } from '../context/AuthContext';
 
 function visibleExamTitle(exam) {
   const note = displayExamDescription(exam);
@@ -30,8 +32,10 @@ export default function ExamCard({
   onRetake,
   progress = '',
 }) {
+  const { user } = useContext(AuthContext);
   const [confirm, setConfirm] = useState(false);
   const status = resolveExamStatus(exam);
+  const fresh = isNewExam(exam, { userId: user?.id, submitted: progress === 'done' || entered });
   const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
   const label = status === 'Live' ? 'Canlı' : status === 'Finished' ? 'Bitib' : status === 'Draft' ? 'Qaralama' : 'Planlanıb';
   const topic = visibleExamTitle(exam);
@@ -46,6 +50,8 @@ export default function ExamCard({
           ? 'border-2 border-emerald-500 bg-emerald-50/80 dark:border-emerald-400 dark:bg-emerald-950/30'
           : progress === 'missed'
             ? 'border-2 border-red-500 bg-red-50/80 dark:border-red-400 dark:bg-red-950/30'
+            : fresh
+              ? 'exam-row-new border-2 border-[#f5a623] bg-[#2a2210]/80'
             : ai
               ? 'border-transparent bg-[linear-gradient(var(--card),var(--card))_padding-box,linear-gradient(135deg,#5b4cf5,#22d3ee)_border-box] [border-width:1.5px]'
               : ''
@@ -70,6 +76,11 @@ export default function ExamCard({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {fresh ? (
+            <span className="exam-new-badge inline-flex items-center rounded-full bg-[#f5a623] px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-[#3a2200]">
+              Yeni
+            </span>
+          ) : null}
           {ai ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-800 dark:bg-violet-950/70 dark:text-violet-200">
               <Sparkles size={12} /> AI

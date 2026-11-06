@@ -8,7 +8,7 @@ function GenericCampus({ title }) {
         <div className="h-1/2 bg-[#00af66]" />
         <div className="h-1/2 bg-[#e4002b]" />
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-16 bg-[#2f7a45]/30" />
+      <div className="absolute bottom-0 left-0 right-0 h-16 bg-[var(--accent)]/25" />
       <div className="absolute bottom-10 left-[8%] h-24 w-28 rounded-t-lg bg-[#d9c4a0]" />
       <div className="absolute bottom-10 right-[10%] h-28 w-20 rounded-t-md bg-[#cbb89a]" />
       <p className="sr-only">{title}</p>

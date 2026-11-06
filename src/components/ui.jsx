@@ -11,7 +11,7 @@ export function Button({
   ...props
 }) {
   const styles = {
-    primary: 'text-white shadow-[0_10px_28px_var(--glow)]',
+    primary: 'text-[#3a2200] shadow-[0_10px_28px_var(--glow)]',
     secondary: 'border border-[var(--line)] bg-[var(--card)] text-[var(--text)]',
     ghost: 'bg-transparent text-[var(--muted)]',
     danger: 'bg-[#e11d48] text-white',
@@ -28,7 +28,7 @@ export function Button({
         'ep-focus ep-lift inline-flex items-center justify-center gap-2 rounded-[14px] font-semibold disabled:cursor-not-allowed disabled:opacity-50',
         sizeClass,
         styles[variant] || styles.primary,
-        variant === 'primary' ? 'bg-[linear-gradient(135deg,#2f7a45,#3d9a58)]' : '',
+        variant === 'primary' ? 'rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)]' : '',
         className,
       )}
       {...props}
@@ -43,7 +43,7 @@ export function Card({ children, className = '', onClick }) {
     <div
       onClick={onClick}
       className={classNames(
-        'rounded-[22px] border border-[var(--line)] bg-[var(--card)] p-6 text-[var(--text)]',
+        'card-vector rounded-[22px] border border-[var(--line)] bg-[var(--card)] p-6 text-[var(--text)]',
         onClick && 'cursor-pointer hover:border-brand-200 active:scale-[0.98] active:brightness-95 dark:hover:border-brand-700 transition-all duration-150',
         className,
       )}

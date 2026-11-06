@@ -13,7 +13,7 @@ export default function Steps() {
         <div className="mt-8 grid gap-5 min-[720px]:grid-cols-3">
           {STEPS.map((step) => (
             <article key={step.n} className="hp-card p-6">
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#2f7a45] font-extrabold text-white">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--hp-accent)] font-extrabold text-[#3a2200]">
                 {step.n}
               </span>
               <h3 className="mt-4 text-xl font-extrabold">{step.title}</h3>

@@ -2,18 +2,20 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import BrandLogo from './BrandLogo';
+import { useLocale } from '../context/LocaleContext';
 import { goToHash, scrollToHash } from '../lib/scrollToHash';
 
 const LINKS = [
-  { to: '/#imkanlar', label: 'İmkanlar', hash: 'imkanlar' },
-  { to: '/teachers', label: 'Müəllim tap' },
-  { to: '/exams', label: 'Açıq imtahanlar' },
-  { to: '/#elaqe', label: 'Əlaqə', hash: 'elaqe' },
+  { to: '/#imkanlar', labelKey: 'auth.features', hash: 'imkanlar' },
+  { to: '/teachers', labelKey: 'auth.findTeacher' },
+  { to: '/exams', labelKey: 'auth.openExams' },
+  { to: '/#elaqe', labelKey: 'auth.contact', hash: 'elaqe' },
 ];
 
 export default function PublicNav({ darkOnNavy = false, appearance }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const navy = appearance === 'navy' || (appearance !== 'light' && darkOnNavy);
 
@@ -62,11 +64,11 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
         <nav className="hidden items-center gap-1 md:flex" aria-label="İctimai menyu">
           {LINKS.map((item) => (
             <Link key={item.to} to={item.to} className={ghost} onClick={goLink(item)}>
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           ))}
-          <Link to="/login" className={ghost}>Daxil ol</Link>
-          <Link to="/register" className={primary}>Qeydiyyat</Link>
+          <Link to="/login" className={ghost}>{t('auth.login')}</Link>
+          <Link to="/register" className={primary}>{t('auth.register')}</Link>
         </nav>
 
         <div className="flex items-center gap-1 md:hidden">
@@ -87,11 +89,11 @@ export default function PublicNav({ darkOnNavy = false, appearance }) {
           <div className="flex flex-col gap-1">
             {LINKS.map((item) => (
               <Link key={item.to} to={item.to} className={ghost} onClick={goLink(item)}>
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             ))}
-            <Link to="/login" className={ghost}>Daxil ol</Link>
-            <Link to="/register" className={`${primary} text-center`}>Qeydiyyat</Link>
+            <Link to="/login" className={ghost}>{t('auth.login')}</Link>
+            <Link to="/register" className={`${primary} text-center`}>{t('auth.register')}</Link>
           </div>
         </div>
       ) : null}

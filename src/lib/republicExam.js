@@ -1,4 +1,5 @@
 import { studentSubscriptions } from './groupSubscriptions';
+import { creditWallet } from './studentWallet';
 import { localDb } from './localDb';
 import { applicantCode, normalizeDuelCode } from './studentCode';
 import { getStudentPhoto } from './studentPhoto';
@@ -332,8 +333,14 @@ export function reviewItemFromQuestion(q, index, selectedRaw) {
   };
 }
 
+export function canTryRepublic(user, date = new Date()) {
+  if (!user) return false;
+  if (user.practice) return true;
+  return canEnterRepublic(user, date);
+}
+
 export function submitRepublic(user, answers, extra = {}) {
-  const questions = republicQuestions();
+  const questions = (extra.questions?.length ? extra.questions : republicQuestions());
   const review = questions.map((q, index) => reviewItemFromQuestion(q, index, answers[q.id]));
   const correct = review.filter((item) => item.isCorrect).length;
   const percent = Math.round((correct / questions.length) * 100);
@@ -391,7 +398,95 @@ export function republicReviewPaper(row) {
 export function republicResults(month = monthKey()) {
   return read('exampulse_republic_results', [])
     .filter((row) => row.month === month)
-    .sort((a, b) => b.percent - a.percent || String(a.at).localeCompare(String(b.at)));
+    .sort((a, b) => b.percent - a.percent || (a.durationSeconds || 0) - (b.durationSeconds || 0) || String(a.at).localeCompare(String(b.at)));
+}
+
+const DEMO_BOARD = [
+  { userId: 'own-a', fullName: 'Aysel Məmmədova', percent: 94, correct: 28, total: 30, durationSeconds: 2140 },
+  { userId: 'own-b', fullName: 'Elvin Quliyev', percent: 90, correct: 27, total: 30, durationSeconds: 2310 },
+  { userId: 'pub-a', fullName: 'Nigar Həsənova', percent: 87, correct: 26, total: 30, durationSeconds: 2488 },
+  { userId: 'pub-b', fullName: 'Rəşad Əliyev', percent: 83, correct: 25, total: 30, durationSeconds: 2595 },
+  { userId: 'demo-5', fullName: 'Leyla Rəhimova', percent: 80, correct: 24, total: 30, durationSeconds: 2710 },
+  { userId: 'demo-6', fullName: 'Kamran Əlizadə', percent: 77, correct: 23, total: 30, durationSeconds: 2802 },
+  { userId: 'demo-7', fullName: 'Səbinə Qasımova', percent: 73, correct: 22, total: 30, durationSeconds: 2914 },
+  { userId: 'demo-8', fullName: 'Tural Məmmədli', percent: 70, correct: 21, total: 30, durationSeconds: 3050 },
+  { userId: 'demo-9', fullName: 'Günel İsmayılova', percent: 67, correct: 20, total: 30, durationSeconds: 3188 },
+  { userId: 'demo-10', fullName: 'Orxan Hüseynov', percent: 63, correct: 19, total: 30, durationSeconds: 3299 },
+];
+
+export function republicRankingRows(month = monthKey(), { padPractice = false } = {}) {
+  const live = republicResults(month);
+  if (!padPractice || live.length >= 10) {
+    return live.map((row, index) => ({ ...row, rank: index + 1 }));
+  }
+  const seen = new Set(live.map((row) => String(row.userId)));
+  const padded = [
+    ...live,
+    ...DEMO_BOARD.filter((row) => !seen.has(String(row.userId))).map((row) => ({ ...row, month, demo: true })),
+  ];
+  return padded.map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+export function republicTopTen(month = monthKey(), options = {}) {
+  return republicRankingRows(month, options).slice(0, 10);
+}
+
+export function republicTopHundred(month = monthKey(), options = {}) {
+  return republicRankingRows(month, options).slice(0, 100);
+}
+
+function rankingClock(seconds) {
+  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const secs = safe % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+export function openRepublicRankingPdf(month = monthKey(), { highlightUserId, padPractice = false } = {}) {
+  const rows = republicRankingRows(month, { padPractice });
+  const title = `Respublika sınağı · ümumi sıralama · ${monthLabel(month)}`;
+  const body = rows.map((row) => `
+    <tr class="${String(row.userId) === String(highlightUserId) ? 'me' : ''}">
+      <td>${row.rank}</td>
+      <td>${String(row.fullName || 'Abituriyent').replace(/</g, '')}</td>
+      <td>${row.correct ?? '—'}/${row.total ?? '—'}</td>
+      <td>${row.percent}%</td>
+      <td>${rankingClock(row.durationSeconds)}</td>
+    </tr>
+  `).join('');
+  const html = `<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; color: #122018; padding: 32px; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    p { color: #5b6b63; margin: 0 0 18px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #d7e0da; font-size: 13px; }
+    th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #5b6b63; }
+    tr.me td { background: #e7f6ec; font-weight: 700; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <p>ExamPulse · imtahan bitən kimi nəticə avtomatik verilir</p>
+  <table>
+    <thead><tr><th>#</th><th>Abituriyent</th><th>Düzgün</th><th>Faiz</th><th>Vaxt</th></tr></thead>
+    <tbody>${body || '<tr><td colspan="5">Hələ iştirakçı yoxdur.</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`;
+  const popup = window.open('', '_blank', 'noopener,noreferrer');
+  if (!popup) return false;
+  popup.document.write(html);
+  popup.document.close();
+  popup.focus();
+  window.setTimeout(() => popup.print(), 250);
+  return true;
 }
 
 export function republicWinners(month = monthKey()) {
@@ -443,6 +538,9 @@ export function applyRepublicCoupon(user, code) {
   if (pay.refunded) throw new Error('Pul artıq geri qaytarılıb.');
   map[key] = { ...pay, refunded: true, refundedAt: new Date().toISOString(), coupon: winner.coupon };
   write('exampulse_republic_pay', map);
+  if (Number(pay.amount) > 0) {
+    creditWallet(user, pay.amount, 'Respublika kuponu ilə hesabına qayıtdı', 'coupon');
+  }
   return map[key];
 }
 

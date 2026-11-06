@@ -58,7 +58,7 @@ export function visibleStudentOptions(question) {
   return raw.map((opt, index) => {
     const letter = optionLetterOf(opt, index);
     return {
-      id: opt?.id,
+      id: opt?.id ?? `${question?.id || 'q'}-${letter}`,
       letter,
       text: optionBody(opt, letter),
       optionText: opt?.optionText || opt?.text || '',
@@ -255,17 +255,16 @@ export default function QuestionCard({
           ? `flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-200 ${
             active ? variantOn : variantIdle
           } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`
-          : `flex w-full select-none items-center gap-3 rounded-2xl border px-4 py-3.5 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
-            active
-              ? 'border-[#2f7a45] bg-[#e7f6ea] text-[#1f5c34] dark:bg-[#163022] dark:text-[#c6f0d4]'
-              : 'border-[var(--line)] bg-[var(--card)] text-[var(--text)] hover:border-[#2f7a45]/40'
+          : `quiz-opt text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
+            active ? 'quiz-opt-on' : 'hover:border-[var(--accent)]/40'
           } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
       >
-        <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-          teacher
-            ? (active ? (dark ? 'bg-amber-400 text-indigo-950' : 'bg-brand-600 text-white') : (dark ? 'bg-white/10' : 'bg-gray-100 dark:bg-slate-800'))
-            : (active ? 'bg-[#2f7a45] text-white' : 'bg-[var(--bg)] text-[var(--text)]')}
-        }`}>{letter})</span>
+        <span className={teacher
+          ? `mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+            active ? (dark ? 'bg-amber-400 text-indigo-950' : 'bg-brand-600 text-white') : (dark ? 'bg-white/10' : 'bg-gray-100 dark:bg-slate-800')
+          }`
+          : 'quiz-letter'
+        }>{letter}</span>
         {editing && teacher ? (
           <input
             value={draftOpts[letter] || ''}
@@ -276,9 +275,6 @@ export default function QuestionCard({
         ) : label ? (
           <LatexText className="min-w-0 flex-1" text={label} />
         ) : <span className="min-w-0 flex-1" />}
-        {!teacher ? (
-          <span className={`h-5 w-5 shrink-0 rounded-full border-2 ${active ? 'border-[#2f7a45] bg-[#2f7a45] shadow-[inset_0_0_0_3px_var(--card)]' : 'border-[var(--muted)]'}`} />
-        ) : null}
       </button>
     );
   };
@@ -292,7 +288,7 @@ export default function QuestionCard({
         ) : teacher ? (
           <div className={textCard}><LatexText text={stem || 'Sual mətni yoxdur'} /></div>
         ) : (
-          <div className="select-none rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-[18px] font-medium leading-[1.55] text-[var(--text)] ring-1 ring-[#2f7a45]/20">
+          <div className="select-none rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-[18px] font-medium leading-[1.55] text-[var(--text)]">
             <LatexText text={stem || 'Sual mətni yoxdur'} />
           </div>
         )}
@@ -307,16 +303,12 @@ export default function QuestionCard({
               type="button"
               disabled={disabled}
               onClick={() => onSelect?.({ id: split.open?.id || 'open', letter: 'OPEN' })}
-              className={`flex w-full select-none items-center gap-3 rounded-xl border px-3 py-3 text-left text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
-                selectedId === String(split.open?.id || 'open')
-                  ? 'border-[#2f7a45] bg-[#e7f6ea] text-[#1f5c34] dark:bg-[#163022] dark:text-[#c6f0d4]'
-                  : 'border-[var(--line)] bg-[var(--card)] text-[var(--text)]'
+              className={`quiz-opt text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
+                selectedId === String(split.open?.id || 'open') ? 'quiz-opt-on' : ''
               }`}
             >
-              <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1 text-xs font-bold ${
-                selectedId === String(split.open?.id || 'open')
-                  ? 'bg-[#2f7a45] text-white'
-                  : 'bg-[var(--bg)] text-[var(--text)]'
+              <span className={`quiz-letter min-w-7 px-1 ${
+                selectedId === String(split.open?.id || 'open') ? '' : 'bg-[var(--bg)] text-[var(--text)]'
               }`}>Açıq</span>
               Öz cavabınız
             </button>

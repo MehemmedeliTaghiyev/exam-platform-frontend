@@ -1,10 +1,14 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Camera, ChevronRight, Copy, Flame, Gavel, Globe, Lock, LogOut, Mail, Moon, Shield, Ticket, Trash2, User } from 'lucide-react';
+import { Camera, ChevronRight, Copy, CreditCard, Flame, Gavel, Globe, Lock, LogOut, Moon, Shield, Ticket, Trash2, Wallet } from 'lucide-react';
 import AppShell from '../components/AppShell';
+import PaymentCheckoutModal from '../components/PaymentCheckoutModal';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { fetchStudentHistory } from '../lib/examApi';
+import { LanguageSwitch, useLocale } from '../context/LocaleContext';
+import { findProfileConflict, fetchStudentHistory, updateStudentProfile } from '../lib/examApi';
+import { errorMessage } from '../lib/utils';
+import { Button, Input } from '../components/ui';
 import { ACCOUNT_DELETE_PATH, PRIVACY_PATH } from '../lib/contact';
 import { studentDuelCode } from '../lib/studentCode';
 import { getStudentPhoto, saveStudentPhoto } from '../lib/studentPhoto';
@@ -12,6 +16,8 @@ import { readDreamImage } from '../lib/dreamUniversity';
 import { examSubject } from '../lib/publicExams';
 import { localDb } from '../lib/localDb';
 import { TEACHER_TICKET_EVENT } from '../lib/teacherReveal';
+import { topUpWallet, useStudentWallet, WALLET_PACKS } from '../lib/studentWallet';
+import { formatManat } from '../lib/teacherAccess';
 
 const MEDALS = [
   { days: 3, label: '3 gün' },
@@ -83,11 +89,26 @@ function Row({ children, to, onClick }) {
 export default function StudentAccount() {
   const { user, logout, patchUser } = useContext(AuthContext);
   const { dark, toggle } = useTheme();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [copied, setCopied] = useState(false);
   const [tickets, setTickets] = useState(() => localDb.ticketsForStudent(user?.id));
   const duelCode = studentDuelCode(user);
+  const wallet = useStudentWallet(user);
+  const [pick, setPick] = useState(5);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const [topupBusy, setTopupBusy] = useState(false);
+  const [topupMsg, setTopupMsg] = useState('');
+  const [profile, setProfile] = useState(() => ({
+    firstName: user?.firstName || String(user?.fullName || '').trim().split(/\s+/)[0] || '',
+    lastName: user?.lastName || String(user?.fullName || '').trim().split(/\s+/).slice(1).join(' ') || '',
+    fatherName: user?.fatherName || '',
+    email: user?.email || '',
+  }));
+  const [profileMsg, setProfileMsg] = useState('');
+  const [profileErr, setProfileErr] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -127,6 +148,50 @@ export default function StudentAccount() {
     }
   };
 
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    const firstName = String(profile.firstName || '').trim();
+    const lastName = String(profile.lastName || '').trim();
+    const fatherName = String(profile.fatherName || '').trim();
+    const email = String(profile.email || '').trim();
+    const fullName = [firstName, lastName, fatherName].filter(Boolean).join(' ');
+    if (!firstName || !email) {
+      setProfileErr('Ad və e-poçt boş ola bilməz.');
+      setProfileMsg('');
+      return;
+    }
+    setSavingProfile(true);
+    setProfileErr('');
+    setProfileMsg('');
+    try {
+      const clash = await findProfileConflict({ userId: user.id, fullName, email });
+      if (clash.emailTaken) {
+        setProfileErr('Bu e-poçt artıq istifadə olunur.');
+        return;
+      }
+      if (clash.nameTaken) {
+        setProfileErr('Bu ad artıq qeydiyyatdadır.');
+        return;
+      }
+      const saved = await updateStudentProfile(user.id, { firstName, lastName, fatherName, email }).catch(() => null);
+      patchUser?.({
+        ...(saved || {}),
+        firstName,
+        lastName,
+        fatherName,
+        email,
+        fullName: saved?.fullName || fullName,
+      });
+      setProfileMsg('Məlumatlar yadda saxlanıldı.');
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 409) setProfileErr('Bu ad və ya e-poçt artıq var.');
+      else setProfileErr(errorMessage(err, 'Məlumat saxlanılmadı.'));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const copyCode = async () => {
     if (!duelCode) return;
     try {
@@ -143,19 +208,19 @@ export default function StudentAccount() {
       <div className="desk-page space-y-4 pb-4">
         <div className="desk-split desk-split-profile">
           <div className="space-y-4">
-            <div className="profile-tile flex flex-col items-center text-center min-[768px]:flex-row min-[768px]:items-center min-[768px]:text-left min-[768px]:gap-5">
+            <div className="profile-tile flex flex-col items-center text-center min-[1024px]:flex-row min-[1024px]:items-center min-[1024px]:text-left min-[1024px]:gap-5">
               <label className="relative cursor-pointer shrink-0">
-                <span className="grid h-[108px] w-[108px] place-items-center overflow-hidden rounded-full border-[3px] border-[#2f7a45] bg-[var(--card)] text-4xl font-black text-[#4cae6e]">
+                <span className="grid h-[clamp(76px,22vw,108px)] w-[clamp(76px,22vw,108px)] place-items-center overflow-hidden rounded-full border-[3px] border-[var(--accent)] bg-[var(--card)] text-[clamp(1.4rem,5vw,2.25rem)] font-black text-[var(--accent)]">
                   {photo ? <img src={photo} alt="" className="h-full w-full object-cover" /> : initial}
                 </span>
-                <span className="absolute bottom-0 right-0 grid h-9 w-9 place-items-center rounded-full bg-[#2f7a45] text-white shadow">
+                <span className="absolute bottom-0 right-0 grid h-9 w-9 place-items-center rounded-full bg-[var(--accent)] text-[#3a2200] shadow">
                   <Camera size={16} />
                 </span>
                 <input type="file" accept="image/*" className="sr-only" onChange={onPhoto} />
               </label>
               <div className="min-w-0">
-                <p className="mt-2 text-xs font-semibold text-[var(--muted)] min-[768px]:mt-0">Şəkil yüklə (istəyə bağlı)</p>
-                <h2 className="mt-2 text-2xl font-extrabold">{user?.fullName || 'Şagird'}</h2>
+                <p className="mt-2 text-xs font-semibold text-[var(--muted)] min-[1024px]:mt-0">Şəkil yüklə (istəyə bağlı)</p>
+                <h2 className="mt-2 text-[clamp(1.15rem,4.4vw,1.5rem)] font-extrabold leading-tight">{user?.fullName || 'Şagird'}</h2>
                 <p className="mt-1 text-sm font-semibold text-[var(--muted)]">{user?.email}</p>
               </div>
             </div>
@@ -180,10 +245,48 @@ export default function StudentAccount() {
               </div>
             </div>
 
+            <div className="profile-tile">
+              <p className="flex items-center gap-1 text-xs font-bold text-[var(--muted)]">
+                <Wallet size={13} /> Pul hesabı
+              </p>
+              <p className="mt-2 text-[clamp(1.2rem,4.5vw,1.5rem)] font-black tabular-nums">{formatManat(wallet.balance)}</p>
+              <p className="mt-2 text-[11px] font-semibold text-[var(--accent)]">Balans artırma tezliklə açılacaq</p>
+              <p className="mt-4 text-xs font-extrabold">Hesabı artır</p>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {WALLET_PACKS.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => setPick(amount)}
+                    className={`rounded-xl px-1 py-2 text-center text-xs font-black ${
+                      pick === amount ? 'bg-[var(--accent)] text-[#3a2200]' : 'bg-[var(--bg)]'
+                    }`}
+                  >
+                    {formatManat(amount)}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setTopupOpen(false); setTopupMsg('Balans artırma tezliklə açılacaq.'); }}
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] px-4 text-sm font-extrabold text-[#3a2200]"
+              >
+                <CreditCard size={15} /> Tezliklə
+              </button>
+              {topupMsg ? <p className="mt-2 text-xs font-bold text-[var(--accent)]">{topupMsg}</p> : null}
+              <button
+                type="button"
+                onClick={() => navigate('/student/wallet')}
+                className="mt-2 text-xs font-bold text-[var(--muted)] underline-offset-2 hover:underline"
+              >
+                Hərəkətlərə bax
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="profile-tile">
                 <p className="text-xs font-bold text-[var(--muted)]">Ən uzun seriya</p>
-                <p className="mt-2 flex items-center gap-1 text-2xl font-black">
+                <p className="mt-2 flex items-center gap-1 text-[clamp(1.2rem,4.5vw,1.5rem)] font-black">
                   {streak} <Flame size={18} className="text-[#f0b429]" />
                 </p>
               </div>
@@ -196,7 +299,7 @@ export default function StudentAccount() {
             {tickets.length ? (
               <div className="profile-tile">
                 <p className="flex items-center gap-2 font-extrabold">
-                  <Ticket size={16} className="text-[#4cae6e]" /> Müəllim endirim biletləri
+                  <Ticket size={16} className="text-[var(--accent)]" /> Müəllim endirim biletləri
                 </p>
                 <div className="mt-3 space-y-2">
                   {tickets.map((item) => (
@@ -215,78 +318,90 @@ export default function StudentAccount() {
 
           <div className="space-y-3">
             <p className="px-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--muted)]">Məlumat</p>
+            <form onSubmit={saveProfile} className="profile-tile space-y-3">
+              <div className="grid gap-3 min-[1024px]:grid-cols-2">
+                <Input label="Ad" value={profile.firstName} onChange={(e) => setProfile({ ...profile, firstName: e.target.value })} required />
+                <Input label="Soyad" value={profile.lastName} onChange={(e) => setProfile({ ...profile, lastName: e.target.value })} />
+              </div>
+              <Input label="Ata adı" value={profile.fatherName} onChange={(e) => setProfile({ ...profile, fatherName: e.target.value })} />
+              <Input label="E-poçt" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} required />
+              {profileErr ? <p className="text-sm font-bold text-[#fb7185]">{profileErr}</p> : null}
+              {profileMsg ? <p className="text-sm font-bold text-[#2ee07a]">{profileMsg}</p> : null}
+              <Button type="submit" disabled={savingProfile} className="w-full min-[1024px]:w-auto">
+                {savingProfile ? 'Yoxlanır...' : 'Yadda saxla'}
+              </Button>
+            </form>
             <div className="grid gap-3 min-[1100px]:grid-cols-2">
-              <Row>
-                <User size={18} className="text-[#4cae6e]" />
-                <span>
-                  <span className="block text-xs font-bold text-[var(--muted)]">Ad</span>
-                  <span className="font-extrabold">{user?.fullName || 'Ad yoxdur'}</span>
-                </span>
-              </Row>
-              <Row>
-                <Mail size={18} className="text-[#4cae6e]" />
-                <span className="min-w-0">
-                  <span className="block text-xs font-bold text-[var(--muted)]">E-poçt</span>
-                  <span className="break-all font-extrabold">{user?.email}</span>
-                </span>
-              </Row>
               {duelCode ? (
                 <Row onClick={copyCode}>
-                  <Copy size={18} className="text-[#4cae6e]" />
+                  <Copy size={18} className="text-[var(--accent)]" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold text-[var(--muted)]">Abituriyent kodu</span>
                     <span className="font-mono text-lg font-black tracking-wide">{duelCode}</span>
                   </span>
-                  <span className="text-xs font-extrabold text-[#4cae6e]">{copied ? 'Kopyalandı' : 'Kopyala'}</span>
+                  <span className="text-xs font-extrabold text-[var(--accent)]">{copied ? 'Kopyalandı' : 'Kopyala'}</span>
                 </Row>
               ) : null}
             </div>
 
-            <p className="px-1 pt-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--muted)]">Tənzimləmə</p>
-            <div className="grid gap-3 min-[768px]:grid-cols-2">
+            <p className="px-1 pt-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--muted)]">{t('common.settings')}</p>
+            <div className="grid gap-3">
               <Row>
-                <Globe size={18} className="text-[#4cae6e]" />
-                <span className="flex-1">
-                  <span className="block font-extrabold">Dil</span>
-                  <span className="text-xs font-semibold text-[var(--muted)]">Azərbaycan</span>
+                <Globe size={18} className="shrink-0 text-[var(--accent)]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-extrabold">{t('account.language')}</span>
+                  <LanguageSwitch compact className="mt-2" />
                 </span>
               </Row>
               <Row onClick={toggle}>
-                <Moon size={18} className="text-[#4cae6e]" />
-                <span className="flex-1 font-extrabold">{dark ? 'Qaranlıq tema' : 'Açıq fon'}</span>
-                <span className={`relative h-7 w-12 rounded-full ${dark ? 'bg-[#2f7a45]' : 'bg-[#d9d3c8]'}`}>
-                  <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition ${dark ? 'right-0.5' : 'left-0.5'}`} />
+                <Moon size={18} className="shrink-0 text-[var(--accent)]" />
+                <span className="min-w-0 flex-1 font-extrabold">{dark ? t('common.darkTheme') : t('common.lightTheme')}</span>
+                <span className={`relative h-7 w-12 shrink-0 rounded-full ${dark ? 'bg-[var(--accent)]' : 'bg-[#d9d3c8]'}`}>
+                  <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-[#F2EDE0] transition ${dark ? 'right-0.5' : 'left-0.5'}`} />
                 </span>
               </Row>
             </div>
 
             <p className="px-1 pt-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[var(--muted)]">Tətbiq</p>
-            <div className="grid gap-3 min-[768px]:grid-cols-2">
+            <div className="grid gap-3">
               <Row to={PRIVACY_PATH}>
-                <Shield size={18} className="text-[#4cae6e]" />
+                <Shield size={18} className="text-[var(--accent)]" />
                 <span className="flex-1 font-extrabold">Məxfilik</span>
                 <ChevronRight size={16} className="text-[var(--muted)]" />
               </Row>
               <Row to="/terms">
-                <Gavel size={18} className="text-[#4cae6e]" />
+                <Gavel size={18} className="text-[var(--accent)]" />
                 <span className="flex-1 font-extrabold">İstifadə şərtləri</span>
                 <ChevronRight size={16} className="text-[var(--muted)]" />
               </Row>
               <Row onClick={signOut}>
                 <LogOut size={18} />
-                <span className="font-extrabold">Çıxış</span>
+                <span className="font-extrabold">{t('common.logout')}</span>
+              </Row>
+              <Row to={ACCOUNT_DELETE_PATH}>
+                <Trash2 size={18} className="text-[#e11d48]" />
+                <span className="flex-1 font-extrabold text-[#e11d48]">Hesabı sil</span>
+                <ChevronRight size={16} className="text-[var(--muted)]" />
               </Row>
             </div>
-
-            <Link
-              to={ACCOUNT_DELETE_PATH}
-              className="flex items-center justify-center gap-2 rounded-[18px] bg-[#fb7185] px-4 py-3.5 text-sm font-extrabold text-white no-underline min-[768px]:max-w-xs"
-            >
-              <Trash2 size={16} /> Hesabı sil
-            </Link>
           </div>
         </div>
       </div>
+      <PaymentCheckoutModal
+        open={topupOpen}
+        busy={topupBusy}
+        plan={{
+          id: 'wallet',
+          title: 'Hesabı artır',
+          price: pick,
+          hint: 'Kartla ExamPulse hesabınız doldurulur. Sonra ödənişlər bu balansdan keçir.',
+        }}
+        onClose={() => setTopupOpen(false)}
+        onConfirm={() => {
+          setTopupOpen(false);
+          setTopupMsg('Balans artırma tezliklə açılacaq.');
+        }}
+      />
     </AppShell>
   );
 }

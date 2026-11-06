@@ -4,6 +4,7 @@ import { Club, Lock, LogOut, Moon, Plus, Trash2, UserPlus } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { LanguageSwitch, useLocale } from '../context/LocaleContext';
 import { Button, ConfirmDialog, Input, Modal, Select, Textarea } from '../components/ui';
 import {
   createGroup,
@@ -37,6 +38,7 @@ function inGroup(student, group) {
 export default function TeacherCabinet() {
   const { user, logout } = useContext(AuthContext);
   const { dark, toggle } = useTheme();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
   const tokens = useTeacherTokens(user);
@@ -401,11 +403,15 @@ export default function TeacherCabinet() {
             className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-[18px] bg-[#171a22] px-4 text-left ring-1 ring-white/8"
           >
             <Moon size={18} className="text-[#9d8cff]" />
-            <span className="flex-1 font-extrabold">{dark ? 'Qaranlıq tema' : 'Açıq fon'}</span>
+            <span className="flex-1 font-extrabold">{dark ? t('common.darkTheme') : t('common.lightTheme')}</span>
             <span className={`relative h-7 w-12 rounded-full ${dark ? 'bg-[#6d5efc]' : 'bg-white/20'}`}>
               <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition ${dark ? 'right-0.5' : 'left-0.5'}`} />
             </span>
           </button>
+          <div className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-[18px] bg-[#171a22] px-4 ring-1 ring-white/8">
+            <span className="flex-1 font-extrabold">{t('account.language')}</span>
+            <LanguageSwitch />
+          </div>
           </div>
           <div>
           <h2 className="text-lg font-black">Şəxsi məlumatlar</h2>

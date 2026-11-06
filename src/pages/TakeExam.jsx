@@ -1,19 +1,22 @@
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Bookmark, ChevronLeft, ChevronRight, Flag, Infinity as InfinityIcon } from 'lucide-react';
+import { Bookmark, ChevronLeft, Flag, Infinity as InfinityIcon } from 'lucide-react';
 import QuestionCard, { visibleStudentOptions } from '../components/QuestionCard';
 import { Button, Card } from '../components/ui';
 import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLocale } from '../context/LocaleContext';
 import { examRetakeReady, formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate, studentResultsReady } from '../lib/utils';
 import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
 import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
 import { teacherWatermarkText } from '../lib/storageAccess';
 import DrivePreview from '../components/DrivePreview';
 import ScreenGuard from '../components/ScreenGuard';
+import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
 import { isPublicExam } from '../lib/examVisibility';
+import { letterOfOption, optionIdValue } from '../lib/gradeExam';
 
 const OPEN_SENTINEL = 'open';
 const LETTER_KEYS = ['A', 'B', 'C', 'D', 'E'];
@@ -30,22 +33,23 @@ function serializeAnswers(map, questions = []) {
     return questions.map((q, index) => {
       const val = map[q.id] || map[String(q.id)] || map[`p${index + 1}`] || {};
       const letter = String(val.letter || '').toUpperCase();
-      const opt = (q.options || []).find((o) => {
-        const mark = String(o.letter || o.optionText || o.text || '').trim().toUpperCase();
-        return mark === letter || mark.startsWith(`${letter})`);
+      const opt = (q.options || []).find((o, oi) => {
+        const mark = letterOfOption(o, oi);
+        return mark && mark === letter;
       });
       const rawId = val.optionId && val.optionId !== OPEN_SENTINEL ? val.optionId : opt?.id;
-      const selected = rawId == null || rawId === '' ? 0 : (Number.isNaN(Number(rawId)) ? rawId : Number(rawId));
       return {
         questionId: Number.isNaN(Number(q.id)) ? q.id : (Number(q.id) || index + 1),
-        selectedOptionId: selected,
+        selectedOptionId: optionIdValue(rawId),
+        letter: letter || letterOfOption(opt, 0),
         textAnswer: val.text || letter || '',
       };
     });
   }
   return Object.entries(map).map(([qId, val], index) => ({
-    questionId: parseInt(qId, 10) || index + 1,
-    selectedOptionId: (val && val.optionId && val.optionId !== OPEN_SENTINEL) ? Number(val.optionId) : 0,
+    questionId: parseInt(qId, 10) || qId || index + 1,
+    selectedOptionId: optionIdValue(val && val.optionId !== OPEN_SENTINEL ? val.optionId : 0),
+    letter: String(val?.letter || '').toUpperCase(),
     textAnswer: (val && typeof val === 'object') ? (val.text || val.letter || '') : String(val || ''),
   }));
 }
@@ -84,7 +88,7 @@ const ExamTimer = memo(function ExamTimer({ initialSeconds, running, onExpire })
 
   const urgent = seconds > 0 && seconds <= 300;
   return (
-    <p className={`text-sm font-black tabular-nums ${urgent ? 'exam-timer-urgent text-[#fbbf24]' : 'text-white'}`}>
+    <p className={`text-sm font-black tabular-nums ${urgent ? 'exam-timer-urgent text-[#fbbf24]' : 'text-[var(--text)]'}`}>
       {formatTime(seconds)}
     </p>
   );
@@ -94,7 +98,7 @@ const QuestionNav = memo(function QuestionNav({ questions, currentIndex, answers
   return (
     <nav aria-label="Suallar" className="grid grid-cols-4 gap-2">
       {questions.map((question, index) => {
-        const answered = Boolean(answers[question.id]);
+        const answered = Boolean(answers[question.id] || answers[String(question.id)]);
         const isFlagged = flagged.has(question.id);
         const current = index === currentIndex;
         return (
@@ -104,12 +108,12 @@ const QuestionNav = memo(function QuestionNav({ questions, currentIndex, answers
             onClick={() => onJump(index)}
             className={`flex h-10 items-center justify-center rounded-lg border text-sm font-semibold transition-all duration-150 ease-in-out ${
               isFlagged
-                ? 'border-[#D97706] bg-[#FBBF24] text-[#D97706]'
+                ? 'border-[#f0b429] bg-[#f0b429] text-[#3a2a00]'
                 : current
-                  ? 'border-[#4F46E5] bg-[#EEF2FF] text-[#4F46E5]'
+                  ? 'border-[var(--accent)] bg-[var(--accent)] text-[#3a2200]'
                   : answered
-                    ? 'border-[#C7D2FE] bg-[#EEF2FF] text-[#4F46E5]'
-                    : 'border-[#E5E7EB] bg-white text-[#1F2937] hover:border-[#C7D2FE]'
+                    ? 'border-[var(--accent)]/40 bg-[var(--accent)]/15 text-[var(--text)]'
+                    : 'border-[var(--line)] bg-[var(--card)] text-[var(--muted)] hover:border-[var(--accent)]/50'
             }`}
           >
             {index + 1}
@@ -162,13 +166,13 @@ const QuestionCanvas = memo(function QuestionCanvas({
       </div>
       <div className="mt-1">
         {open ? (
-          <div className={`rounded-2xl border p-5 ${dark ? 'border-[#4cae6e]/50 bg-[#1a222c]' : 'border-[#E5E7EB] bg-white'}`}>
+          <div className={`rounded-2xl border p-5 ${dark ? 'border-white/10 bg-[var(--card)]' : 'border-[#E5E7EB] bg-white'}`}>
             <p className={`text-sm font-semibold ${dark ? 'text-white/55' : 'text-[#6B7280]'}`}>Sual {index + 1}</p>
             <div className={`mt-2 select-none text-[18px] font-medium leading-[1.5] ${dark ? 'text-[#f3f0ea]' : 'text-[#1F2937]'}`}>
               {question.text}
             </div>
             <input
-              className={`mt-4 w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none ${dark ? 'border-[#2d3642] bg-[#121820] text-[#f3f0ea]' : 'border-[#E5E7EB] text-[#1F2937]'}`}
+              className={`mt-4 w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none ${dark ? 'border-white/10 bg-[#120e24] text-[#f7f4ff]' : 'border-[#E5E7EB] text-[#1F2937]'}`}
               type={question.inputKind === 'Text' ? 'text' : 'number'}
               step={question.inputKind === 'Decimal' ? 'any' : question.inputKind === 'Integer' ? '1' : undefined}
               placeholder={question.inputKind === 'Text' ? 'Cavabı yazın' : 'Rəqəm daxil edin'}
@@ -227,6 +231,7 @@ export default function TakeExam() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { dark } = useTheme();
+  const { t } = useLocale();
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -239,6 +244,7 @@ export default function TakeExam() {
   const [flash, setFlash] = useState({ id: null, n: 0 });
   const [saved, setSaved] = useState(false);
   const submittedRef = useRef(false);
+  const finishGuardRef = useRef(null);
   const answersRef = useRef({});
   const sessionRef = useRef(null);
   const questionsRef = useRef([]);
@@ -348,6 +354,7 @@ export default function TakeExam() {
 
   const handleSubmit = useCallback(async () => {
     if (submitting || submittedRef.current) return;
+    finishGuardRef.current?.release();
     submittedRef.current = true;
     setSubmitting(true);
     try {
@@ -376,6 +383,11 @@ export default function TakeExam() {
   const onExpire = useCallback(() => {
     submitRef.current?.();
   }, []);
+  const inExam = !loading && !submitting && exam && !isExamScheduled(exam) && paperQuestions.length > 0;
+  const finishGuard = useExamFinishGuard(inExam, () => {
+    submitRef.current?.();
+  });
+  finishGuardRef.current = finishGuard;
 
   const jumpTo = useCallback((index) => {
     const last = questionsRef.current.length - 1;
@@ -395,7 +407,7 @@ export default function TakeExam() {
         [questionId]: { optionId: openId, text: prev[questionId]?.text || '' },
       }));
     } else {
-      setAnswers((prev) => ({ ...prev, [questionId]: { optionId: opt.id, text: '' } }));
+      setAnswers((prev) => ({ ...prev, [questionId]: { optionId: opt.id, letter: opt.letter, text: '' } }));
     }
     markSaved(questionId);
   }, [markSaved]);
@@ -462,35 +474,49 @@ export default function TakeExam() {
 
   return (
     <div className={`fixed inset-0 z-[60] flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] ${personalQuiz || watermarkName ? 'exam-guard' : ''}`} style={{ height: '100vh' }}>
-      <header className="shrink-0 border-b border-[#E5E7EB] bg-[#121820] px-4 py-3 text-white sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-white/10" onClick={() => navigate('/student')} aria-label="Geri">
+      <header className="shrink-0 border-b border-white/10 bg-[var(--bg)] px-4 py-3 text-[var(--text)] sm:px-6">
+        <div className="flex items-center gap-3">
+          <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--card)] ring-1 ring-[var(--line)]" onClick={inExam ? finishGuard.request : () => navigate('/student')} aria-label={t('quiz.close')}>
             <ChevronLeft size={18} />
           </button>
-          <p className="min-w-0 flex-1 truncate text-center text-sm font-extrabold">{exam?.title || exam?.subjectName || 'İmtahan'}</p>
-          <Button onClick={handleSubmit} disabled={submitting || loading || scheduled} className="shrink-0 bg-[#2f7a45] px-3 py-1.5 text-xs">
-            {submitting ? '...' : 'Bitir'}
+          <div className="quiz-track h-2 min-w-0 flex-1 overflow-hidden rounded-full">
+            <div
+              className="h-full rounded-full bg-[var(--accent)]"
+              style={{ width: `${paperQuestions.length ? ((currentIndex + 1) / paperQuestions.length) * 100 : 0}%` }}
+            />
+          </div>
+          <p className="shrink-0 text-sm font-extrabold tabular-nums">
+            {paperQuestions.length ? `${currentIndex + 1}/${paperQuestions.length}` : '—'}
+          </p>
+          <button
+            type="button"
+            onClick={toggleSave}
+            className={`grid h-9 w-9 place-items-center rounded-full ${saved ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}`}
+            aria-label={saved ? t('common.saved') : t('common.save')}
+          >
+            <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
+          </button>
+          <Button
+            onClick={finishGuard.request}
+            disabled={submitting || loading || scheduled}
+            className="shrink-0 px-3 py-1.5 text-xs"
+          >
+            {submitting ? '...' : t('quiz.finish')}
           </Button>
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="rounded-2xl border border-white/20 bg-transparent px-3 py-2.5 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-white/55">Sual</p>
-            <p className="mt-0.5 text-sm font-black tabular-nums">{paperQuestions.length ? `${currentIndex + 1}/${paperQuestions.length}` : '—'}</p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-sm font-semibold text-[var(--muted)]">
+            {exam?.subjectName || exam?.title || t('quiz.exam')}
+            {exam?.title && exam?.subjectName ? ` · ${exam.title}` : ''}
+          </p>
+          <div className="flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-[var(--accent)]">
+            {!loading && !scheduled && secondsBudget > 0 ? (
+              <ExamTimer initialSeconds={secondsBudget} running={timerRunning} onExpire={onExpire} />
+            ) : (
+              <InfinityIcon size={18} />
+            )}
+            <span className="text-xs font-extrabold">{t('quiz.left')}</span>
           </div>
-          <div className="rounded-2xl border border-white/20 bg-transparent px-3 py-2.5 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-white/55">Vaxt</p>
-            <div className="mt-0.5 flex justify-center text-white">
-              {!loading && !scheduled && secondsBudget > 0 ? (
-                <ExamTimer initialSeconds={secondsBudget} running={timerRunning} onExpire={onExpire} />
-              ) : (
-                <InfinityIcon size={18} className="mx-auto mt-0.5" />
-              )}
-            </div>
-          </div>
-          <button type="button" onClick={toggleSave} className="rounded-2xl border border-white/20 bg-transparent px-3 py-2.5 text-center">
-            <Bookmark size={16} className="mx-auto" fill={saved ? 'currentColor' : 'none'} />
-            <p className="mt-0.5 text-[10px] font-bold">{saved ? 'Saxlı' : 'Saxla'}</p>
-          </button>
         </div>
       </header>
 
@@ -520,7 +546,7 @@ export default function TakeExam() {
                     <QuestionCanvas
                       question={active}
                       index={currentIndex}
-                      answer={active ? answers[active.id] : null}
+                      answer={active ? (answers[active.id] || answers[String(active.id)]) : null}
                       flagged={active ? flagged.has(active.id) : false}
                       disabled={submitting}
                       flash={flash}
@@ -539,8 +565,8 @@ export default function TakeExam() {
                 </div>
               </main>
               {paperQuestions.length > 0 ? (
-                <aside className="hidden w-64 shrink-0 overflow-y-auto border-l border-[#E5E7EB] bg-white p-4 sm:block">
-                  <p className="mb-3 text-sm font-semibold text-[#1F2937]">Suallar</p>
+                <aside className="hidden w-64 shrink-0 overflow-y-auto border-l border-[var(--line)] bg-[var(--bg)] p-4 sm:block">
+                  <p className="mb-3 text-sm font-semibold text-[var(--text)]">Suallar</p>
                   <QuestionNav
                     questions={paperQuestions}
                     currentIndex={currentIndex}
@@ -548,7 +574,7 @@ export default function TakeExam() {
                     flagged={flagged}
                     onJump={jumpTo}
                   />
-                  <p className="mt-4 text-xs leading-[1.5] text-[#6B7280]">
+                  <p className="mt-4 text-xs leading-[1.5] text-[var(--muted)]">
                     Ox düymələri sualı dəyişir. A–E və ya 1–{Math.min(5, visibleStudentOptions(active || {}).length || 4)} cavabı seçir.
                   </p>
                 </aside>
@@ -558,28 +584,35 @@ export default function TakeExam() {
         </div>
       )}
       {!loading && !scheduled && paperQuestions.length > 0 ? (
-        <div className="grid shrink-0 grid-cols-2 gap-3 border-t border-[var(--line)] bg-[var(--bg)] px-4 py-3 sm:hidden" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+        <div className="flex shrink-0 gap-3 border-t border-white/10 bg-[var(--bg)] px-4 py-3 sm:hidden" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
           <button
             type="button"
             disabled={currentIndex <= 0}
             onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-            className="flex h-14 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--card)] disabled:opacity-40"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--card)] disabled:opacity-40"
             aria-label="Əvvəlki sual"
           >
             <ChevronLeft size={22} />
           </button>
           <button
             type="button"
-            disabled={currentIndex >= paperQuestions.length - 1}
-            onClick={() => setCurrentIndex((i) => Math.min(paperQuestions.length - 1, i + 1))}
-            className="flex h-14 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--card)] disabled:opacity-40"
-            aria-label="Növbəti sual"
+            onClick={() => {
+              if (currentIndex >= paperQuestions.length - 1) finishGuard.request();
+              else setCurrentIndex((i) => Math.min(paperQuestions.length - 1, i + 1));
+            }}
+            className="flex h-14 min-w-0 flex-1 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]"
           >
-            <ChevronRight size={22} />
+            {currentIndex >= paperQuestions.length - 1 ? t('quiz.finish') : t('quiz.continue')}
           </button>
         </div>
       ) : null}
       <ScreenGuard active={Boolean(watermarkName)} name={watermarkName} />
+      <ExamFinishConfirm
+        open={finishGuard.open}
+        busy={submitting}
+        onStay={finishGuard.stay}
+        onFinish={finishGuard.confirm}
+      />
     </div>
   );
 }

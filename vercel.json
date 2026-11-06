@@ -5,7 +5,9 @@
     { "source": "/drive-folder", "destination": "/api/drive-folder" },
     { "source": "/pipeline/:path*", "destination": "/api/pipeline?path=:path*" },
     { "source": "/pipeline", "destination": "/api/pipeline" },
-    { "source": "/((?!api/|pipeline|drive-pdf|drive-extract|drive-folder|\\.well-known/).*)", "destination": "/index.html" }
+    { "source": "/urgent", "destination": "/api/urgent" },
+    { "source": "/monthly-quiz", "destination": "/api/monthly-quiz" },
+    { "source": "/((?!api/|pipeline|drive-pdf|drive-extract|drive-folder|urgent|monthly-quiz|\\.well-known/).*)", "destination": "/index.html" } }
   ],
   "functions": {
     "api/drive-extract.js": {

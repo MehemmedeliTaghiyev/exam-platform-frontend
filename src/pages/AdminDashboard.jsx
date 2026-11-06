@@ -1,10 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { BookOpen, GraduationCap, Trophy, Upload, UserCheck, Users } from 'lucide-react';
+import { BookOpen, GraduationCap, Megaphone, Trophy, Upload, UserCheck, Users } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { Skeleton } from '../components/ui';
 import { fetchGroupsForTeacher } from '../lib/examApi';
 import { AuthContext } from '../context/AuthContext';
-import { unwrapList } from '../lib/utils';
+import { formatDateTime, unwrapList } from '../lib/utils';
 import API from '../api/axios';
 import {
   difficultyLabelAz,
@@ -21,6 +21,8 @@ import {
   winnerSlotsFor,
 } from '../lib/republicExam';
 import { practiceAdminStudents, practiceAdminTeachers, PRACTICE_TEACHER_ID } from '../lib/practice';
+import { sendUrgentBroadcast, urgentBroadcasts } from '../lib/urgentBroadcast';
+import { publishUrgentHub } from '../lib/pushNotify';
 
 function isActiveStudent(u) {
   if (u.isDeleted) return false;
@@ -65,6 +67,9 @@ export default function AdminDashboard() {
   const [teacherGroups, setTeacherGroups] = useState({});
   const [plan, setPlan] = useState(() => republicPlan(nextMonth));
   const [tick, setTick] = useState(0);
+  const [urgentText, setUrgentText] = useState('');
+  const [urgentMsg, setUrgentMsg] = useState('');
+  const [sentNotes, setSentNotes] = useState(() => urgentBroadcasts());
 
   const patchPlan = (patch) => setPlan(saveRepublicPlan(nextMonth, patch));
 
@@ -170,6 +175,59 @@ export default function AdminDashboard() {
               );
             })}
           </div>
+          <section className="rounded-[28px] bg-[#2a1c12] p-4 ring-1 ring-[#f0b429]/25">
+            <p className="flex items-center gap-2 text-lg font-black">
+              <Megaphone size={18} className="text-[#f0b429]" /> Təcili mesaj
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white/50">
+              Göndərəndə telefon bildirişi gedir — proqram bağlı olsa belə. İstifadəçi bir dəfə «Bildirişi aç» basmış olmalıdır. Daxil olanda da pəncərə çıxır.
+            </p>
+            <textarea
+              value={urgentText}
+              onChange={(e) => setUrgentText(e.target.value.slice(0, 800))}
+              rows={4}
+              placeholder="Məsələn: Bu gün saat 20:00-da sistem yenilənəcək..."
+              className="mt-3 w-full resize-none rounded-[20px] bg-[#12141a] px-4 py-3 text-sm font-semibold text-white outline-none ring-1 ring-white/10 placeholder:text-white/30"
+            />
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold text-white/35">{urgentText.trim().length}/800</p>
+              <button
+                type="button"
+                disabled={!urgentText.trim()}
+                onClick={async () => {
+                  const text = urgentText;
+                  const row = sendUrgentBroadcast(text, user);
+                  if (!row) return;
+                  setUrgentText('');
+                  try {
+                    const hub = await publishUrgentHub(text, user);
+                    setSentNotes(urgentBroadcasts());
+                    setUrgentMsg(`Göndərildi — ${hub.delivered ?? 0} telefona bildiriş getdi.`);
+                  } catch {
+                    setSentNotes(urgentBroadcasts());
+                    setUrgentMsg('Yazıldı. Telefon bildirişi üçün serverə çatmadı — daxil olanda görünəcək.');
+                  }
+                }}
+                className="inline-flex min-h-11 items-center rounded-full bg-[#f0b429] px-5 text-sm font-extrabold text-[#3a2a00] disabled:opacity-40"
+              >
+                Hamıya göndər
+              </button>
+            </div>
+            {urgentMsg ? <p className="mt-2 text-sm font-bold text-[#f0b429]">{urgentMsg}</p> : null}
+            {sentNotes.length ? (
+              <ul className="mt-4 space-y-2">
+                {sentNotes.slice(0, 5).map((row) => (
+                  <li key={row.id} className="rounded-[18px] bg-[#12141a] px-3 py-3">
+                    <p className="text-sm font-extrabold leading-snug">{row.text}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-white/40">
+                      {row.at ? formatDateTime(row.at) : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+
           <p className="flex items-start gap-2 text-sm font-semibold text-white/45">
             <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/10 text-[10px]">i</span>
             Aktiv tələbə: silinməyib və girişi açıqdır.

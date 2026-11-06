@@ -5,6 +5,8 @@ import { loadDrivePdfBuffer, parseDrivePdfId, extractTextFromPdfBuffer } from '.
 import { createTeacherDriveFolder } from './api/drive-folder.js'
 import { compileLatexToPdfBuffer } from './api/latexPdf.js'
 import { proxyPipeline } from './api/pipelineProxy.js'
+import urgentHandler from './api/urgent.js'
+import { peekMonthlyQuizRam, seedMonthlyQuizRam } from './api/monthlyQuizRam.js'
 
 function drivePdfDevPlugin() {
   return {
@@ -21,6 +23,46 @@ function drivePdfDevPlugin() {
       if (env.PIPELINE_API_KEY) process.env.PIPELINE_API_KEY = env.PIPELINE_API_KEY
       server.middlewares.use(async (req, res, next) => {
         const pipelineUrl = req.url || ''
+        const pathOnly = (req.url || '').split('?')[0]
+        if (pathOnly === '/monthly-quiz') {
+          const send = (status, payload) => {
+            res.statusCode = status
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(payload))
+          }
+          const month = new URL(req.url, 'http://localhost').searchParams.get('month') || ''
+          if (req.method === 'GET') {
+            const hit = peekMonthlyQuizRam(month)
+            send(200, { month, source: hit?.length ? 'ram' : 'empty', questions: hit || [] })
+            return
+          }
+          if (req.method === 'POST') {
+            const chunks = []
+            req.on('data', (c) => chunks.push(c))
+            req.on('end', async () => {
+              try {
+                const body = JSON.parse(Buffer.concat(chunks).toString() || '{}')
+                const questions = seedMonthlyQuizRam(body.month || month, body.questions)
+                send(200, { month: body.month || month, source: 'ram', questions: questions || [] })
+              } catch (err) {
+                send(400, { error: String(err?.message || 'monthly-quiz') })
+              }
+            })
+            return
+          }
+        }
+        if (pathOnly === '/urgent') {
+          try {
+            await urgentHandler(req, res)
+          } catch (err) {
+            if (!res.headersSent) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: String(err?.message || 'urgent') }))
+            }
+          }
+          return
+        }
         if (pipelineUrl.startsWith('/pipeline')) {
           try {
             await proxyPipeline(req, res)

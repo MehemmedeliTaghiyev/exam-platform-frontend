@@ -107,7 +107,7 @@ export default function PaymentCheckoutModal({
                   type="button"
                   disabled={busy}
                   onClick={() => pickMethod(row.id)}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-left transition hover:border-[#2f7a45]"
+                  className="flex w-full items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-left transition hover:border-[var(--accent)]"
                 >
                   {row.kind === 'paypal' ? <PaypalMark /> : null}
                   {row.kind === 'card' ? (
@@ -125,7 +125,7 @@ export default function PaymentCheckoutModal({
             <div className="mt-8 text-center">
               <p className="text-sm font-extrabold text-[var(--muted)]">Abunə şərtləri</p>
               <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
-                Bu ödəniş bir dəfəlikdir. Avtomatik yenilənmir. Paket bitənə qədər Anbar açıq qalır.
+                {plan.hint || 'Bu ödəniş bir dəfəlikdir. Avtomatik yenilənmir. Paket bitənə qədər Anbar açıq qalır.'}
               </p>
               <p className="mt-4 text-xs font-semibold text-[var(--muted)]">Məlumatlar təhlükəsiz ötürülür</p>
             </div>

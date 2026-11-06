@@ -90,9 +90,8 @@ export default function Login() {
         <div className="login-scroll">
         <div className="login-card">
           <Link to="/" className="login-brand">
-            <BrandLogo size={40} nameClassName="text-[27px]" />
+            <BrandLogo size={40} nameClassName="text-[clamp(1.25rem,4vw,1.65rem)]" />
           </Link>
-
           <h1>Xoş gəlmisən!</h1>
           <p className="login-lead">Öyrənməyə və hədəflərinə bir addım daha yaxınlaşmağa davam et.</p>
 

@@ -72,7 +72,7 @@ export default function TokenPaymentCard({ user }) {
             <div>
               <p className="text-sm font-semibold text-white/50">Anbar ödənişi</p>
               <p className="text-2xl font-extrabold text-[#f0b429]">
-                {account.unlimited ? 'Limitsiz' : `${account.balance} jeton`}
+                {account.unlimited ? 'Limitsiz' : `${account.balance} qəpik`}
               </p>
             </div>
           </div>
@@ -81,9 +81,9 @@ export default function TokenPaymentCard({ user }) {
         <div className="space-y-4 p-5">
           <ul className="space-y-2 text-sm font-semibold text-[var(--text)]">
             {[
-              `İlk girişdə ${WEEKLY_TOKENS} pulsuz jeton`,
-              `Asan ${TOKEN_COSTS.asan} · Orta ${TOKEN_COSTS.orta} · Çətin ${TOKEN_COSTS.çətin} jeton`,
-              'Jeton bitəndə paket bir dəfəlik alınır, həftəlik yenilənmir',
+              `Hər həftə ${WEEKLY_TOKENS} qəpik hesabınıza düşür`,
+              `Asan ${TOKEN_COSTS.asan} · Orta ${TOKEN_COSTS.orta} · Çətin ${TOKEN_COSTS.çətin} qəpik`,
+              'Qəpiklə anbardan imtahan götürürsünüz. Paket ödənişi tezliklə',
               `Watermark istəsəniz əlavə ${formatManat(WATERMARK_PRICE)}`,
             ].map((line) => (
               <li key={line} className="flex items-start gap-2">
@@ -159,8 +159,8 @@ export default function TokenPaymentCard({ user }) {
 
           {note ? <p className="text-sm font-semibold text-red-600">{note}</p> : null}
 
-          <Button className="w-full !bg-[#7c6aff] !bg-none hover:brightness-110" disabled={busy} onClick={openCheckout}>
-            {account.subscribed ? 'Paketi yenilə' : 'Ödənişə keç'} · {formatManat(total)}
+          <Button className="w-full !bg-[#7c6aff] !bg-none hover:brightness-110" onClick={() => setNote('Paket ödənişi tezliklə açılacaq.')}>
+            Tezliklə
           </Button>
         </div>
       </Card>

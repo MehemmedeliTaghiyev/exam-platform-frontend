@@ -20,6 +20,9 @@
     "limitsNavigationsToAppBoundDomains": false
   },
   "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#f0b429"
+    },
     "StatusBar": {
       "overlaysWebView": true,
       "style": "LIGHT",

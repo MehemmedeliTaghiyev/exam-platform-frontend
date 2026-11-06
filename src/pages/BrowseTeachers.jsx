@@ -39,7 +39,7 @@ function FilterSheet({ title, open, onClose, children }) {
     <div className="fixed inset-0 z-[70]" onClick={onClose}>
       <div className="absolute inset-0 bg-black/55" />
       <div
-        className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-[#1a1d26] px-5 pb-[max(28px,env(safe-area-inset-bottom))] pt-3 text-white shadow-[0_-16px_40px_rgba(0,0,0,0.35)]"
+        className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-[var(--card)] px-5 pb-[max(28px,env(safe-area-inset-bottom))] pt-3 text-[var(--text)] shadow-[0_-16px_40px_rgba(0,0,0,0.35)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
@@ -55,15 +55,15 @@ function SheetRow({ active, children, hint, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[68px] w-full items-start justify-between gap-3 border-b border-white/[0.06] py-3 text-left last:border-0"
+      className="flex min-h-[68px] w-full items-start justify-between gap-3 border-b border-[var(--line)] py-3 text-left last:border-0"
     >
       <span>
-        <span className={`block text-[16px] font-extrabold ${active ? 'text-[#9d8cff]' : 'text-white'}`}>
+        <span className={`block text-[16px] font-extrabold ${active ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
           {children}
         </span>
-        {hint ? <span className="mt-0.5 block text-[13px] font-semibold text-white/40">{hint}</span> : null}
+        {hint ? <span className="mt-0.5 block text-[13px] font-semibold text-[var(--muted)]">{hint}</span> : null}
       </span>
-      {active ? <Check size={18} className="mt-1 shrink-0 text-[#9d8cff]" /> : null}
+      {active ? <Check size={18} className="mt-1 shrink-0 text-[var(--accent)]" /> : null}
     </button>
   );
 }
@@ -74,10 +74,10 @@ function FilterField({ label, value, onClick, accent = false }) {
       type="button"
       onClick={onClick}
       className={`flex min-h-[72px] flex-col justify-center rounded-[18px] px-4 text-left ${
-        accent ? 'bg-[#2a2158] ring-1 ring-[#6d5efc]/40' : 'bg-[#171a22]'
+        accent ? 'bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]/40' : 'card-vector bg-[var(--card)] ring-1 ring-[var(--line)]'
       }`}
     >
-      <span className={`text-[11px] font-bold ${accent ? 'text-[#b4abff]' : 'text-white/40'}`}>{label}</span>
+      <span className={`text-[11px] font-bold ${accent ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}`}>{label}</span>
       <span className="mt-0.5 flex items-center justify-between gap-2 text-[15px] font-extrabold">
         <span className="min-w-0 truncate">{value}</span>
         <ChevronDown size={16} className="shrink-0 opacity-50" />
@@ -97,46 +97,46 @@ function TeacherRow({ teacher, followed, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="w-full rounded-[22px] bg-[#171a22] p-4 text-left ring-1 ring-white/[0.04] transition active:scale-[0.99]"
+      className="card-vector w-full rounded-[22px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)] transition active:scale-[0.99]"
     >
       <div className="flex items-center gap-3">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#3b2f78] text-[15px] font-black text-[#c9c0ff]">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] text-[15px] font-black text-[var(--accent)]">
           {initialOf(teacher.fullName)}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[16px] font-extrabold">{teacher.fullName}</span>
-          <span className="mt-0.5 block truncate text-[13px] font-semibold text-white/40">
+          <span className="mt-0.5 block truncate text-[13px] font-semibold text-[var(--muted)]">
             {teacher.position || 'Bölgə yoxdur'}
             {subject ? ` · ${subject}` : ''}
           </span>
         </span>
-        <ChevronRight size={18} className="shrink-0 text-white/25" />
+        <ChevronRight size={18} className="shrink-0 text-[var(--muted)]" />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <span className="rounded-[16px] bg-[#12141a] px-3 py-2.5">
-          <span className="block text-[11px] font-bold text-white/35">Bu həftə</span>
+        <span className="rounded-[16px] bg-[var(--bg)] px-3 py-2.5">
+          <span className="block text-[11px] font-bold text-[var(--muted)]">Bu həftə</span>
           <span className="mt-0.5 block text-[16px] font-black">
             {teacher.weeklyExamCount} imtahan
           </span>
         </span>
-        <span className="rounded-[16px] bg-[#12141a] px-3 py-2.5">
-          <span className="block text-[11px] font-bold text-white/35">Orta nəticə</span>
+        <span className="rounded-[16px] bg-[var(--bg)] px-3 py-2.5">
+          <span className="block text-[11px] font-bold text-[var(--muted)]">Orta nəticə</span>
           <span className="mt-0.5 block text-[16px] font-black">{avg}</span>
         </span>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {teacher.hasPublic ? (
-          <span className="rounded-full bg-[#16301f] px-2.5 py-1 text-[11px] font-extrabold text-[#4ade80]">
+          <span className="rounded-full bg-[#2ee07a]/15 px-2.5 py-1 text-[11px] font-extrabold text-[var(--success-text)]">
             Açıq imtahanlar
           </span>
         ) : null}
         {teacher.hasPrivate ? (
-          <span className="rounded-full bg-[#2a2158] px-2.5 py-1 text-[11px] font-extrabold text-[#b4abff]">
+          <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--accent)]">
             Özəl imtahanlar
           </span>
         ) : null}
         {followed ? (
-          <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-extrabold text-white/45">
+          <span className="rounded-full bg-[var(--bg)] px-2.5 py-1 text-[11px] font-extrabold text-[var(--muted)]">
             İzlənilir
           </span>
         ) : null}
@@ -224,30 +224,30 @@ export default function BrowseTeachers({ embedded = false }) {
   };
 
   const list = (
-    <div className="pb-24 text-white">
-      <h1 className="text-[32px] font-black tracking-tight">Müəllim tap</h1>
-      <p className="mt-1 text-[15px] font-semibold text-white/45">
+    <div className="pb-24">
+      <h1 className="text-[clamp(1.4rem,5vw,2rem)] font-black tracking-tight">Müəllim tap</h1>
+      <p className="mt-1 text-[15px] font-semibold text-[var(--muted)]">
         Müəllimləri bölgə və fənnə görə süzün.
       </p>
 
-      <div className="mt-5 space-y-2.5 rounded-[18px] bg-[#171a22] px-4 py-3.5 text-[13px] font-semibold leading-snug">
+      <div className="card-vector mt-5 space-y-2.5 rounded-[18px] bg-[var(--card)] px-4 py-3.5 text-[13px] font-semibold leading-snug ring-1 ring-[var(--line)]">
         <p className="flex items-start gap-2.5">
-          <Unlock size={15} className="mt-0.5 shrink-0 text-[#4ade80]" />
+          <Unlock size={15} className="mt-0.5 shrink-0 text-[var(--success-text)]" />
           <span>Açıq imtahanlar pulsuzdur.</span>
         </p>
-        <p className="flex items-start gap-2.5 text-white/70">
-          <Lock size={15} className="mt-0.5 shrink-0 text-[#9d8cff]" />
+        <p className="flex items-start gap-2.5 text-[var(--muted)]">
+          <Lock size={15} className="mt-0.5 shrink-0 text-[var(--accent)]" />
           <span>Özəl imtahanlar yalnız o müəllimin şagirdləri üçündür — tələbə ödəniş etmir.</span>
         </p>
       </div>
 
       <div className="relative mt-4">
-        <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+        <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Ad, bölgə, fənn..."
-          className="h-14 w-full rounded-[18px] bg-[#171a22] pl-12 pr-4 text-[15px] font-semibold text-white outline-none placeholder:text-white/30 ring-1 ring-white/[0.04] focus:ring-[#6d5efc]/50"
+          className="h-14 w-full rounded-[18px] bg-[var(--card)] pl-12 pr-4 text-[15px] font-semibold text-[var(--text)] outline-none ring-1 ring-[var(--line)] placeholder:text-[var(--muted)] focus:ring-[var(--accent)]/50"
         />
       </div>
 
@@ -274,7 +274,7 @@ export default function BrowseTeachers({ embedded = false }) {
             type="button"
             onClick={() => setDir('desc')}
             className={`flex min-h-[72px] items-center justify-center gap-1.5 rounded-[18px] text-[13px] font-extrabold ${
-              dir === 'desc' ? 'bg-[#6d5efc] text-white' : 'bg-[#171a22] text-white/70'
+              dir === 'desc' ? 'bg-[var(--accent)] text-[#2a2208]' : 'card-vector bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
             }`}
           >
             <ArrowDown size={15} /> Azalan
@@ -283,7 +283,7 @@ export default function BrowseTeachers({ embedded = false }) {
             type="button"
             onClick={() => setDir('asc')}
             className={`flex min-h-[72px] items-center justify-center gap-1.5 rounded-[18px] text-[13px] font-extrabold ${
-              dir === 'asc' ? 'bg-[#6d5efc] text-white' : 'bg-[#171a22] text-white/70'
+              dir === 'asc' ? 'bg-[var(--accent)] text-[#2a2208]' : 'card-vector bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
             }`}
           >
             <ArrowUp size={15} /> Artan
@@ -292,29 +292,29 @@ export default function BrowseTeachers({ embedded = false }) {
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3">
-        <p className="text-[14px] font-extrabold text-white/50">
+        <p className="text-[14px] font-extrabold text-[var(--muted)]">
           {loading ? 'Yüklənir...' : `${filtered.length} müəllim`}
         </p>
         {filteredOn ? (
-          <button type="button" onClick={clearFilters} className="text-[14px] font-extrabold text-[#9d8cff]">
+          <button type="button" onClick={clearFilters} className="text-[14px] font-extrabold text-[var(--accent)]">
             Təmizlə
           </button>
         ) : null}
       </div>
 
-      {loading ? <Skeleton className="mt-4 h-40 rounded-[22px] bg-[#171a22]" /> : null}
+      {loading ? <Skeleton className="mt-4 h-40 rounded-[22px]" /> : null}
 
       {!loading && !filtered.length ? (
-        <div className="mt-4 rounded-[22px] bg-[#171a22] px-6 py-12 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#12141a] text-white/30">
+        <div className="card-vector mt-4 rounded-[22px] bg-[var(--card)] px-6 py-12 text-center ring-1 ring-[var(--line)]">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[var(--bg)] text-[var(--muted)]">
             <Search size={22} />
           </span>
           <p className="mt-4 text-[18px] font-black">Müəllim tapılmadı</p>
-          <p className="mt-1 text-[14px] font-semibold text-white/40">Başqa bölgə və ya fənn seçin.</p>
+          <p className="mt-1 text-[14px] font-semibold text-[var(--muted)]">Başqa bölgə və ya fənn seçin.</p>
           <button
             type="button"
             onClick={clearFilters}
-            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-[#6d5efc] px-6 text-sm font-extrabold"
+            className="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--accent)] px-6 text-sm font-extrabold text-[#2a2208]"
           >
             Filtrləri təmizlə
           </button>
@@ -397,39 +397,39 @@ export default function BrowseTeachers({ embedded = false }) {
   );
 
   const detail = (
-    <div className="text-white">
+    <div>
       <button
         type="button"
         onClick={() => navigate(listPath)}
-        className="inline-flex min-h-11 items-center gap-2 text-sm font-extrabold text-white/70"
+        className="inline-flex min-h-11 items-center gap-2 text-sm font-extrabold text-[var(--muted)]"
       >
         <ArrowLeft size={16} /> Müəllim tap
       </button>
-      <div className="mt-4 flex items-center gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#3b2f78] text-[16px] font-black text-[#c9c0ff]">
+      <div className="card-vector mt-4 flex items-center gap-3 rounded-[22px] bg-[var(--card)] p-4 ring-1 ring-[var(--line)]">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] text-[16px] font-black text-[var(--accent)]">
           {initialOf(selected?.fullName)}
         </span>
         <div className="min-w-0">
           <h2 className="truncate text-xl font-black">{selected?.fullName || 'Müəllim'}</h2>
-          <p className="mt-0.5 text-sm font-semibold text-white/45">
+          <p className="mt-0.5 text-sm font-semibold text-[var(--muted)]">
             {selected?.position || 'Bölgə göstərilməyib'}
             {selected?.subjects?.length ? ` · ${selected.subjects.join(', ')}` : ''}
           </p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-[16px] bg-[#171a22] px-3 py-3">
-          <p className="text-[11px] font-bold text-white/35">Bu həftə</p>
+        <div className="card-vector rounded-[16px] bg-[var(--card)] px-3 py-3 ring-1 ring-[var(--line)]">
+          <p className="text-[11px] font-bold text-[var(--muted)]">Bu həftə</p>
           <p className="mt-0.5 text-[16px] font-black">{selected?.weeklyExamCount ?? 0} imtahan</p>
         </div>
-        <div className="rounded-[16px] bg-[#171a22] px-3 py-3">
-          <p className="text-[11px] font-bold text-white/35">Orta nəticə</p>
+        <div className="card-vector rounded-[16px] bg-[var(--card)] px-3 py-3 ring-1 ring-[var(--line)]">
+          <p className="text-[11px] font-bold text-[var(--muted)]">Orta nəticə</p>
           <p className="mt-0.5 text-[16px] font-black">
             {selected?.avgScore ? `${Math.round(selected.avgScore)}%` : '—'}
           </p>
         </div>
       </div>
-      {loading ? <Skeleton className="mt-6 h-40 rounded-[22px] bg-[#171a22]" /> : null}
+      {loading ? <Skeleton className="mt-6 h-40 rounded-[22px]" /> : null}
       {!loading && !exams.length ? (
         <EmptyState title="İmtahan yoxdur" text="Bu müəllim hələ dərc edilmiş imtahan qoymayıb." />
       ) : (

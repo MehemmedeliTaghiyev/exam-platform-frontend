@@ -10,6 +10,7 @@ import { decorateTeacher } from './teacherMarketplace';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
+import { gradeExam } from './gradeExam';
 import { publicWebOrigin } from './runtime';
 import {
   isPractice,
@@ -664,26 +665,78 @@ export async function setStudentAccess(id, enabled) {
   return unwrapItem(res.data) || res.data;
 }
 
+export function normalizePersonName(value) {
+  return String(value || '')
+    .trim()
+    .toLocaleLowerCase('az')
+    .replace(/\s+/g, ' ');
+}
+
+export async function findProfileConflict({ userId, fullName, email }) {
+  const load = async (role) => {
+    try {
+      return (await fetchUsersByRole(role)).map(mapStudent).filter(Boolean);
+    } catch {
+      return [];
+    }
+  };
+  const people = [...(await load('Student')), ...(await load('Teacher'))];
+  const others = people.filter((row) => String(row.id) !== String(userId));
+  const mail = String(email || '').trim().toLowerCase();
+  const name = normalizePersonName(fullName);
+  const emailTaken = Boolean(mail) && others.some((row) => String(row.email || '').trim().toLowerCase() === mail);
+  const nameTaken = Boolean(name) && others.some((row) => (
+    normalizePersonName(row.fullName || [row.firstName, row.lastName, row.fatherName].filter(Boolean).join(' ')) === name
+  ));
+  return { emailTaken, nameTaken };
+}
+
 export async function updateStudentProfile(id, payload) {
+  const fullName = String(payload.fullName || [payload.firstName, payload.lastName, payload.fatherName].filter(Boolean).join(' ')).trim();
   const body = {
     firstName: payload.firstName,
     lastName: payload.lastName,
     fatherName: payload.fatherName ?? '',
+    fullName,
+    FullName: fullName,
+    FirstName: payload.firstName,
+    LastName: payload.lastName,
+    FatherName: payload.fatherName ?? '',
   };
+  if (payload.email != null) {
+    const email = String(payload.email).trim();
+    body.email = email;
+    body.Email = email;
+  }
   if (payload.phone != null) {
     body.phone = String(payload.phone).trim();
     body.Phone = body.phone;
   }
   const send = async (data) => {
-    try {
-      const res = await API.patch(`/Users/${id}/profile`, data);
-      return mapStudent(unwrapItem(res.data) || res.data);
-    } catch (err) {
-      const status = err?.response?.status;
-      if (status !== 404 && status !== 405) throw err;
-      const res = await API.put(`/Users/${id}/profile`, data);
-      return mapStudent(unwrapItem(res.data) || res.data);
+    const paths = [`/Users/${id}/profile`, `/Users/${id}`];
+    let lastErr;
+    for (const path of paths) {
+      try {
+        const res = await API.patch(path, data);
+        return mapStudent(unwrapItem(res.data) || res.data);
+      } catch (err) {
+        const status = err?.response?.status;
+        lastErr = err;
+        if (status === 404 || status === 405) {
+          try {
+            const res = await API.put(path, data);
+            return mapStudent(unwrapItem(res.data) || res.data);
+          } catch (putErr) {
+            lastErr = putErr;
+            continue;
+          }
+        }
+        if (status === 409) throw err;
+        if (status && status !== 404 && status !== 405) continue;
+      }
     }
+    if (lastErr) throw lastErr;
+    return null;
   };
   try {
     const saved = await send(body);
@@ -1272,6 +1325,8 @@ function normalizeQuestion(q) {
     type: typeName,
     inputKind: q.inputKind || q.InputKind || (typeName === 'OpenEnded' ? 'Text' : 'Choice'),
     correctText: q.correctText ?? q.CorrectText ?? '',
+    correctLetter: q.correctLetter || q.CorrectLetter || '',
+    correct_answer: q.correct_answer || q.correctAnswer || q._correct || '',
     difficultyLevel: q.difficultyLevel || q.DifficultyLevel || '',
     points: Number(q.points ?? q.Points ?? pointsForDifficulty(q.difficultyLevel || q.DifficultyLevel)) || 1,
     options: rawQuestionOptions(q),
@@ -1732,16 +1787,53 @@ export async function fetchWeeklyRankingSource() {
   return { exams, students, submissions };
 }
 
+function enrichReview(data, examId) {
+  const row = data?.result || data || {};
+  const answers = data?.answers || row.answers || [];
+  const paper = (data?.questions || []).length
+    ? data.questions
+    : (examId ? (isPractice() ? practiceQuestions(examId) : localDb.getQuestions(examId)) : []);
+  if (answers.length && paper.length) {
+    const graded = gradeExam(paper.map((q) => ({
+      ...q,
+      options: q.options || q.Options,
+    })), answers);
+    const apiCorrect = Number(row.correctAnswersCount ?? row.percent ?? 0);
+    if (apiCorrect === 0 && graded.correct > 0) {
+      return {
+        ...data,
+        questions: graded.questions,
+        result: {
+          ...row,
+          percent: graded.percent,
+          score: graded.percent,
+          correctAnswersCount: graded.correct,
+          totalQuestions: graded.total,
+        },
+        examEnded: true,
+      };
+    }
+  }
+  if (data?.questions?.length) return data;
+  if (row.questions?.length) return { ...data, questions: row.questions };
+  return data;
+}
+
 export async function fetchExamReview(studentExamId) {
-  if (isPractice()) return practiceFindReview(studentExamId);
+  if (isPractice()) {
+    const found = practiceFindReview(studentExamId);
+    return enrichReview(found, found?.examId || found?.result?.examId);
+  }
   const res = await API.get(`/Submissions/review/${studentExamId}`, { timeout: 8000 });
-  return unwrapItem(res.data) || res.data;
+  const data = unwrapItem(res.data) || res.data;
+  return enrichReview(data, data?.result?.examId || data?.examId);
 }
 
 export async function fetchExamReviewByExam(examId) {
-  if (isPractice()) return practiceFindReview(examId);
+  if (isPractice()) return enrichReview(practiceFindReview(examId), examId);
   const res = await API.get(`/Submissions/exam/${examId}/review`, { timeout: 8000 });
-  return unwrapItem(res.data) || res.data;
+  const data = unwrapItem(res.data) || res.data;
+  return enrichReview(data, examId);
 }
 
 export async function fetchUsersByRole(role = 'Student') {
@@ -1868,8 +1960,44 @@ export async function startExam({ examId, studentId }) {
   return unwrapItem(res.data) || res.data;
 }
 
+async function paperForGrade(examId) {
+  if (isPractice()) return practiceQuestions(examId) || [];
+  const local = localDb.getQuestions(examId) || [];
+  if (local.length) return local;
+  try {
+    return await fetchQuestions(examId);
+  } catch {
+    return [];
+  }
+}
+
+function localGrade(payload, extraQuestions = []) {
+  const paper = extraQuestions.length
+    ? extraQuestions
+    : (isPractice() ? practiceQuestions(payload.examId) : localDb.getQuestions(payload.examId));
+  return gradeExam(paper || [], payload.answers || []);
+}
+
+function withLocalScore(row, payload, extraQuestions = []) {
+  const graded = localGrade(payload, extraQuestions);
+  const apiCorrect = Number(row?.correctAnswersCount ?? row?.percent ?? row?.score ?? 0);
+  const useLocal = graded.total > 0 && ((apiCorrect === 0 && graded.correct > 0) || !row?.questions?.length);
+  if (!useLocal && row?.questions?.length) return { ...row, answers: payload.answers || row.answers };
+  return {
+    ...row,
+    score: graded.percent,
+    percent: graded.percent,
+    correctAnswersCount: graded.correct,
+    totalQuestions: graded.total,
+    answers: payload.answers || row.answers,
+    questions: graded.questions,
+  };
+}
+
 export async function submitExam(payload) {
-  if (isPractice()) return practiceSubmitExam(payload);
+  const paper = await paperForGrade(payload.examId);
+  const graded = gradeExam(paper || [], payload.answers || []);
+  if (isPractice()) return practiceSubmitExam(payload, graded);
   try {
     const res = await API.post('/Submissions/submit', {
       studentExamId: payload.studentExamId || 0,
@@ -1884,24 +2012,11 @@ export async function submitExam(payload) {
       studentId: created.studentId || payload.studentId,
       studentName: created.studentName || payload.studentName,
     });
-    localDb.addSubmission(normalized);
-    return normalized;
+    const scored = withLocalScore(normalized, payload, paper);
+    localDb.addSubmission(scored);
+    return scored;
   } catch {
-    const questions = localDb.getQuestions(payload.examId);
-    let correct = 0;
-    payload.answers.forEach((a) => {
-      const q = questions.find((x) => String(x.id) === String(a.questionId));
-      const opt = q?.options?.find((o) => String(o.id) === String(a.selectedOptionId));
-      const openPick = isOpenChoiceOption(opt);
-      const text = String(a.textAnswer || '').trim().toLowerCase();
-      const expected = String(q?.correctText || '').trim().toLowerCase();
-      if (openPick) {
-        if (text && expected && text === expected) correct += 1;
-      } else if (opt?.isCorrect) {
-        correct += 1;
-      }
-    });
-    const total = questions.length || payload.answers.length || 1;
+    const fallback = gradeExam(paper || [], payload.answers || []);
     const exam = localDb.getExams().find((e) => String(e.id) === String(payload.examId));
     const submission = {
       id: payload.studentExamId || uid('sub'),
@@ -1910,12 +2025,13 @@ export async function submitExam(payload) {
       examTitle: exam?.title,
       studentId: payload.studentId,
       studentName: payload.studentName,
-      score: percent(correct, total),
-      percent: percent(correct, total),
-      correctAnswersCount: correct,
-      totalQuestions: total,
+      score: fallback.percent,
+      percent: fallback.percent,
+      correctAnswersCount: fallback.correct,
+      totalQuestions: fallback.total,
       submittedAt: new Date().toISOString(),
       answers: payload.answers,
+      questions: fallback.questions,
     };
     localDb.addSubmission(submission);
     return submission;

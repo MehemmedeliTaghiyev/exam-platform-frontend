@@ -1,10 +1,11 @@
-import { useContext, useMemo, useState } from 'react';
+import { useContext, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import QuestionCard from '../components/QuestionCard';
 import { Button, Card, FormError, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { mapPipelineQuestion, parseLang, scoreAnswer } from '../lib/pipeline/contract';
 import { usePipelineExam, useSubmitPipelineAttempts } from '../lib/pipeline/hooks';
+import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
 
 export default function TakePipelineExam({ preview = false }) {
   const { examId } = useParams();
@@ -39,7 +40,9 @@ export default function TakePipelineExam({ preview = false }) {
     }));
   };
 
+  const finishGuardRef = useRef(null);
   const handleSubmit = async () => {
+    finishGuardRef.current?.release();
     const attempts = questions.map((q) => {
       const picked = answers[q.id] || {};
       const answer = String(picked.letter || picked.text || '').trim();
@@ -69,6 +72,9 @@ export default function TakePipelineExam({ preview = false }) {
   };
 
   const back = () => navigate(preview ? '/teacher' : '/student');
+  const inExam = !preview && !loading && !result && questions.length > 0;
+  const finishGuard = useExamFinishGuard(inExam, handleSubmit);
+  finishGuardRef.current = finishGuard;
 
   return (
     <div className="min-h-screen bg-[#F3F4F6] text-[#1F2937]">
@@ -78,8 +84,8 @@ export default function TakePipelineExam({ preview = false }) {
           <p className="truncate font-semibold">{exam?.title || `İmtahan #${examId}`}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={back}>Geri</Button>
-          <Button size="sm" onClick={handleSubmit} disabled={busy || loading || Boolean(result) || !questions.length}>
+          <Button variant="secondary" size="sm" onClick={inExam ? finishGuard.request : back}>Geri</Button>
+          <Button size="sm" onClick={inExam ? finishGuard.request : handleSubmit} disabled={busy || loading || Boolean(result) || !questions.length}>
             {busy ? 'Yazılır…' : preview ? 'Yoxla (log yoxdur)' : 'Təhvil ver'}
           </Button>
         </div>
@@ -152,6 +158,12 @@ export default function TakePipelineExam({ preview = false }) {
           </>
         )}
       </main>
+      <ExamFinishConfirm
+        open={finishGuard.open}
+        busy={busy}
+        onStay={finishGuard.stay}
+        onFinish={finishGuard.confirm}
+      />
     </div>
   );
 }

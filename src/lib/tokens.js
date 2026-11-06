@@ -84,6 +84,32 @@ function persistAccount(userId, row) {
   return stored;
 }
 
+function applyWeeklyGrant(userId, row) {
+  const week = isoWeekKey();
+  if (!row || row.lastWeeklyKey === week) return row;
+  return persistAccount(userId, {
+    ...row,
+    lastWeeklyKey: week,
+    balance: Math.max(0, Number(row.balance) || 0) + WEEKLY_TOKENS,
+    history: [
+      {
+        at: new Date().toISOString(),
+        amount: WEEKLY_TOKENS,
+        note: `Həftəlik ${WEEKLY_TOKENS} qəpik`,
+        kind: 'credit',
+      },
+      ...(row.history || []),
+    ],
+  });
+}
+
+export function ensureWeeklyTokens(user) {
+  if (!user?.id) return teacherTokenAccount(user);
+  if (user.practice || user.role === 'Admin') return teacherTokenAccount(user);
+  if (user.role !== 'Teacher') return teacherTokenAccount(user);
+  return teacherTokenAccount(user);
+}
+
 export function isTokenUnlimited(user) {
   if (!user) return false;
   if (user.practice || user.role === 'Admin') return true;
@@ -116,6 +142,8 @@ export function teacherTokenAccount(user) {
   let row = readJson(accountKey(user.id), null);
   if (!row || typeof row !== 'object') {
     row = persistAccount(user.id, emptyAccount());
+  } else {
+    row = applyWeeklyGrant(user.id, row);
   }
   return {
     ...row,
@@ -241,6 +269,12 @@ export async function requestStorageExam(user, mix, extras = {}) {
   const previous = readJson(requestsKey(user.id), []);
   writeJson(requestsKey(user.id), [row, ...(Array.isArray(previous) ? previous : [])]);
   emitTokens();
+  try {
+    const { notifyTeacherQuizSuccess } = await import('./teacherQuizReminders');
+    await notifyTeacherQuizSuccess(user);
+  } catch {
+    /* bildiriş olmasa da quiz qalır */
+  }
   return row;
 }
 

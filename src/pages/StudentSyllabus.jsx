@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, Lock } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
-import { Button, Card, EmptyState, Skeleton } from '../components/ui';
+import { Card, EmptyState, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams, fetchExams, fetchListedExamsForTeacher, fetchStudentHistory } from '../lib/examApi';
 import { studentSubscriptions } from '../lib/groupSubscriptions';
@@ -89,7 +89,9 @@ export default function StudentSyllabus() {
   if (topic && !isSyllabusSubjectOpen(topic.subject)) {
     return (
       <AppShell title={topic.title}>
-        <Button variant="ghost" onClick={() => navigate('/student/syllabus')}>← Sillabus</Button>
+        <button type="button" className="syllabus-back" onClick={() => navigate('/student/syllabus')}>
+          ← Sillabus
+        </button>
         <div className="mt-6">
           <EmptyState
             title={`${topic.subject} hələ bağlıdır`}
@@ -104,7 +106,9 @@ export default function StudentSyllabus() {
     const list = syllabusExamsForTopic(exams, topic, user);
     return (
       <AppShell title={topic.title}>
-        <Button variant="ghost" onClick={() => navigate('/student/syllabus')}>← Sillabus</Button>
+        <button type="button" className="syllabus-back" onClick={() => navigate('/student/syllabus')}>
+          ← Sillabus
+        </button>
         <p className="mt-2 text-sm text-[var(--muted)]">
           {topic.subject} · abunə qruplarınız və öz müəlliminizin sınaqları. Yaşıl: daxil olmusunuz. Qırmızı: hələ yox.
         </p>
@@ -160,7 +164,7 @@ export default function StudentSyllabus() {
               onClick={() => open && setSubject(name)}
               className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold ${
                 subject === name
-                  ? 'bg-[#2f7a45] text-white'
+                  ? 'bg-[var(--accent)] text-[#3a2200]'
                   : open
                     ? 'bg-[var(--card)] text-[var(--text)] ring-1 ring-[var(--line)]'
                     : 'cursor-not-allowed bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)] opacity-70'

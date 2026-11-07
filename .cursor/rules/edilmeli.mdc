@@ -1,0 +1,8 @@
+---
+description: ExamPulse pending work list (VAPID, domain, payments)
+alwaysApply: true
+---
+
+Pending work lives in `EDILMELI.md` at the repo root. Do not treat it as done until the user checks it off.
+
+Current reminder: there is **no VAPID private key** on Vercel. The site works without it. Web Push urgent messages need a generated key pair; put the private key only in Vercel env `VAPID_PRIVATE_KEY`, never in git. Teacher weekly quiz alerts use Capacitor local notifications and do not need VAPID.

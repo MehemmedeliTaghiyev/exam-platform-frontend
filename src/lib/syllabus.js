@@ -2,6 +2,7 @@ import { displayExamDescription } from './driveLinks';
 import { examVisibility } from './examVisibility';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { studentResultsReady } from './utils';
+import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
 
 const MIXED_MARK = '[[MIXED]]';
 
@@ -161,6 +162,9 @@ export function examSyllabusTopics(exam) {
 }
 
 export function isMixedSyllabusExam(exam) {
+  const audience = examPulseAudience(exam);
+  if (audience === 'weekly' || audience === 'hidden') return false;
+  if (audience === 'mixed' || audience === 'specialty') return true;
   if (isMixedMarked(exam)) return true;
   return examSyllabusTopics(exam).length >= 2;
 }
@@ -175,6 +179,7 @@ export function canShareExamPublic(exam) {
 }
 
 export function examAudience(exam) {
+  if (isStudentWeeklyExam(exam)) return 'everyone';
   if (isMixedSyllabusExam(exam)) return 'students';
   return examVisibility(exam) === 'public' ? 'everyone' : 'students';
 }
@@ -186,8 +191,10 @@ function examOwnerId(exam) {
 
 export function studentCanSeeExam(user, exam) {
   if (!user || !exam) return false;
+  if (examPulseAudience(exam) === 'hidden') return false;
   const owner = examOwnerId(exam);
   if (user.role === 'Admin') return true;
+  if (isStudentWeeklyExam(exam)) return true;
   const own = String(user.teacherId ?? user.TeacherId ?? '') === String(owner);
   if (isMixedSyllabusExam(exam)) return own;
   if (examAudience(exam) === 'everyone') return true;

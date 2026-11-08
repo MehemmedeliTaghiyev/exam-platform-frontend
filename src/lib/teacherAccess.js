@@ -1,6 +1,7 @@
 import { examVisibility } from './examVisibility';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { examAudience, isMixedSyllabusExam } from './syllabus';
+import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
 
 export function formatManat(amount) {
   const n = Number(amount) || 0;
@@ -27,6 +28,8 @@ export function canEnterExam(user, exam) {
     return vis === 'public' || String(user.id) === owner || user.role === 'Admin';
   }
   if (user.role !== 'Student' && !user.practice) return false;
+  if (examPulseAudience(exam) === 'hidden') return false;
+  if (isStudentWeeklyExam(exam)) return true;
   if (isMixedSyllabusExam(exam)) return isOwnTeacherStudent(user, owner);
   if (examAudience(exam) === 'everyone') return true;
   if (isOwnTeacherStudent(user, owner)) return true;

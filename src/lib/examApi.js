@@ -8,6 +8,7 @@ import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publi
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher } from './teacherMarketplace';
 import { subscribedTeacherIds } from './groupSubscriptions';
+import { examKindOf, examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
 import { gradeExam } from './gradeExam';
@@ -53,6 +54,7 @@ function withCounts(exams) {
     visibility: examVisibility(exam),
     isPublic: examVisibility(exam) === 'public',
       subjectName: exam.subjectName || exam.subject || exam.SubjectName,
+      kind: examKindOf(exam) || exam.kind || exam.Kind,
       totalQuestions: exam.totalQuestions ?? exam.questionCount ?? exam.TotalQuestions,
       durationMinutes: exam.durationMinutes ?? exam.DurationMinutes,
       startTime: exam.startTime || exam.StartTime,
@@ -930,7 +932,9 @@ function visibleForCurrentUser(exams) {
   const followed = new Set(localDb.followedTeacherIds(id));
   const subscribedTeachers = new Set(subscribedTeacherIds(id));
   return exams.filter((exam) => {
+    if (examPulseAudience(exam) === 'hidden') return false;
     const owner = String(examOwnerId(exam) ?? '');
+    if (isStudentWeeklyExam(exam)) return true;
     if (scope != null && owner === String(scope)) return true;
     if (subscribedTeachers.has(owner)) return true;
     return examVisibility(exam) === 'public' && followed.has(owner);
@@ -1245,6 +1249,7 @@ export async function fetchExam(id) {
   return {
     ...merged,
     id: merged.id ?? merged.Id ?? id,
+    kind: examKindOf(merged) || merged.kind || merged.Kind,
     teacherId: examOwnerId(merged) ?? (remoteOk ? currentTeacherScope() : examOwnerId(merged)),
     subjectId: merged.subjectId ?? merged.SubjectId,
     status: merged.status || merged.Status,
@@ -1320,6 +1325,7 @@ function normalizeQuestion(q) {
   return {
     ...q,
     id: q.id ?? q.Id ?? q.questionId ?? q.QuestionId,
+    qnum: q.qnum || q.Qnum || q.sourceQnum || q.SourceQnum || '',
     text,
     imageUrl,
     type: typeName,

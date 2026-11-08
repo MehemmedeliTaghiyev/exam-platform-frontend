@@ -13,6 +13,7 @@ import {
   LIVE_WEEKLY_MEDIUM_EXAM_ID,
   REPUBLIC_NOV_2026_EXAM_ID,
   WEEKLY_SMOKE_EXAM_ID,
+  republicMixedExams,
   weeklyPairForInterval,
 } from './weeklyMath.js';
 
@@ -55,6 +56,13 @@ describe('weekly vs mixed routing', () => {
     assert.equal(examPulseAudience({ id: 98, kind: 'Sınaq' }), 'weekly');
     assert.notEqual(String(pair.easy.id), REPUBLIC_NOV_2026_EXAM_ID);
     assert.notEqual(String(pair.medium.id), WEEKLY_SMOKE_EXAM_ID);
+    const mixed = republicMixedExams([
+      { id: 94, title: 'Respublika sınağı · Noyabr 2026', kind: 'Sınaq' },
+      { id: 96, title: 'Noyabr 2026 həftəlik', kind: 'Sınaq' },
+      { id: 97, title: 'Həftəlik asan', kind: 'Sınaq' },
+      { id: 98, title: 'Həftəlik orta', kind: 'Sınaq' },
+    ]);
+    assert.equal(mixed.map((exam) => String(exam.id)).join(','), REPUBLIC_NOV_2026_EXAM_ID);
   });
 
   it('kind map: Sınaq weekly, Buraxılış/Respublika mixed, Blok specialty', () => {

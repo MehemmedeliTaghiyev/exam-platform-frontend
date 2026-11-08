@@ -109,7 +109,7 @@ function stubWeeklyPaper(id, band, interval) {
     weeklyBand: band,
     visibility: 'public',
     isPublic: true,
-    status: 'Live',
+    status: 'Weekly',
     totalQuestions: null,
     durationMinutes: 90,
     intervalStart: interval?.start,
@@ -153,7 +153,8 @@ export function weeklyPairForDate(ymd, exams = []) {
 export function republicMixedExams(exams = []) {
   return (exams || []).filter((exam) => {
     const id = examIdOf(exam);
-    if (id === WEEKLY_SMOKE_EXAM_ID || id === REPUBLIC_NOV_2026_EXAM_ID || isLiveWeeklyExamId(id)) return false;
+    if (id === WEEKLY_SMOKE_EXAM_ID || isLiveWeeklyExamId(id)) return false;
+    if (id === REPUBLIC_NOV_2026_EXAM_ID) return true;
     if (examPulseAudience(exam) !== 'mixed') return false;
     const blob = `${exam?.title || exam?.Title || ''} ${examKindOf(exam)}`;
     return /respublika/i.test(blob);

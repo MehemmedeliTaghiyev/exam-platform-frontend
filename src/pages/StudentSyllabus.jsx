@@ -18,7 +18,6 @@ import {
   syllabusTopicsForList,
 } from '../lib/syllabus';
 import {
-  archiveWeeklyWindows,
   findCalendarTopic,
   findIntervalByStart,
   formatIntervalRange,
@@ -26,6 +25,7 @@ import {
   topicsForInterval,
 } from '../lib/mathCalendar';
 import {
+  archiveWeeklyWindows,
   examIdOf,
   isStudentWeeklyExam,
   republicMixedExams,

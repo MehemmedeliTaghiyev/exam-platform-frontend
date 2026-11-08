@@ -5,7 +5,6 @@ import { loadDrivePdfBuffer, parseDrivePdfId, extractTextFromPdfBuffer } from '.
 import { createTeacherDriveFolder } from './api/drive-folder.js'
 import { compileLatexToPdfBuffer } from './api/latexPdf.js'
 import { proxyPipeline } from './api/pipelineProxy.js'
-import urgentHandler from './api/urgent.js'
 import { peekMonthlyQuizRam, seedMonthlyQuizRam } from './api/monthlyQuizRam.js'
 
 function drivePdfDevPlugin() {
@@ -53,6 +52,7 @@ function drivePdfDevPlugin() {
         }
         if (pathOnly === '/urgent') {
           try {
+            const { default: urgentHandler } = await import('./api/urgent.js')
             await urgentHandler(req, res)
           } catch (err) {
             if (!res.headersSent) {

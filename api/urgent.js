@@ -2,7 +2,15 @@ import webpush from 'web-push';
 import { loadUrgentStore, saveUrgentStore } from './urgentStore.js';
 import { VAPID_MAILTO, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY } from './vapid.js';
 
-webpush.setVapidDetails(VAPID_MAILTO, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+function vapidReady() {
+  return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+}
+
+function applyVapid() {
+  if (!vapidReady()) return false;
+  webpush.setVapidDetails(VAPID_MAILTO, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  return true;
+}
 
 function json(res, status, payload) {
   res.statusCode = status;
@@ -72,6 +80,10 @@ export default async function handler(req, res) {
   }
 
   if (action === 'send') {
+    if (!applyVapid()) {
+      json(res, 503, { error: 'Təcili bildiriş üçün VAPID_PRIVATE_KEY yoxdur. Sayt onsuz işləyir.' });
+      return;
+    }
     const text = String(body.text || '').trim().slice(0, 800);
     if (!text) {
       json(res, 400, { error: 'Mətn boşdur' });

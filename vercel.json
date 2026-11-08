@@ -7,7 +7,7 @@
     { "source": "/pipeline", "destination": "/api/pipeline" },
     { "source": "/urgent", "destination": "/api/urgent" },
     { "source": "/monthly-quiz", "destination": "/api/monthly-quiz" },
-    { "source": "/((?!api/|pipeline|drive-pdf|drive-extract|drive-folder|urgent|monthly-quiz|\\.well-known/).*)", "destination": "/index.html" } }
+    { "source": "/((?!api/|pipeline|drive-pdf|drive-extract|drive-folder|urgent|monthly-quiz|figures/|\\.well-known/).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/drive-extract.js": {
@@ -35,6 +35,13 @@
       "source": "/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/figures/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
     },
     {

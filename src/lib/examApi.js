@@ -8,7 +8,8 @@ import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publi
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher } from './teacherMarketplace';
 import { subscribedTeacherIds } from './groupSubscriptions';
-import { examKindOf, examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
+import { examRankingEnabled } from './examKind';
+import { examKindOf, examPulseAudience, isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
 import { gradeExam } from './gradeExam';
@@ -53,8 +54,9 @@ function withCounts(exams) {
     teacherName: exam.teacherName || exam.TeacherName,
     visibility: examVisibility(exam),
     isPublic: examVisibility(exam) === 'public',
+    kind: examKindOf(exam) || exam.kind || exam.Kind,
+    rankingEnabled: exam.rankingEnabled ?? exam.RankingEnabled,
       subjectName: exam.subjectName || exam.subject || exam.SubjectName,
-      kind: examKindOf(exam) || exam.kind || exam.Kind,
       totalQuestions: exam.totalQuestions ?? exam.questionCount ?? exam.TotalQuestions,
       durationMinutes: exam.durationMinutes ?? exam.DurationMinutes,
       startTime: exam.startTime || exam.StartTime,
@@ -1043,7 +1045,9 @@ export async function fetchAllPublicExams() {
     const item = withCounts([exam])[0];
     if (item?.id == null) return;
     const vis = withExamVisibility(item);
-    if (examVisibility(vis) !== 'public' || resolveExamStatus(vis) === 'Draft') return;
+    if (resolveExamStatus(vis) === 'Draft') return;
+    const weekly = isStudentWeeklyExam(vis) || isLiveWeeklyExamId(vis.id);
+    if (!weekly && examVisibility(vis) !== 'public') return;
     const owner = String(examOwnerId(vis) ?? '');
     map.set(String(vis.id), {
       ...vis,
@@ -1080,6 +1084,8 @@ function toLocalExam(payload, created = {}, source = 'remote') {
     pdfFilePath: created.pdfFilePath || created.PdfFilePath || payload.pdfFilePath || payload.pdfFileUrl || '',
     visibility: examVisibility({ ...payload, ...created }),
     isPublic: examVisibility({ ...payload, ...created }) === 'public',
+    kind: created.kind || created.Kind || payload.kind,
+    rankingEnabled: created.rankingEnabled ?? created.RankingEnabled ?? payload.rankingEnabled,
     status: resolveExamStatus({
       ...created,
       startTime: created.startTime || created.StartTime || payload.startTime,
@@ -1110,6 +1116,8 @@ export async function createExam(payload) {
       description: wrapExamDescription(payload.description, payload.pdfFileUrl, payload.visibility),
       isPublic: payload.visibility === 'public' || payload.isPublic === true,
       visibility: payload.visibility || (payload.isPublic ? 'public' : 'private'),
+      kind: payload.kind,
+      rankingEnabled: payload.rankingEnabled,
     },
     {
       Title: payload.title,
@@ -1129,6 +1137,8 @@ export async function createExam(payload) {
       Description: wrapExamDescription(payload.description, payload.pdfFileUrl, payload.visibility),
       IsPublic: payload.visibility === 'public' || payload.isPublic === true,
       Visibility: payload.visibility || (payload.isPublic ? 'public' : 'private'),
+      Kind: payload.kind,
+      RankingEnabled: payload.rankingEnabled,
     },
     {
       name: payload.title,
@@ -1190,6 +1200,10 @@ export async function updateExam(id, payload) {
     IsPublic: vis === 'public',
     visibility: vis,
     Visibility: vis,
+    kind: payload.kind,
+    Kind: payload.kind,
+    rankingEnabled: payload.rankingEnabled,
+    RankingEnabled: payload.rankingEnabled,
   };
   try {
     await API.put(`/Exams/${id}`, body, FAST);
@@ -1241,7 +1255,9 @@ export async function fetchExam(id) {
     : (withCounts([remote || local].filter(Boolean))[0] || local || remote);
   if (!merged) return merged;
   const remoteOk = Boolean(remote && (remote.id || remote.Id || remote.title || remote.Title || remote.pdfFilePath || remote.PdfFilePath));
-  const openToStudents = examVisibility(merged) === 'public';
+  const openToStudents = examVisibility(merged) === 'public'
+    || isStudentWeeklyExam(merged)
+    || isLiveWeeklyExamId(merged.id ?? merged.Id ?? id);
   if ((currentUserSnapshot().role === 'Student' || !remoteOk) && !openToStudents) {
     const allowed = visibleForCurrentUser([merged]);
     if (!allowed.length) return null;
@@ -1774,7 +1790,10 @@ export async function fetchExamSubmissions(examId) {
 
 export async function fetchWeeklyRankingSource() {
   if (isPractice()) return practiceWeeklyRankingSource();
-  const exams = (await fetchExams()).filter((exam) => resolveExamStatus(exam) !== 'Draft');
+  const exams = (await fetchExams()).filter((exam) => {
+    if (resolveExamStatus(exam) === 'Draft') return false;
+    return examRankingEnabled(exam);
+  });
   let students = [];
   try {
     students = (await fetchStudents()).filter(Boolean);

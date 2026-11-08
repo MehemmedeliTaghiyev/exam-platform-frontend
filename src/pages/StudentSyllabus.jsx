@@ -5,29 +5,33 @@ import AppShell from '../components/AppShell';
 import ExamCard from '../components/ExamCard';
 import { Card, EmptyState, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
-import { fetchAllPublicExams, fetchExams, fetchListedExamsForTeacher, fetchStudentHistory } from '../lib/examApi';
+import { fetchAllPublicExams, fetchExam, fetchExams, fetchListedExamsForTeacher, fetchStudentHistory } from '../lib/examApi';
 import { studentSubscriptions } from '../lib/groupSubscriptions';
 import {
   findSyllabusTopic,
   isSyllabusSubjectOpen,
   OPEN_SYLLABUS_SUBJECT,
   resultLabel,
+  examSyllabusTopics,
   studentCanSeeExam,
   syllabusExamsForTopic,
   syllabusSubjects,
   syllabusTopicsForList,
 } from '../lib/syllabus';
 import {
+  allCalendarTopics,
   findCalendarTopic,
   findIntervalByStart,
   formatIntervalRange,
+  MATH_CALENDAR,
   studentTopicPlace,
-  topicsForInterval,
 } from '../lib/mathCalendar';
 import {
   archiveWeeklyWindows,
   examIdOf,
   isStudentWeeklyExam,
+  LIVE_WEEKLY_EASY_EXAM_ID,
+  LIVE_WEEKLY_MEDIUM_EXAM_ID,
   republicMixedExams,
   WEEKLY_SMOKE_EXAM_ID,
   weeklyPairForInterval,
@@ -41,7 +45,7 @@ function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate })
   if (!list.length) {
     return (
       <div className="mt-4">
-        <EmptyState title="Bu pəncərədə həftəlik kağız yoxdur" text="Arxivdən köhnə həftənin asan və orta kağızı açılır. Yeni sual yığılmır." />
+        <EmptyState title="Hələ sınaq yoxdur" text="Bu mövzuya sınaq düşəndə burada açılacaq." />
       </div>
     );
   }
@@ -98,13 +102,15 @@ export default function StudentSyllabus() {
           ownTeacherId,
           ...subs.map((row) => row.teacherId),
         ].filter((id) => id != null && id !== ''))];
-        const [mine, pubs, hist, listed] = await Promise.all([
+        const [mine, pubs, hist, listed, easy, medium] = await Promise.all([
           fetchExams().catch(() => []),
           fetchAllPublicExams().catch(() => []),
           fetchStudentHistory(user?.id).catch(() => []),
           Promise.all(teacherIds.map((id) => fetchListedExamsForTeacher(id).catch(() => []))),
+          fetchExam(LIVE_WEEKLY_EASY_EXAM_ID).catch(() => null),
+          fetchExam(LIVE_WEEKLY_MEDIUM_EXAM_ID).catch(() => null),
         ]);
-        const merged = [...mine, ...pubs, ...listed.flat()].filter((exam, index, all) => (
+        const merged = [...mine, ...pubs, ...listed.flat(), easy, medium].filter((exam, index, all) => (
           exam?.id != null && all.findIndex((row) => String(row.id) === String(exam.id)) === index
         ));
         if (!cancelled) {
@@ -141,8 +147,27 @@ export default function StudentSyllabus() {
   );
   const mixed = useMemo(() => republicMixedExams(exams), [exams]);
   const archives = useMemo(() => archiveWeeklyWindows(placement.today), [placement.today]);
-  const mathTopics = topicsForInterval(viewed);
+  const mathTopics = useMemo(() => allCalendarTopics(), []);
   const calendarHit = findCalendarTopic(topicId);
+
+  const papersForTopic = (topic) => {
+    const interval = topic?.interval || findIntervalByStart(topic?.intervalStart);
+    const windowPair = weeklyPairForInterval(interval, exams);
+    const weekly = [windowPair.easy, windowPair.medium].filter(Boolean);
+    const extras = (exams || []).filter((exam) => {
+      if (!studentCanSeeExam(user, exam)) return false;
+      if (isStudentWeeklyExam(exam)) return false;
+      if (examIdOf(exam) === WEEKLY_SMOKE_EXAM_ID) return false;
+      return examSyllabusTopics(exam).some((row) => row.title === topic.title);
+    });
+    const seen = new Set();
+    return [...weekly, ...extras].filter((exam) => {
+      const id = String(exam.id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  };
 
   const openExam = (exam) => {
     if (isExamScheduled(exam) || !canEnterExam(user, exam)) return;
@@ -162,55 +187,27 @@ export default function StudentSyllabus() {
   };
 
   if (topicId && calendarHit.topic) {
-    const teacherExtras = syllabusExamsForTopic(exams, calendarHit.topic, user)
-      .filter((exam) => !isStudentWeeklyExam(exam) && examIdOf(exam) !== WEEKLY_SMOKE_EXAM_ID);
     const windowPair = weeklyPairForInterval(calendarHit.interval, exams);
+    const topicPapers = papersForTopic(calendarHit.topic);
     return (
       <AppShell title={calendarHit.topic.title}>
         <button type="button" className="syllabus-back" onClick={() => navigate('/student/syllabus')}>
           ← Sillabus
         </button>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          {formatIntervalRange(calendarHit.interval)} · həftəlik asan və orta eyni kağızlardır.
-          {windowPair.archived ? ' Bu pəncərə arxivdir — suallar yenidən yığılmır.' : ''}
+          {formatIntervalRange(calendarHit.interval)}
+          {calendarHit.interval?.send?.weekly ? ' · həftəlik asan və orta eyni kağızlardır.' : ' · blok / situasiya pəncərəsi.'}
+          {windowPair.archived ? ' Bu pəncərə arxivdir.' : ''}
         </p>
         {loading ? <Skeleton className="mt-6 h-40" /> : (
-          <>
-            <PaperGrid
-              papers={[windowPair.easy, windowPair.medium]}
-              attemptByExam={attemptByExam}
-              entered={entered}
-              user={user}
-              openExam={openExam}
-              navigate={navigate}
-            />
-            {teacherExtras.length ? (
-              <div className="mt-8">
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-[var(--muted)]">Müəllim sınaqları</h2>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  {teacherExtras.map((exam) => {
-                    const attempt = attemptByExam.get(String(exam.id));
-                    return (
-                      <ExamCard
-                        key={exam.id}
-                        exam={exam}
-                        progress={attempt ? 'done' : undefined}
-                        entered={entered.has(String(exam.id))}
-                        resultText={resultLabel(attempt, exam, user)}
-                        teacherName={exam.teacherName}
-                        actionLabel={
-                          attempt
-                            ? (studentResultsReady(exam, user) ? 'Nəticəyə bax' : 'Təhvil verildi')
-                            : canEnterExam(user, exam) ? 'İmtahana başla' : 'Giriş yoxdur'
-                        }
-                        onOpen={isExamScheduled(exam) || !canEnterExam(user, exam) ? undefined : () => openExam(exam)}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </>
+          <PaperGrid
+            papers={topicPapers}
+            attemptByExam={attemptByExam}
+            entered={entered}
+            user={user}
+            openExam={openExam}
+            navigate={navigate}
+          />
         )}
       </AppShell>
     );
@@ -263,8 +260,7 @@ export default function StudentSyllabus() {
   return (
     <AppShell title="Sillabus">
       <p className="mb-5 text-sm text-[var(--muted)]">
-        Həftəlik sınaq yalnız bu pəncərənin mövzularındandır: asan və orta. Hamı eyni kağızı alır.
-        Bütün keçilmiş mövzuların qarışığı Respublika sınağındadır.
+        Bütün mövzular buradadır. Sınaq gələndə öz bölməsinə düşür. Həftəlik kağız yalnız o pəncərənin fəsillərindəndir; qarışıq sınaq Respublikadadır.
       </p>
       <div className="mb-5 flex flex-wrap gap-2">
         {syllabusSubjects().map((name) => {
@@ -334,39 +330,55 @@ export default function StudentSyllabus() {
 
             <section>
               <h2 className="text-lg font-black">Mövzular</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">Yalnız bu pəncərənin fəsilləri. Keçmiş mövzuların cəmi həftəlik kağıza düşmür.</p>
-              <div className="mt-3 grid gap-3">
-                {mathTopics.map((row) => {
-                  const papers = [pair.easy, pair.medium].filter(Boolean);
-                  const started = papers.filter((exam) => entered.has(String(exam.id))).length;
-                  const pending = Math.max(0, papers.length - started);
+              <p className="mt-1 text-sm text-[var(--muted)]">Noyabrdan fevraladək bütün fəsillər. Sınaq olanda uyğun mövzunun içinə düşür.</p>
+              <div className="mt-3 space-y-8">
+                {MATH_CALENDAR.intervals.map((interval) => {
+                  const rows = mathTopics.filter((row) => row.intervalStart === interval.start);
+                  const current = placement.current?.start === interval.start;
                   return (
-                    <Card
-                      key={row.id}
-                      className="cursor-pointer"
-                      onClick={() => navigate(`/student/syllabus/${encodeURIComponent(row.id)}`)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#e7f6ea] text-sm font-black text-[#1f7a3a]">
-                          {row.order}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-extrabold text-[var(--text)]">{row.title}</p>
-                          <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                            {papers.length
-                              ? `${started}/${papers.length} kağıza daxil olub · asan və orta`
-                              : 'Hələ kağız yoxdur'}
-                          </p>
-                        </div>
-                        {pending > 0 ? (
-                          <span className="shrink-0 rounded-full bg-[#f0b429]/15 px-2.5 py-1 text-sm font-black text-[#f0b429]">
-                            +{pending}
-                          </span>
-                        ) : (
-                          <ChevronRight size={18} className="text-[var(--muted)]" />
-                        )}
+                    <div key={interval.start}>
+                      <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--muted)]">
+                        {formatIntervalRange(interval)}
+                        {current ? ' · indi' : ''}
+                        {interval.send?.weekly ? ' · həftəlik' : ' · blok'}
+                      </p>
+                      <h3 className="mt-1 text-base font-black">{interval.title}</h3>
+                      <div className="mt-3 grid gap-3">
+                        {rows.map((row) => {
+                          const papers = papersForTopic(row);
+                          const started = papers.filter((exam) => entered.has(String(exam.id))).length;
+                          const pending = Math.max(0, papers.length - started);
+                          return (
+                            <Card
+                              key={row.id}
+                              className="cursor-pointer"
+                              onClick={() => navigate(`/student/syllabus/${encodeURIComponent(row.id)}`)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#e7f6ea] text-sm font-black text-[#1f7a3a]">
+                                  {row.order}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-extrabold text-[var(--text)]">{row.title}</p>
+                                  <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
+                                    {papers.length
+                                      ? `${started}/${papers.length} sınağa daxil olub`
+                                      : 'Hələ sınaq yoxdur'}
+                                  </p>
+                                </div>
+                                {pending > 0 ? (
+                                  <span className="shrink-0 rounded-full bg-[#f0b429]/15 px-2.5 py-1 text-sm font-black text-[#f0b429]">
+                                    +{pending}
+                                  </span>
+                                ) : (
+                                  <ChevronRight size={18} className="text-[var(--muted)]" />
+                                )}
+                              </div>
+                            </Card>
+                          );
+                        })}
                       </div>
-                    </Card>
+                    </div>
                   );
                 })}
               </div>

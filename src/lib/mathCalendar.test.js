@@ -56,6 +56,9 @@ describe('weekly vs mixed routing', () => {
     assert.equal(examPulseAudience({ id: 98, kind: 'Sınaq' }), 'weekly');
     assert.notEqual(String(pair.easy.id), REPUBLIC_NOV_2026_EXAM_ID);
     assert.notEqual(String(pair.medium.id), WEEKLY_SMOKE_EXAM_ID);
+    const empty = weeklyPairForInterval(interval, []);
+    assert.equal(empty.easy, null);
+    assert.equal(empty.medium, null);
     const mixed = republicMixedExams([
       { id: 94, title: 'Respublika sınağı · Noyabr 2026', kind: 'Sınaq' },
       { id: 96, title: 'Noyabr 2026 həftəlik', kind: 'Sınaq' },

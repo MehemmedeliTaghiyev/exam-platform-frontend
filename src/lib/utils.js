@@ -1,3 +1,5 @@
+import { isWeeklyQuiz } from './examKind';
+
 export function unwrapList(data) {
   if (Array.isArray(data)) return data;
   if (!data || typeof data !== 'object') return [];
@@ -234,6 +236,7 @@ export function isValidExamDate(value) {
 
 export function resolveExamStatus(exam) {
   if (!exam) return 'Live';
+  if (isWeeklyQuiz(exam)) return 'Weekly';
   const start = parseExamDate(exam.startTime || exam.StartTime);
   const end = parseExamDate(exam.endTime || exam.EndTime);
   const now = Date.now();
@@ -256,11 +259,17 @@ export function studentResultsReady(exam, user) {
   if (user?.practice) return true;
   if (user?.role && user.role !== 'Student') return true;
   if (!exam) return false;
+  if (isWeeklyQuiz(exam)) return true;
   return isExamEnded(exam);
 }
 
 export function isExamLive(exam) {
   return resolveExamStatus(exam) === 'Live';
+}
+
+export function isExamOpen(exam) {
+  const status = resolveExamStatus(exam);
+  return status === 'Live' || status === 'Weekly';
 }
 
 export function isExamScheduled(exam) {

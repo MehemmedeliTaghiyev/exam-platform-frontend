@@ -2,6 +2,7 @@ import { displayExamDescription } from './driveLinks';
 import { examVisibility } from './examVisibility';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { studentResultsReady } from './utils';
+import { MATH_CALENDAR, calendarTopicId } from './mathCalendar';
 import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
 
 const MIXED_MARK = '[[MIXED]]';
@@ -152,12 +153,30 @@ export function isMixedMarked(exam) {
   return /qar[iı][sş][iı]q|blok sınaq|ümumi sınaq|bir neçə mövzu/i.test(raw);
 }
 
+function mathCalendarTopicPool() {
+  const seen = new Set();
+  const rows = [];
+  MATH_CALENDAR.intervals.forEach((interval) => {
+    (interval.topics || []).forEach((title) => {
+      const id = calendarTopicId(title);
+      if (seen.has(id)) return;
+      seen.add(id);
+      rows.push({ id, subject: OPEN_SYLLABUS_SUBJECT, title });
+    });
+  });
+  return rows;
+}
+
 export function examSyllabusTopics(exam) {
   const subject = String(exam?.subjectName || exam?.subject || exam?.SubjectName || '').trim();
+  const blob = examBlob(exam);
+  if (!subject || subject === OPEN_SYLLABUS_SUBJECT) {
+    const calendarHits = mathCalendarTopicPool().filter((topic) => blob.includes(normalize(topic.title)));
+    if (calendarHits.length) return calendarHits;
+  }
   const pool = subject && SYLLABUS_BY_SUBJECT[subject]
     ? syllabusTopics(subject)
     : allSyllabusTopics();
-  const blob = examBlob(exam);
   return pool.filter((topic) => blob.includes(normalize(topic.title)));
 }
 

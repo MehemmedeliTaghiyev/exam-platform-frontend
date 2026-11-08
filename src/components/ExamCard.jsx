@@ -36,8 +36,8 @@ export default function ExamCard({
   const [confirm, setConfirm] = useState(false);
   const status = resolveExamStatus(exam);
   const fresh = isNewExam(exam, { userId: user?.id, submitted: progress === 'done' || entered });
-  const tone = status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
-  const label = status === 'Live' ? 'Canlı' : status === 'Finished' ? 'Bitib' : status === 'Draft' ? 'Qaralama' : 'Planlanıb';
+  const tone = status === 'Weekly' ? 'brand' : status === 'Live' ? 'success' : status === 'Finished' ? 'neutral' : status === 'Draft' ? 'warning' : 'brand';
+  const label = status === 'Weekly' ? 'Həftəlik quiz' : status === 'Live' ? 'Canlı' : status === 'Finished' ? 'Bitib' : status === 'Draft' ? 'Qaralama' : 'Planlanıb';
   const topic = visibleExamTitle(exam);
   const subject = exam.subjectName || exam.subject;
   const ai = isAiExam(exam);

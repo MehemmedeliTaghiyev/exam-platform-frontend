@@ -217,20 +217,33 @@ export function calendarTopicId(title) {
 export function topicsForInterval(interval) {
   if (!interval) return [];
   return (interval.topics || []).map((title, index) => ({
-    id: calendarTopicId(title),
+    id: `${calendarTopicId(title)}__${interval.start}`,
     subject: 'Riyaziyyat',
     title,
     order: index + 1,
     intervalStart: interval.start,
+    weekly: Boolean(interval.send?.weekly),
   }));
+}
+
+export function allCalendarTopics() {
+  let order = 0;
+  return MATH_CALENDAR.intervals.flatMap((interval) => (
+    topicsForInterval(interval).map((topic) => ({
+      ...topic,
+      order: ++order,
+      interval,
+    }))
+  ));
 }
 
 export function findCalendarTopic(id) {
   let raw = String(id || '');
   try { raw = decodeURIComponent(raw); } catch { /* keep */ }
-  for (const interval of MATH_CALENDAR.intervals) {
-    const found = topicsForInterval(interval).find((topic) => topic.id === raw);
-    if (found) return { topic: found, interval };
-  }
+  const all = allCalendarTopics();
+  const exact = all.find((topic) => topic.id === raw);
+  if (exact) return { topic: exact, interval: exact.interval };
+  const legacy = all.find((topic) => calendarTopicId(topic.title) === raw);
+  if (legacy) return { topic: legacy, interval: legacy.interval };
   return { topic: null, interval: null };
 }

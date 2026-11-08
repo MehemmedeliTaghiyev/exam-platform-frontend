@@ -99,23 +99,6 @@ function pickFromList(exams, id) {
   return (exams || []).find((exam) => examIdOf(exam) === String(id)) || null;
 }
 
-function stubWeeklyPaper(id, band, interval) {
-  const label = band === 'easy' ? 'Asan' : 'Orta';
-  return {
-    id: Number(id) || id,
-    title: `Həftəlik sınaq · ${label}`,
-    subjectName: 'Riyaziyyat',
-    kind: 'Sınaq',
-    weeklyBand: band,
-    visibility: 'public',
-    isPublic: true,
-    status: 'Weekly',
-    totalQuestions: null,
-    durationMinutes: 90,
-    intervalStart: interval?.start,
-  };
-}
-
 function matchBandInInterval(exams, interval, band) {
   return (exams || []).find((exam) => {
     if (isHiddenWeeklyExam(exam)) return false;
@@ -130,13 +113,13 @@ export function weeklyPairForInterval(interval, exams = []) {
   if (!interval?.send?.weekly) return { easy: null, medium: null, archived: true };
   const live = interval.start === LIVE_WEEKLY_INTERVAL_START;
   let easy = live
-    ? pickFromList(exams, LIVE_WEEKLY_EASY_EXAM_ID) || stubWeeklyPaper(LIVE_WEEKLY_EASY_EXAM_ID, 'easy', interval)
+    ? pickFromList(exams, LIVE_WEEKLY_EASY_EXAM_ID) || matchBandInInterval(exams, interval, 'easy')
     : matchBandInInterval(exams, interval, 'easy');
   let medium = live
-    ? pickFromList(exams, LIVE_WEEKLY_MEDIUM_EXAM_ID) || stubWeeklyPaper(LIVE_WEEKLY_MEDIUM_EXAM_ID, 'medium', interval)
+    ? pickFromList(exams, LIVE_WEEKLY_MEDIUM_EXAM_ID) || matchBandInInterval(exams, interval, 'medium')
     : matchBandInInterval(exams, interval, 'medium');
-  if (easy && isHiddenWeeklyExam(easy)) easy = live ? stubWeeklyPaper(LIVE_WEEKLY_EASY_EXAM_ID, 'easy', interval) : null;
-  if (medium && isHiddenWeeklyExam(medium)) medium = live ? stubWeeklyPaper(LIVE_WEEKLY_MEDIUM_EXAM_ID, 'medium', interval) : null;
+  if (easy && isHiddenWeeklyExam(easy)) easy = null;
+  if (medium && isHiddenWeeklyExam(medium)) medium = null;
   const today = tbilisiYmd();
   return {
     easy,

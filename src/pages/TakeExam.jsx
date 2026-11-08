@@ -2,6 +2,7 @@ import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } f
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Bookmark, ChevronLeft, Flag, Infinity as InfinityIcon } from 'lucide-react';
 import QuestionCard, { visibleStudentOptions } from '../components/QuestionCard';
+import LatexText from '../components/LatexText';
 import { Button, Card } from '../components/ui';
 import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
@@ -11,6 +12,7 @@ import { useLocale } from '../context/LocaleContext';
 import { examRetakeReady, formatDateTime, isExamEnded, isExamScheduled, isOpenChoiceOption, parseExamDate, studentResultsReady } from '../lib/utils';
 import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
 import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
+import { isLiveWeeklyExamId, isStudentWeeklyExam } from '../lib/weeklyMath';
 import { teacherWatermarkText } from '../lib/storageAccess';
 import DrivePreview from '../components/DrivePreview';
 import ScreenGuard from '../components/ScreenGuard';
@@ -169,8 +171,15 @@ const QuestionCanvas = memo(function QuestionCanvas({
           <div className={`rounded-2xl border p-5 ${dark ? 'border-white/10 bg-[var(--card)]' : 'border-[#E5E7EB] bg-white'}`}>
             <p className={`text-sm font-semibold ${dark ? 'text-white/55' : 'text-[#6B7280]'}`}>Sual {index + 1}</p>
             <div className={`mt-2 select-none text-[18px] font-medium leading-[1.5] ${dark ? 'text-[#f3f0ea]' : 'text-[#1F2937]'}`}>
-              {question.text}
+              <LatexText text={question.text} />
             </div>
+            {question.imageUrl ? (
+              <img
+                src={question.imageUrl}
+                alt=""
+                className="mt-3 max-h-56 w-full rounded-xl object-contain bg-white"
+              />
+            ) : null}
             <input
               className={`mt-4 w-full rounded-xl border px-3 py-2.5 text-[16px] outline-none ${dark ? 'border-white/10 bg-[#120e24] text-[#f7f4ff]' : 'border-[#E5E7EB] text-[#1F2937]'}`}
               type={question.inputKind === 'Text' ? 'text' : 'number'}
@@ -266,16 +275,17 @@ export default function TakeExam() {
     const run = async () => {
       const examId = Number.isNaN(Number(id)) ? id : parseInt(id, 10);
       try {
-        const examData = await fetchExam(examId);
+        const examData = (await fetchExam(examId)) || { id: examId };
         setExam(examData);
 
         if (!user) {
-          navigate('/login', { replace: true });
+          navigate(`/login?next=${encodeURIComponent(`/student/exams/${examId}`)}`, { replace: true });
           return;
         }
-        if (!canEnterExam(user, examData)) {
+        const weeklyOk = isLiveWeeklyExamId(examId) || isStudentWeeklyExam(examData);
+        if (!weeklyOk && !canEnterExam(user, examData)) {
           const owner = examTeacherId(examData);
-          navigate(owner ? `/teachers/${owner}` : '/teachers', { replace: true });
+          navigate(owner ? `/student/teachers/${owner}` : '/student/teachers', { replace: true });
           return;
         }
 
@@ -534,7 +544,7 @@ export default function TakeExam() {
                 {(exam?.startTime || exam?.StartTime) && (
                   <p className="mt-1 text-sm text-[#6B7280]">Başlama: {formatDateTime(exam.startTime || exam.StartTime)}</p>
                 )}
-                <p className="mt-3 text-sm text-[#6B7280]">Suallar yalnız Live olanda görünəcək.</p>
+                <p className="mt-3 text-sm text-[#6B7280]">Suallar imtahan başlayanda görünəcək.</p>
                 <Button variant="secondary" className="mt-4" onClick={() => navigate('/student')}>Panelə qayıt</Button>
               </Card>
             </div>

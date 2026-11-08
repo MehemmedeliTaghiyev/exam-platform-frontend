@@ -51,7 +51,10 @@ export default function Login() {
         rememberEmail: remember || rememberPassword,
         rememberPassword,
       });
-      if (userData?.role === 'Admin') navigate('/admin');
+      const next = new URLSearchParams(location.search).get('next') || '';
+      const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '';
+      if (safeNext && userData?.role === 'Student' && safeNext.startsWith('/student')) navigate(safeNext);
+      else if (userData?.role === 'Admin') navigate('/admin');
       else if (userData?.role === 'Teacher') navigate('/teacher');
       else navigate('/student');
     } catch (err) {

@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { Skeleton } from './ui';
 import { normalizeRole } from '../lib/utils';
@@ -13,6 +13,7 @@ function homeForRole(role) {
 
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading } = useContext(AuthContext);
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -26,7 +27,10 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) {
+    const next = `${location.pathname}${location.search || ''}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+  }
   const role = normalizeRole(user.role);
   if (allowedRoles && !allowedRoles.includes(role)) {
     return <Navigate to={homeForRole(role)} replace />;

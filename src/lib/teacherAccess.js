@@ -29,7 +29,7 @@ export function canEnterExam(user, exam) {
   }
   if (user.role !== 'Student' && !user.practice) return false;
   if (examPulseAudience(exam) === 'hidden') return false;
-  if (isStudentWeeklyExam(exam)) return true;
+  if (isStudentWeeklyExam(exam) || isStudentWeeklyExam({ id: exam?.id ?? exam?.Id })) return true;
   if (isMixedSyllabusExam(exam)) return isOwnTeacherStudent(user, owner);
   if (examAudience(exam) === 'everyone') return true;
   if (isOwnTeacherStudent(user, owner)) return true;

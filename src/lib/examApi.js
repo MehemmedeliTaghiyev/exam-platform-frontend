@@ -10,6 +10,7 @@ import { decorateTeacher } from './teacherMarketplace';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { examRankingEnabled } from './examKind';
 import { examSortNewest } from './dailyTopicQuiz';
+import { durationMinutesForQuestionCount } from './examDuration';
 import { examKindOf, examPulseAudience, isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
@@ -1095,11 +1096,15 @@ function toLocalExam(payload, created = {}, source = 'remote') {
 
 export async function createExam(payload) {
   if (isPractice()) return practiceCreateExam(payload);
+  const totalQuestions = Number(payload.totalQuestions) || 10;
+  const durationMinutes = Number(payload.durationMinutes) > 0
+    ? Number(payload.durationMinutes)
+    : durationMinutesForQuestionCount(totalQuestions);
   const bodies = [
     {
       title: payload.title,
-      totalQuestions: payload.totalQuestions,
-      durationMinutes: payload.durationMinutes,
+      totalQuestions,
+      durationMinutes,
       teacherId: payload.teacherId,
       subjectId: payload.subjectId,
       subjectName: payload.subjectName,
@@ -1119,8 +1124,8 @@ export async function createExam(payload) {
     {
       Title: payload.title,
       Description: payload.description,
-      TotalQuestions: payload.totalQuestions,
-      DurationMinutes: payload.durationMinutes,
+      TotalQuestions: totalQuestions,
+      DurationMinutes: durationMinutes,
       TeacherId: payload.teacherId,
       SubjectId: payload.subjectId,
       SubjectName: payload.subjectName,
@@ -1142,8 +1147,8 @@ export async function createExam(payload) {
       Name: payload.title,
       subjectId: payload.subjectId,
       SubjectId: payload.subjectId,
-      durationMinutes: payload.durationMinutes,
-      questionCount: payload.totalQuestions,
+      durationMinutes,
+      questionCount: totalQuestions,
     },
   ];
 

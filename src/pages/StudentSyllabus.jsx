@@ -70,7 +70,7 @@ function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate })
                 : canEnterExam(user, exam) ? 'İmtahana başla' : 'Giriş yoxdur'
             }
             onOpen={isExamScheduled(exam) || !canEnterExam(user, exam) ? undefined : () => openExam(exam)}
-            onRetake={examRetakeReady(exam) && canEnterExam(user, exam) ? () => navigate(`/student/exams/${exam.id}?yeniden=1`) : undefined}
+            onRetake={examRetakeReady(exam, attempt) && canEnterExam(user, exam) ? () => navigate(`/student/exams/${exam.id}?yeniden=1`) : undefined}
           />
         );
       })}

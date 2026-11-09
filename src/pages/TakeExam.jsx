@@ -4,7 +4,7 @@ import { Bookmark, ChevronLeft, Flag, Infinity as InfinityIcon } from 'lucide-re
 import QuestionCard, { visibleStudentOptions } from '../components/QuestionCard';
 import LatexText from '../components/LatexText';
 import { Button, Card } from '../components/ui';
-import { fetchExam, fetchQuestions, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
+import { fetchExam, fetchQuestions, fetchStudentHistory, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { AuthContext } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -297,18 +297,24 @@ export default function TakeExam() {
         const qs = await fetchQuestions(examId, examData).catch(() => []);
         setQuestions(Array.isArray(qs) ? qs : []);
 
-        const retry = wantsRetry && examRetakeReady(examData);
+        const history = await fetchStudentHistory(user?.id).catch(() => []);
+        const priorAttempt = (history || []).find((row) => String(row.examId ?? row.ExamId) === String(examId));
+        const retry = wantsRetry && examRetakeReady(examData, priorAttempt);
         if (isExamEnded(examData) && !retry) {
           navigate(`/student/exams/${examId}/review`, { replace: true });
           return;
         }
 
+        const qCount = Array.isArray(qs) ? qs.length : (examData?.totalQuestions || 10);
+        const durationMin = Number(examData?.durationMinutes) > 0
+          ? Number(examData.durationMinutes)
+          : Math.max(1, Math.round(qCount * 2));
         const endAt = parseExamDate(examData?.endTime);
         let remainingMs = endAt ? endAt.getTime() - Date.now() : NaN;
         if (user?.practice || retry) {
-          remainingMs = (examData?.durationMinutes || 30) * 60 * 1000;
+          remainingMs = durationMin * 60 * 1000;
         } else if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
-          remainingMs = (examData?.durationMinutes || 30) * 60 * 1000;
+          remainingMs = durationMin * 60 * 1000;
         }
         setSecondsBudget(Math.max(1, Math.floor(remainingMs / 1000)));
 

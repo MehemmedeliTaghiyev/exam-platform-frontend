@@ -290,7 +290,15 @@ export function examCanEdit(exam) {
   return Date.now() - created.getTime() >= WEEK_MS;
 }
 
-export function examRetakeReady(exam) {
+/**
+ * Yenidən işlə: işlənmiş (təhvil verilmiş) imtahandan 1 həftə sonra.
+ * Təhvil yoxdursa — bitmiş imtahanın endTime-ından 1 həftə sonra.
+ */
+export function examRetakeReady(exam, attempt) {
+  const submitted = parseExamDate(attempt?.submittedAt || attempt?.SubmittedAt);
+  if (submitted) {
+    return Date.now() - submitted.getTime() >= WEEK_MS;
+  }
   if (!exam || !isExamEnded(exam)) return false;
   const end = parseExamDate(exam.endTime || exam.EndTime || exam.createdAt || exam.CreatedAt);
   if (!end) return false;

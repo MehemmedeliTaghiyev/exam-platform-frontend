@@ -6,12 +6,14 @@ import AppShell from '../components/AppShell';
 import ExamRow from '../components/ExamRow';
 import { Button, FormError, Input, Modal, Select, Skeleton, Textarea } from '../components/ui';
 import { createExam, createSubject, deleteExam, fetchExams, fetchOwnProfile, fetchSubjects, updateExam } from '../lib/examApi';
+import { isWeeklyQuiz } from '../lib/examKind';
 import { errorMessage, examCanEdit, isExamDraft, isExamLive, normalizeRole, resolveExamStatus } from '../lib/utils';
 import { republicAdminExams, republicMonthLabel } from '../lib/republicExam';
 import TokenBanner from '../components/TokenBanner';
 import { filterPublicExams, uniqueSubjects } from '../lib/publicExams';
 import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
 import { withMixedMark } from '../lib/syllabus';
+import { durationHint, durationMinutesForQuestionCount } from '../lib/examDuration';
 
 const MONTHS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
 
@@ -33,6 +35,7 @@ function examMonthKey(exam) {
 
 const STATUS_FILTERS = [
   { id: 'all', label: 'Hamısı' },
+  { id: 'weekly', label: 'Həftəlik' },
   { id: 'live', label: 'Canlı' },
   { id: 'draft', label: 'Qaralama' },
   { id: 'finished', label: 'Bitmiş' },
@@ -99,7 +102,8 @@ export default function TeacherDashboard() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [questionCount, setQuestionCount] = useState(10);
-  const [durationMinutes, setDurationMinutes] = useState(45);
+  const [durationMinutes, setDurationMinutes] = useState(() => durationMinutesForQuestionCount(10));
+  const [durationManual, setDurationManual] = useState(false);
   const [subjectMode, setSubjectMode] = useState('existing');
   const [subjectId, setSubjectId] = useState('');
   const [newSubject, setNewSubject] = useState('');
@@ -108,6 +112,7 @@ export default function TeacherDashboard() {
   const [folderUrl, setFolderUrl] = useState('');
   const [visibility, setVisibility] = useState('private');
   const [mixedTopics, setMixedTopics] = useState(false);
+  const [rankingEnabled, setRankingEnabled] = useState(true);
   const [examFilter, setExamFilter] = useState('all');
   const [dateMode, setDateMode] = useState('all');
   const [pickDate, setPickDate] = useState('');
@@ -128,6 +133,7 @@ export default function TeacherDashboard() {
     driveFileLink,
     visibility,
     mixedTopics,
+    rankingEnabled,
   };
 
   useEffect(() => {
@@ -175,7 +181,12 @@ export default function TeacherDashboard() {
       if (saved.title) setTitle(saved.title);
       if (saved.description) setDescription(saved.description);
       if (saved.questionCount) setQuestionCount(saved.questionCount);
-      if (saved.durationMinutes) setDurationMinutes(saved.durationMinutes);
+      if (saved.durationMinutes) {
+        setDurationMinutes(saved.durationMinutes);
+        setDurationManual(true);
+      } else if (saved.questionCount) {
+        setDurationMinutes(durationMinutesForQuestionCount(saved.questionCount));
+      }
       if (saved.subjectMode) setSubjectMode(saved.subjectMode);
       if (saved.subjectId) setSubjectId(String(saved.subjectId));
       if (saved.newSubject) setNewSubject(saved.newSubject);
@@ -204,6 +215,7 @@ export default function TeacherDashboard() {
     setDriveFileLink('');
     setVisibility('private');
     setMixedTopics(false);
+    setRankingEnabled(true);
     setSubjectMode(subjects.length ? 'existing' : 'new');
     localStorage.removeItem(draftStorageKey(user?.id));
   };
@@ -223,7 +235,8 @@ export default function TeacherDashboard() {
       if (!subject) return;
 
       const start = new Date(form.startLocal);
-      const duration = Number(form.durationMinutes) || 45;
+      const qCount = Number(form.questionCount) || 10;
+      const duration = Number(form.durationMinutes) || durationMinutesForQuestionCount(qCount);
       const end = Number.isNaN(start.getTime())
         ? new Date(Date.now() + duration * 60 * 1000)
         : new Date(start.getTime() + duration * 60 * 1000);
@@ -240,7 +253,7 @@ export default function TeacherDashboard() {
       const payload = {
         title: form.title,
         description: withMixedMark(form.description, mixed),
-        totalQuestions: Number(form.questionCount) || 10,
+        totalQuestions: qCount,
         durationMinutes: duration,
         teacherId: user?.id,
         subjectId: subject?.id,
@@ -252,6 +265,8 @@ export default function TeacherDashboard() {
         visibility: mixed ? 'private' : form.visibility === 'public' ? 'public' : 'private',
         isPublic: !mixed && form.visibility === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(form.driveFileLink)) || undefined,
+        rankingEnabled: form.rankingEnabled !== false,
+        kind: 'teacher',
       };
 
       let exam;
@@ -316,7 +331,9 @@ export default function TeacherDashboard() {
         skipDraftRef.current = false;
         return;
       }
-      const end = new Date(start.getTime() + Number(durationMinutes) * 60 * 1000);
+      const qCount = Number(questionCount) || 10;
+      const duration = Number(durationMinutes) || durationMinutesForQuestionCount(qCount);
+      const end = new Date(start.getTime() + duration * 60 * 1000);
 
       const savedDraftId = (() => {
         try {
@@ -329,8 +346,8 @@ export default function TeacherDashboard() {
       const payload = {
         title,
         description: withMixedMark(description, mixedTopics),
-        totalQuestions: Number(questionCount),
-        durationMinutes: Number(durationMinutes),
+        totalQuestions: qCount,
+        durationMinutes: duration,
         teacherId: user?.id,
         subjectId: subject?.id,
         subjectName: subject?.name,
@@ -341,6 +358,8 @@ export default function TeacherDashboard() {
         visibility: mixedTopics ? 'private' : visibility === 'public' ? 'public' : 'private',
         isPublic: !mixedTopics && visibility === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(driveFileLink)) || undefined,
+        rankingEnabled,
+        kind: 'teacher',
       };
 
       let exam;
@@ -369,6 +388,21 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleToggleRanking = async (exam, next) => {
+    setExams((list) => list.map((row) => (
+      String(row.id) === String(exam.id) ? { ...row, rankingEnabled: next } : row
+    )));
+    try {
+      await updateExam(exam.id, {
+        ...exam,
+        rankingEnabled: next,
+        status: isWeeklyQuiz(exam) ? 'Weekly' : exam.status,
+      });
+    } catch {
+      /* local toggle already saved */
+    }
+  };
+
   const handleDelete = async (exam) => {
     try {
       await deleteExam(exam.id);
@@ -389,6 +423,7 @@ export default function TeacherDashboard() {
       ? exams.filter((exam) => monthFilter === 'all' || examMonthKey(exam) === monthFilter)
       : filterPublicExams(exams, { dateMode, pickDate, subject: fen });
     return dated.filter((exam) => {
+      if (examFilter === 'weekly') return isWeeklyQuiz(exam);
       if (examFilter === 'draft') return isExamDraft(exam);
       if (examFilter === 'live') return isExamLive(exam);
       if (examFilter === 'finished') return resolveExamStatus(exam) === 'Finished';
@@ -642,6 +677,7 @@ export default function TeacherDashboard() {
                 }
                 onStats={() => navigate(exam.source === 'republic' ? `/admin/exams/${exam.id}` : `/teacher/exams/${exam.id}/stats`)}
                 onDelete={exam.source === 'republic' ? undefined : handleDelete}
+                onToggleRanking={exam.source === 'republic' ? undefined : handleToggleRanking}
               />
             ))}
             </div>
@@ -705,6 +741,30 @@ export default function TeacherDashboard() {
               Hamı
             </button>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setRankingEnabled(true)}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                rankingEnabled
+                  ? 'border-emerald-700 bg-emerald-700 text-white'
+                  : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
+              }`}
+            >
+              Sıralama açıq
+            </button>
+            <button
+              type="button"
+              onClick={() => setRankingEnabled(false)}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                !rankingEnabled
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-300 bg-white text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100'
+              }`}
+            >
+              Sıralama bağlı
+            </button>
+          </div>
           <div className="flex gap-2 rounded-xl bg-gray-50 p-1 dark:bg-slate-800">
             <button
               type="button"
@@ -756,7 +816,11 @@ export default function TeacherDashboard() {
               type="number"
               min="1"
               value={questionCount}
-              onChange={(e) => setQuestionCount(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setQuestionCount(next);
+                if (!durationManual) setDurationMinutes(durationMinutesForQuestionCount(next));
+              }}
               required
             />
             <Input
@@ -764,10 +828,17 @@ export default function TeacherDashboard() {
               type="number"
               min="1"
               value={durationMinutes}
-              onChange={(e) => setDurationMinutes(e.target.value)}
+              onChange={(e) => {
+                setDurationManual(true);
+                setDurationMinutes(e.target.value);
+              }}
               required
             />
           </div>
+          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+            {durationHint(questionCount)}
+            {durationManual ? ' · əl ilə dəyişilib' : ' · avtomatik'}
+          </p>
           <p className="text-sm text-gray-800 dark:text-gray-200">
             “Yarat” düyməsinə basmadan səhifədən çıxsanız imtahan qaralama kimi saxlanılacaq. Gələcək tarix
             seçsəniz imtahan planlanmış olacaq.

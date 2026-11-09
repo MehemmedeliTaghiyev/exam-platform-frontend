@@ -15,6 +15,7 @@ import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import { isAiExam, pointsForDifficulty } from '../lib/questionDifficulty';
 import { examTeacherId } from '../lib/teacherAccess';
 import { teacherWatermarkText } from '../lib/storageAccess';
+import { examRankingEnabled } from '../lib/examKind';
 import { isPublicExam } from '../lib/examVisibility';
 import { gradeExam } from '../lib/gradeExam';
 import ScreenGuard from '../components/ScreenGuard';
@@ -251,6 +252,7 @@ export default function ExamResult() {
   const aiWeighted = isAiExam(examMeta) || questions.some((q) => q.difficultyLevel);
   const examEnded = Boolean(user?.practice) || (examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded));
   const resultsReady = studentResultsReady(examMeta, user) || (examMeta == null && examEnded);
+  const showRanking = examRankingEnabled(examMeta);
   const isStudent = user?.role === 'Student';
   const isPersonal = Boolean(result?.studentExamId || reviewId) || (isStudent && resultsReady);
   const personalQuiz = isStudent && !isPublicExam(examMeta);
@@ -272,7 +274,7 @@ export default function ExamResult() {
             <h2 className="text-3xl font-black tracking-tight">{t('result.complete')}</h2>
             <p className="mt-2 text-sm font-semibold text-[var(--muted)]">
               {result.examTitle || `İmtahan #${result.examId}`}
-              {generalRank ? ` · ${t('result.place', { n: generalRank })}` : ''}
+              {showRanking && generalRank ? ` · ${t('result.place', { n: generalRank })}` : ''}
             </p>
             <div className="mt-6">
               <ScoreRing correct={correct} total={total} label={t('result.percentCorrect', { pct: Math.round((Number(correct) / Math.max(1, Number(total))) * 100) })} />
@@ -291,7 +293,7 @@ export default function ExamResult() {
                 <p className="text-[11px] font-bold text-[var(--muted)]">{t('result.wrong')}</p>
               </div>
             </div>
-            {!isStudent ? (
+            {!isStudent && showRanking ? (
               <p className="mt-4 text-sm font-medium text-[var(--muted)]">
                 Öz şagirdlər: {ownRank ? `#${ownRank}` : '—'} · Ümumi: {generalRank ? `#${generalRank}` : '—'}
                 {result.submittedAt ? ` · Bitirmə: ${formatDateTime(result.submittedAt)}` : ''}
@@ -304,7 +306,7 @@ export default function ExamResult() {
               </p>
             ) : null}
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-              {examRetakeReady(examMeta) && (user?.role === 'Student' || user?.practice) ? (
+              {examRetakeReady(examMeta, result) && (user?.role === 'Student' || user?.practice) ? (
                 <Button className="dream-change" onClick={() => navigate(`/student/exams/${result?.examId || examId}?yeniden=1`)}>
                   {t('result.retake')}
                 </Button>
@@ -318,7 +320,7 @@ export default function ExamResult() {
 
         {resultsReady ? (
           <>
-            {isStudent ? (
+            {isStudent && showRanking ? (
               <>
                 <DualExamRanking
                   ownRows={boards.own}
@@ -347,7 +349,7 @@ export default function ExamResult() {
                   <Card className="text-sm text-gray-500">{t('result.noQuestions')}</Card>
                 )}
             </div>
-            {!isStudent ? (
+            {!isStudent && showRanking ? (
               <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
             ) : null}
           </>
@@ -355,7 +357,7 @@ export default function ExamResult() {
           <Card className="text-center">
             <p className="text-lg font-extrabold">İmtahan təhvil verildi</p>
             <p className="mt-3 text-sm text-[var(--muted)]">
-              Nəticə avtomatik saxlanıldı. Düzgün və səhv cavablar, eləcə də ümumi sıralama imtahan bitəndən sonra açılacaq.
+              Nəticə avtomatik saxlanıldı. Düzgün və səhv cavablar imtahan bitəndən sonra açılacaq.
               Bitəndən sonra kabinetə daxil olub nəticənə baxa bilərsən.
             </p>
           </Card>

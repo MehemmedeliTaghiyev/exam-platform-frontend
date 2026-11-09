@@ -3,7 +3,7 @@ import { Camera, Pencil, X } from 'lucide-react';
 import { Button, Card, Textarea } from './ui';
 import { isOpenChoiceOption, isLetterOption, optionLetter, unwrapOptions } from '../lib/utils';
 import { difficultyLabel, normalizeDifficulty } from '../lib/questionDifficulty';
-import { compressQuestionImage } from '../lib/questionImage';
+import { compressQuestionImage, parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 import LatexText from './LatexText';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -66,72 +66,26 @@ export function visibleStudentOptions(question) {
   }).filter((opt) => opt.id != null || opt.text || opt.optionText);
 }
 
-function QuestionImagePane({ src, teacher, dark, onPick, onRemove }) {
+function QuestionFigure({ src, className = '' }) {
   const [zoom, setZoom] = useState(false);
-  const fileRef = useRef(null);
-  if (!src && !teacher) return null;
-
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) return null;
   return (
     <>
-      <div className="w-[6.25rem] shrink-0 space-y-2">
-        {src ? (
-          <button
-            type="button"
-            onClick={() => setZoom(true)}
-            className={`block w-full overflow-hidden rounded-xl ring-1 ${
-              dark ? 'ring-white/20' : 'ring-gray-200 dark:ring-slate-700'
-            }`}
-            title="Böyüt"
-          >
-            <img src={src} alt="Sual şəkli" className="h-28 w-full object-cover" />
-          </button>
-        ) : (
-          <div
-            className={`flex h-28 items-center justify-center rounded-xl border border-dashed px-1 text-center text-[10px] leading-tight ${
-              dark ? 'border-white/20 text-indigo-200' : 'border-gray-300 text-gray-500 dark:border-slate-600'
-            }`}
-          >
-            Şəkil yoxdur
-          </div>
-        )}
-        {teacher ? (
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (file) onPick?.(file);
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className={`flex w-full items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[10px] font-semibold ${
-                dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-200'
-              }`}
-            >
-              <Camera size={12} /> {src ? 'Dəyiş' : 'Şəkil çək'}
-            </button>
-            {src ? (
-              <button
-                type="button"
-                onClick={onRemove}
-                className={`flex w-full items-center justify-center gap-1 rounded-lg px-1 py-1 text-[10px] ${
-                  dark ? 'text-red-200' : 'text-red-600'
-                }`}
-              >
-                <X size={12} /> Sil
-              </button>
-            ) : null}
-          </>
-        ) : null}
-      </div>
-      {zoom && src ? (
+      <button
+        type="button"
+        onClick={() => setZoom(true)}
+        className={`mt-3 block w-full overflow-hidden rounded-xl bg-white p-2 ring-1 ring-black/10 ${className}`}
+        title="Böyüt"
+      >
+        <img
+          src={src}
+          alt="Sual şəkli"
+          className="mx-auto max-h-64 w-full object-contain"
+          onError={() => setBroken(true)}
+        />
+      </button>
+      {zoom ? (
         <button
           type="button"
           className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4"
@@ -141,6 +95,46 @@ function QuestionImagePane({ src, teacher, dark, onPick, onRemove }) {
         </button>
       ) : null}
     </>
+  );
+}
+
+function TeacherImageTools({ src, dark, onPick, onRemove }) {
+  const fileRef = useRef(null);
+  return (
+    <div className="flex flex-wrap gap-2">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) onPick?.(file);
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold ${
+          dark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-200'
+        }`}
+      >
+        <Camera size={12} /> {src ? 'Şəkli dəyiş' : 'Şəkil əlavə et'}
+      </button>
+      {src ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] ${
+            dark ? 'text-red-200' : 'text-red-600'
+          }`}
+        >
+          <X size={12} /> Sil
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -164,10 +158,11 @@ export default function QuestionCard({
   const [editing, setEditing] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
   const split = splitQuestionOptions(question);
-  const stem = String(question?.text || '').trim();
+  const rawStem = String(question?.text || '').trim();
+  const stem = stripQuestionImage(rawStem);
   const correctLetter = String(question?.correctLetter || split.options.find((o) => o.isCorrect)?.letter || 'A').toUpperCase();
   const difficulty = normalizeDifficulty(question?.difficultyLevel) || 'orta';
-  const imageUrl = question?.imageUrl || '';
+  const imageUrl = parseQuestionImage(question) || question?.imageUrl || question?.figureUrl || question?.FigureUrl || '';
 
   const [draftText, setDraftText] = useState(stem);
   const [draftOpts, setDraftOpts] = useState(() => Object.fromEntries(split.options.map((o) => [o.letter, o.text])));
@@ -176,7 +171,7 @@ export default function QuestionCard({
 
   const beginEdit = () => {
     const next = splitQuestionOptions(question);
-    setDraftText(String(question?.text || '').trim());
+    setDraftText(stripQuestionImage(String(question?.text || '').trim()));
     setDraftOpts(Object.fromEntries(next.options.map((o) => [o.letter, o.text])));
     const letter = String(question?.correctLetter || next.options.find((o) => o.isCorrect)?.letter || 'A').toUpperCase();
     setDraftCorrect(letter === 'OPEN' ? 'A' : letter);
@@ -279,115 +274,120 @@ export default function QuestionCard({
     );
   };
 
+  const stemBlock = editing && teacher ? (
+    <Textarea rows={3} value={draftText} onChange={(e) => setDraftText(e.target.value)} />
+  ) : teacher ? (
+    <div className={textCard}>
+      <LatexText text={stem || 'Sual mətni yoxdur'} />
+      <QuestionFigure src={imageUrl} />
+    </div>
+  ) : (
+    <div className="select-none rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-[18px] font-medium leading-[1.55] text-[var(--text)]">
+      <LatexText text={stem || 'Sual mətni yoxdur'} />
+      <QuestionFigure src={imageUrl} />
+    </div>
+  );
+
   const body = (
-    <div className="flex items-start gap-3">
-      <div className="min-w-0 flex-1 space-y-3">
-        <p className={`text-sm font-semibold ${teacher ? muted : 'text-[var(--muted)]'}`}>Sual {index + 1}</p>
-        {editing && teacher ? (
-          <Textarea rows={3} value={draftText} onChange={(e) => setDraftText(e.target.value)} />
-        ) : teacher ? (
-          <div className={textCard}><LatexText text={stem || 'Sual mətni yoxdur'} /></div>
-        ) : (
-          <div className="select-none rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-4 text-[18px] font-medium leading-[1.55] text-[var(--text)]">
-            <LatexText text={stem || 'Sual mətni yoxdur'} />
-          </div>
-        )}
+    <div className="space-y-3">
+      <p className={`text-sm font-semibold ${teacher ? muted : 'text-[var(--muted)]'}`}>Sual {index + 1}</p>
+      {stemBlock}
+      {teacher ? (
+        <TeacherImageTools
+          src={imageUrl}
+          dark={dark}
+          onPick={pickImage}
+          onRemove={() => onImageChange?.('')}
+        />
+      ) : null}
 
-        <div className="space-y-2">
-          {(teacher
-            ? (editing ? LETTERS.map((letter) => ({ letter, text: draftOpts[letter] || '', id: split.options.find((o) => o.letter === letter)?.id })) : split.options)
-            : studentOptions
-          ).map(renderVariant)}
-          {!teacher && (
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onSelect?.({ id: split.open?.id || 'open', letter: 'OPEN' })}
-              className={`quiz-opt text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
-                selectedId === String(split.open?.id || 'open') ? 'quiz-opt-on' : ''
-              }`}
-            >
-              <span className={`quiz-letter min-w-7 px-1 ${
-                selectedId === String(split.open?.id || 'open') ? '' : 'bg-[var(--bg)] text-[var(--text)]'
-              }`}>Açıq</span>
-              Öz cavabınız
-            </button>
-          )}
-        </div>
-
-        {!teacher && selectedId === String(split.open?.id || 'open') && (
-          <textarea
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
-            rows={3}
-            placeholder="Öz cavabınızı yazın"
+      <div className="space-y-2">
+        {(teacher
+          ? (editing ? LETTERS.map((letter) => ({ letter, text: draftOpts[letter] || '', id: split.options.find((o) => o.letter === letter)?.id })) : split.options)
+          : studentOptions
+        ).map(renderVariant)}
+        {!teacher && (
+          <button
+            type="button"
             disabled={disabled}
-            value={openText}
-            onChange={(e) => onOpenText?.(e.target.value)}
-          />
-        )}
-
-        {teacher && (
-          <div className="space-y-2">
-            <p className={`text-xs font-medium ${muted}`}>Çətinlik dərəcəsi</p>
-            {editing ? (
-              <div className="flex flex-wrap gap-2">
-                {LEVELS.map((level) => (
-                  <button
-                    key={level.value}
-                    type="button"
-                    onClick={() => setDraftLevel(level.value)}
-                    className={`rounded-xl border px-3 py-2 text-xs font-medium ${
-                      draftLevel === level.value ? variantOn : variantIdle
-                    }`}
-                  >
-                    {level.label}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {LEVELS.map((level) => (
-                  <span
-                    key={level.value}
-                    className={`rounded-xl border px-3 py-2 text-xs font-medium ${
-                      difficulty === level.value ? variantOn : variantIdle
-                    }`}
-                  >
-                    {level.label}
-                  </span>
-                ))}
-              </div>
-            )}
-            <p className={`text-xs ${muted}`}>
-              Düzgün: {editing ? draftCorrect : (correctLetter === 'OPEN' ? 'Açıq' : correctLetter)}
-              {' · '}
-              {difficultyLabel(editing ? draftLevel : difficulty) || 'Orta'}
-            </p>
-          </div>
-        )}
-
-        {teacher && (
-          <div className="pt-1">
-            {editing ? (
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={saveEdit}>Yadda saxla</Button>
-                <Button type="button" variant="secondary" onClick={() => setEditing(false)}>Ləğv</Button>
-              </div>
-            ) : (
-              <Button type="button" variant="secondary" onClick={beginEdit}>
-                <Pencil size={16} /> Sualı dəyiş
-              </Button>
-            )}
-          </div>
+            onClick={() => onSelect?.({ id: split.open?.id || 'open', letter: 'OPEN' })}
+            className={`quiz-opt text-[16px] leading-[1.5] transition-all duration-150 ease-in-out ${
+              selectedId === String(split.open?.id || 'open') ? 'quiz-opt-on' : ''
+            }`}
+          >
+            <span className={`quiz-letter min-w-7 px-1 ${
+              selectedId === String(split.open?.id || 'open') ? '' : 'bg-[var(--bg)] text-[var(--text)]'
+            }`}>Açıq</span>
+            Öz cavabınız
+          </button>
         )}
       </div>
-      <QuestionImagePane
-        src={imageUrl}
-        teacher={teacher}
-        dark={dark}
-        onPick={pickImage}
-        onRemove={() => onImageChange?.('')}
-      />
+
+      {!teacher && selectedId === String(split.open?.id || 'open') && (
+        <textarea
+          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+          rows={3}
+          placeholder="Öz cavabınızı yazın"
+          disabled={disabled}
+          value={openText}
+          onChange={(e) => onOpenText?.(e.target.value)}
+        />
+      )}
+
+      {teacher && (
+        <div className="space-y-2">
+          <p className={`text-xs font-medium ${muted}`}>Çətinlik dərəcəsi</p>
+          {editing ? (
+            <div className="flex flex-wrap gap-2">
+              {LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  onClick={() => setDraftLevel(level.value)}
+                  className={`rounded-xl border px-3 py-2 text-xs font-medium ${
+                    draftLevel === level.value ? variantOn : variantIdle
+                  }`}
+                >
+                  {level.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {LEVELS.map((level) => (
+                <span
+                  key={level.value}
+                  className={`rounded-xl border px-3 py-2 text-xs font-medium ${
+                    difficulty === level.value ? variantOn : variantIdle
+                  }`}
+                >
+                  {level.label}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className={`text-xs ${muted}`}>
+            Düzgün: {editing ? draftCorrect : (correctLetter === 'OPEN' ? 'Açıq' : correctLetter)}
+            {' · '}
+            {difficultyLabel(editing ? draftLevel : difficulty) || 'Orta'}
+          </p>
+        </div>
+      )}
+
+      {teacher && (
+        <div className="pt-1">
+          {editing ? (
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={saveEdit}>Yadda saxla</Button>
+              <Button type="button" variant="secondary" onClick={() => setEditing(false)}>Ləğv</Button>
+            </div>
+          ) : (
+            <Button type="button" variant="secondary" onClick={beginEdit}>
+              <Pencil size={16} /> Sualı dəyiş
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 

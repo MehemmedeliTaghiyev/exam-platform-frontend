@@ -173,11 +173,11 @@ const QuestionCanvas = memo(function QuestionCanvas({
             <div className={`mt-2 select-none text-[18px] font-medium leading-[1.5] ${dark ? 'text-[#f3f0ea]' : 'text-[#1F2937]'}`}>
               <LatexText text={question.text} />
             </div>
-            {question.imageUrl ? (
+            {(question.imageUrl || question.figureUrl || question.FigureUrl) ? (
               <img
-                src={question.imageUrl}
+                src={question.imageUrl || question.figureUrl || question.FigureUrl}
                 alt=""
-                className="mt-3 max-h-56 w-full rounded-xl object-contain bg-white"
+                className="mt-3 max-h-64 w-full rounded-xl bg-white object-contain p-2"
               />
             ) : null}
             <input

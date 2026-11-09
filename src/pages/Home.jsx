@@ -30,22 +30,18 @@ export default function Home() {
     navigate('/teacher');
   };
 
-  const practiceAdmin = () => {
-    enterPractice('Admin');
-    navigate('/admin');
-  };
-
   const real = user && !user.practice;
+  const continueTo = user?.role === 'Teacher' ? '/teacher' : user?.role === 'Student' ? '/student' : null;
 
   return (
     <div className="home-page">
       <Header overlay />
-      {real ? (
+      {real && continueTo ? (
         <div className="mx-auto max-w-[1120px] px-5 pt-6">
           <button
             type="button"
             className="text-sm font-semibold text-[var(--hp-accent)]"
-            onClick={() => navigate(user.role === 'Admin' ? '/admin' : user.role === 'Teacher' ? '/teacher' : '/student')}
+            onClick={() => navigate(continueTo)}
           >
             Davam et: {user.fullName || user.email}
           </button>
@@ -56,7 +52,7 @@ export default function Home() {
         <RepublicBanner />
         <CtaBand />
       </main>
-      <Footer onAdminPractice={practiceAdmin} />
+      <Footer />
     </div>
   );
 }

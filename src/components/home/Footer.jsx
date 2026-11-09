@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CONTACT_EMAIL, CONTACT_MAILTO } from '../../lib/contact';
 
-export default function Footer({ onAdminPractice }) {
+export default function Footer() {
   return (
     <footer className="hp-footer">
       <div className="hp-footer-inner">
@@ -13,11 +13,6 @@ export default function Footer({ onAdminPractice }) {
           <Link to="/privacy">Məxfilik</Link>
           <Link to="/terms">Şərtlər</Link>
           <Link to="/support">Dəstək</Link>
-          {onAdminPractice ? (
-            <button type="button" onClick={onAdminPractice}>Admin paneli</button>
-          ) : (
-            <Link to="/admin">Admin paneli</Link>
-          )}
         </p>
       </div>
     </footer>

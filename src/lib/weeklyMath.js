@@ -71,7 +71,7 @@ export function examPulseAudience(exam) {
   if (/respublika/i.test(kind) || /respublika/i.test(blob)) return 'mixed';
   if (/burax[ıi]l[ıi][sş]/i.test(kind) || /burax[ıi]l[ıi][sş]/i.test(blob)) return 'mixed';
   if (/blok/i.test(kind)) return 'specialty';
-  if (/s[ıi]naq/i.test(kind) || /həftəlik/i.test(blob)) {
+  if (/weekly/i.test(kind) || /s[ıi]naq/i.test(kind) || /həftəlik/i.test(blob)) {
     if (/ümumi/i.test(blob) && /qar[iı][sş][iı]q/i.test(blob)) return 'hidden';
     return 'weekly';
   }

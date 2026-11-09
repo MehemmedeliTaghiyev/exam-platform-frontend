@@ -9,6 +9,7 @@ import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprova
 import { decorateTeacher } from './teacherMarketplace';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { examRankingEnabled } from './examKind';
+import { examSortNewest } from './dailyTopicQuiz';
 import { examKindOf, examPulseAudience, isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
@@ -1054,11 +1055,7 @@ export async function fetchAllPublicExams() {
       teacherName: vis.teacherName || names.get(owner) || vis.TeacherName || '',
     });
   });
-  return Array.from(map.values()).sort((a, b) => {
-    const da = new Date(b.startTime || b.createdAt || 0).getTime();
-    const db = new Date(a.startTime || a.createdAt || 0).getTime();
-    return da - db;
-  });
+  return Array.from(map.values()).sort(examSortNewest);
 }
 
 function currentTeacherScope() {

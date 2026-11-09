@@ -9,6 +9,7 @@ import { AuthContext } from '../context/AuthContext';
 import { fetchAllPublicExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import ExamRow from '../components/ExamRow';
+import { examSortNewest } from '../lib/dailyTopicQuiz';
 import { filterPublicExams, uniqueSubjects } from '../lib/publicExams';
 import { isExamEnded, isExamLive, isExamScheduled } from '../lib/utils';
 
@@ -98,7 +99,7 @@ export default function PublicExamZone({ embedded = false }) {
       pickDate,
       subject,
       savedIds: savedOnly ? savedIds : null,
-    });
+    }).sort(examSortNewest);
   }, [exams, dateMode, pickDate, subject, savedOnly, savedIds, user?.id]);
   const filteredOn = dateMode !== 'all' || subject !== 'all' || Boolean(pickDate) || savedOnly;
 

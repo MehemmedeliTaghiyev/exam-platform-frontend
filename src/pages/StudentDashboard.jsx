@@ -10,7 +10,7 @@ import { Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { examSubject, subjectProgress } from '../lib/publicExams';
-import { isExamLive, isExamScheduled, parseExamDate, resolveExamStatus } from '../lib/utils';
+import { isExamOpen, isExamScheduled, resolveExamStatus } from '../lib/utils';
 import {
   ensureWeekendPaper,
   isWeekendDay,
@@ -19,17 +19,10 @@ import {
   weekendWindow,
 } from '../lib/weekendWeakExam';
 import { countStreak, dailyDoneDays, dailyKey, dailyMine, flameDying, flamePeak, todaysQuestion, weekDots } from '../lib/dailyChallenge';
+import { examSortNewest, todaysTopicQuiz } from '../lib/dailyTopicQuiz';
+import { tbilisiYmd } from '../lib/mathCalendar';
 import StreakFlame from '../components/StreakFlame';
 import { Check } from 'lucide-react';
-
-function examSortTime(exam) {
-  return (
-    parseExamDate(exam.startTime || exam.StartTime)?.getTime()
-    || parseExamDate(exam.createdAt || exam.CreatedAt)?.getTime()
-    || parseExamDate(exam.endTime || exam.EndTime)?.getTime()
-    || 0
-  );
-}
 
 export default function StudentDashboard() {
   const { user } = useContext(AuthContext);
@@ -75,16 +68,28 @@ export default function StudentDashboard() {
       if (status === 'inprogress' || status === 'in_progress') return false;
       return Boolean(h.submittedAt || h.SubmittedAt);
     });
-    if (isExamLive(exam) && (!submitted || user?.practice)) {
+    if (isExamOpen(exam) && (!submitted || user?.practice)) {
       navigate(`/student/exams/${exam.id}`);
       return;
     }
     navigate(`/student/exams/${exam.id}/review`);
   };
 
-  const latestExams = useMemo(
-    () => [...exams].sort((a, b) => examSortTime(b) - examSortTime(a)).slice(0, 5),
-    [exams],
+  const boardExams = useMemo(() => {
+    const map = new Map();
+    [...exams, ...publicExams].forEach((exam) => {
+      if (!exam || exam.id == null) return;
+      if (resolveExamStatus(exam) === 'Draft') return;
+      map.set(String(exam.id), exam);
+    });
+    return Array.from(map.values()).sort(examSortNewest);
+  }, [exams, publicExams]);
+
+  const latestExams = useMemo(() => boardExams.slice(0, 5), [boardExams]);
+
+  const dayQuiz = useMemo(
+    () => todaysTopicQuiz(boardExams, tbilisiYmd()),
+    [boardExams],
   );
 
   const daily = useMemo(() => {
@@ -190,6 +195,23 @@ export default function StudentDashboard() {
           })}
         </div>
       </button>
+
+      {dayQuiz.exam ? (
+        <button
+          type="button"
+          onClick={() => openExam(dayQuiz.exam)}
+          className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
+        >
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">Günün sınağı</p>
+          <p className="mt-1 text-lg font-black">{dayQuiz.topic || dayQuiz.exam.title}</p>
+          <p className="mt-1 line-clamp-2 text-sm font-semibold text-[var(--muted)]">
+            {String(dayQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim()}
+          </p>
+          <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
+            Sınağı aç
+          </span>
+        </button>
+      ) : null}
 
       <button
         type="button"

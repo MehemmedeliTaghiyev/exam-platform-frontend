@@ -26,6 +26,7 @@ import {
   MATH_CALENDAR,
   studentTopicPlace,
 } from '../lib/mathCalendar';
+import { DAILY_TOPIC_SENDS } from '../lib/dailyTopicQuiz';
 import {
   archiveWeeklyWindows,
   examIdOf,
@@ -102,15 +103,17 @@ export default function StudentSyllabus() {
           ownTeacherId,
           ...subs.map((row) => row.teacherId),
         ].filter((id) => id != null && id !== ''))];
-        const [mine, pubs, hist, listed, easy, medium] = await Promise.all([
+        const dailyIds = [...new Set(DAILY_TOPIC_SENDS.map((row) => row.examId).filter(Boolean))];
+        const [mine, pubs, hist, listed, easy, medium, ...dailyExams] = await Promise.all([
           fetchExams().catch(() => []),
           fetchAllPublicExams().catch(() => []),
           fetchStudentHistory(user?.id).catch(() => []),
           Promise.all(teacherIds.map((id) => fetchListedExamsForTeacher(id).catch(() => []))),
           fetchExam(LIVE_WEEKLY_EASY_EXAM_ID).catch(() => null),
           fetchExam(LIVE_WEEKLY_MEDIUM_EXAM_ID).catch(() => null),
+          ...dailyIds.map((id) => fetchExam(id).catch(() => null)),
         ]);
-        const merged = [...mine, ...pubs, ...listed.flat(), easy, medium].filter((exam, index, all) => (
+        const merged = [...mine, ...pubs, ...listed.flat(), easy, medium, ...dailyExams].filter((exam, index, all) => (
           exam?.id != null && all.findIndex((row) => String(row.id) === String(exam.id)) === index
         ));
         if (!cancelled) {
@@ -151,22 +154,24 @@ export default function StudentSyllabus() {
   const calendarHit = findCalendarTopic(topicId);
 
   const papersForTopic = (topic) => {
-    const interval = topic?.interval || findIntervalByStart(topic?.intervalStart);
-    const windowPair = weeklyPairForInterval(interval, exams);
-    const weekly = [windowPair.easy, windowPair.medium].filter(Boolean);
-    const extras = (exams || []).filter((exam) => {
+    // Only papers tagged for this topic — not the whole weekly pair.
+    const matched = (exams || []).filter((exam) => {
       if (!studentCanSeeExam(user, exam)) return false;
-      if (isStudentWeeklyExam(exam)) return false;
       if (examIdOf(exam) === WEEKLY_SMOKE_EXAM_ID) return false;
+      if (examIdOf(exam) === LIVE_WEEKLY_EASY_EXAM_ID || examIdOf(exam) === LIVE_WEEKLY_MEDIUM_EXAM_ID) {
+        return false; // asan/orta kağız yalnız «Həftəlik sınaq» blokunda
+      }
       return examSyllabusTopics(exam).some((row) => row.title === topic.title);
     });
     const seen = new Set();
-    return [...weekly, ...extras].filter((exam) => {
-      const id = String(exam.id);
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
+    return matched
+      .filter((exam) => {
+        const id = String(exam.id);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .sort((a, b) => Number(examIdOf(b) || 0) - Number(examIdOf(a) || 0));
   };
 
   const openExam = (exam) => {
@@ -196,7 +201,9 @@ export default function StudentSyllabus() {
         </button>
         <p className="mt-2 text-sm text-[var(--muted)]">
           {formatIntervalRange(calendarHit.interval)}
-          {calendarHit.interval?.send?.weekly ? ' · həftəlik asan və orta eyni kağızlardır.' : ' · blok / situasiya pəncərəsi.'}
+          {calendarHit.interval?.send?.weekly
+            ? ' · bu bölməyə aid mövzu sınaqları; həftəlik asan/orta yuxarıdakı «Həftəlik sınaq»dadır.'
+            : ' · blok / situasiya pəncərəsi.'}
           {windowPair.archived ? ' Bu pəncərə arxivdir.' : ''}
         </p>
         {loading ? <Skeleton className="mt-6 h-40" /> : (
@@ -260,7 +267,7 @@ export default function StudentSyllabus() {
   return (
     <AppShell title="Sillabus">
       <p className="mb-5 text-sm text-[var(--muted)]">
-        Bütün mövzular buradadır. Sınaq gələndə öz bölməsinə düşür. Həftəlik kağız yalnız o pəncərənin fəsillərindəndir; qarışıq sınaq Respublikadadır.
+        Bütün mövzular buradadır. Gündəlik mövzu sınağı yalnız öz bölməsinə düşür. Həftəlik asan/orta ayrıca «Həftəlik sınaq»dadır; qarışıq sınaq Respublikadadır.
       </p>
       <div className="mb-5 flex flex-wrap gap-2">
         {syllabusSubjects().map((name) => {

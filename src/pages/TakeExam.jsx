@@ -19,6 +19,12 @@ import ScreenGuard from '../components/ScreenGuard';
 import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
 import { isPublicExam } from '../lib/examVisibility';
 import { letterOfOption, optionIdValue } from '../lib/gradeExam';
+import {
+  examShuffleSeed,
+  persistShuffle,
+  readPersistedShuffle,
+  shuffleExamPaper,
+} from '../lib/examShuffle';
 
 const OPEN_SENTINEL = 'open';
 const LETTER_KEYS = ['A', 'B', 'C', 'D', 'E'];
@@ -243,10 +249,13 @@ export default function TakeExam() {
   const { t } = useLocale();
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [pendingQuestions, setPendingQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [flagged, setFlagged] = useState(() => new Set());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [started, setStarted] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [secondsBudget, setSecondsBudget] = useState(0);
   const [studentExamId, setStudentExamId] = useState(null);
@@ -291,11 +300,16 @@ export default function TakeExam() {
 
         if (isExamScheduled(examData)) {
           setQuestions([]);
+          setPendingQuestions([]);
+          setStarted(false);
           return;
         }
 
         const qs = await fetchQuestions(examId, examData).catch(() => []);
-        setQuestions(Array.isArray(qs) ? qs : []);
+        const list = Array.isArray(qs) ? qs : [];
+        setPendingQuestions(list);
+        setQuestions([]);
+        setStarted(false);
 
         const history = await fetchStudentHistory(user?.id).catch(() => []);
         const priorAttempt = (history || []).find((row) => String(row.examId ?? row.ExamId) === String(examId));
@@ -305,7 +319,7 @@ export default function TakeExam() {
           return;
         }
 
-        const qCount = Array.isArray(qs) ? qs.length : (examData?.totalQuestions || 10);
+        const qCount = list.length || (examData?.totalQuestions || 10);
         const durationMin = Number(examData?.durationMinutes) > 0
           ? Number(examData.durationMinutes)
           : Math.max(1, Math.round(qCount * 2));
@@ -317,25 +331,6 @@ export default function TakeExam() {
           remainingMs = durationMin * 60 * 1000;
         }
         setSecondsBudget(Math.max(1, Math.floor(remainingMs / 1000)));
-
-        startExam({ examId, studentId: user?.id })
-          .then((started) => {
-            if (started.alreadySubmitted && !retry) {
-              navigate(`/student/exams/${examId}/review`, { replace: true });
-              return;
-            }
-            const sessionId = started.alreadySubmitted
-              ? `retry-${examId}-${Date.now()}`
-              : (started.studentExamId || started.id);
-            sessionRef.current = sessionId;
-            setStudentExamId(sessionId);
-          })
-          .catch(() => {
-            if (!retry) return;
-            const sessionId = `retry-${examId}-${Date.now()}`;
-            sessionRef.current = sessionId;
-            setStudentExamId(sessionId);
-          });
       } finally {
         setLoading(false);
       }
@@ -369,7 +364,7 @@ export default function TakeExam() {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (submitting || submittedRef.current) return;
+    if (submitting || submittedRef.current || !started) return;
     finishGuardRef.current?.release();
     submittedRef.current = true;
     setSubmitting(true);
@@ -392,14 +387,61 @@ export default function TakeExam() {
       submittedRef.current = false;
       setSubmitting(false);
     }
-  }, [exam, id, navigate, submitting, user]);
+  }, [exam, id, navigate, started, submitting, user]);
+
+  const beginExam = useCallback(async () => {
+    if (starting || started || !exam) return;
+    setStarting(true);
+    const examId = Number.isNaN(Number(id)) ? id : parseInt(id, 10);
+    const retry = wantsRetry;
+    try {
+      const history = await fetchStudentHistory(user?.id).catch(() => []);
+      const priorAttempt = (history || []).find((row) => String(row.examId ?? row.ExamId) === String(examId));
+      const canRetry = retry && examRetakeReady(exam, priorAttempt);
+
+      let startedRow = null;
+      try {
+        startedRow = await startExam({ examId, studentId: user?.id });
+      } catch {
+        startedRow = null;
+      }
+      if (startedRow?.alreadySubmitted && !canRetry) {
+        navigate(`/student/exams/${examId}/review`, { replace: true });
+        return;
+      }
+      let sessionId = startedRow?.studentExamId || startedRow?.id;
+      if (startedRow?.alreadySubmitted && canRetry) {
+        sessionId = `retry-${examId}-${Date.now()}`;
+      } else if (!sessionId) {
+        sessionId = (canRetry || retry) ? `retry-${examId}-${Date.now()}` : `local-${examId}-${Date.now()}`;
+      }
+      sessionRef.current = sessionId;
+      setStudentExamId(sessionId);
+
+      const seed = examShuffleSeed(examId, user?.id);
+      const cached = readPersistedShuffle(examId, user?.id);
+      const source = pendingQuestions.length ? pendingQuestions : [];
+      const shuffled = source.length
+        ? (cached?.length ? cached : shuffleExamPaper(source, seed))
+        : [];
+      if (source.length && !cached?.length) persistShuffle(examId, user?.id, shuffled);
+      setQuestions(shuffled);
+      setCurrentIndex(0);
+      setStarted(true);
+    } finally {
+      setStarting(false);
+    }
+  }, [exam, id, navigate, pendingQuestions, started, starting, user?.id, wantsRetry]);
 
   const submitRef = useRef(handleSubmit);
   submitRef.current = handleSubmit;
   const onExpire = useCallback(() => {
     submitRef.current?.();
   }, []);
-  const inExam = !loading && !submitting && exam && !isExamScheduled(exam) && paperQuestions.length > 0;
+  const onAbandonExam = useCallback(() => {
+    submitRef.current?.();
+  }, []);
+  const inExam = Boolean(started && !loading && !submitting && exam && !isExamScheduled(exam) && paperQuestions.length > 0);
   const finishGuard = useExamFinishGuard(inExam, () => {
     submitRef.current?.();
   });
@@ -484,12 +526,14 @@ export default function TakeExam() {
 
   const active = paperQuestions[currentIndex] || null;
   const scheduled = isExamScheduled(exam);
-  const timerRunning = !loading && !scheduled && !submitting && secondsBudget > 0 && paperQuestions.length > 0;
+  const timerRunning = Boolean(started && !loading && !scheduled && !submitting && secondsBudget > 0 && paperQuestions.length > 0);
   const personalQuiz = !isPublicExam(exam);
   const watermarkName = teacherWatermarkText(examTeacherId(exam)) || (personalQuiz ? (user?.fullName || user?.email || 'ExamPulse') : '');
+  const showGate = !loading && !scheduled && !started;
+  const pendingCount = pendingQuestions.length || Number(exam?.totalQuestions) || 0;
 
   return (
-    <div className={`fixed inset-0 z-[60] flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] ${personalQuiz || watermarkName ? 'exam-guard' : ''}`} style={{ height: '100vh' }}>
+    <div className={`fixed inset-0 z-[60] flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] ${started ? 'exam-guard' : ''}`} style={{ height: '100vh' }}>
       <header className="shrink-0 border-b border-white/10 bg-[var(--bg)] px-4 py-3 text-[var(--text)] sm:px-6">
         <div className="flex items-center gap-3">
           <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--card)] ring-1 ring-[var(--line)]" onClick={inExam ? finishGuard.request : () => navigate('/student')} aria-label={t('quiz.close')}>
@@ -498,11 +542,11 @@ export default function TakeExam() {
           <div className="quiz-track h-2 min-w-0 flex-1 overflow-hidden rounded-full">
             <div
               className="h-full rounded-full bg-[var(--accent)]"
-              style={{ width: `${paperQuestions.length ? ((currentIndex + 1) / paperQuestions.length) * 100 : 0}%` }}
+              style={{ width: `${started && paperQuestions.length ? ((currentIndex + 1) / paperQuestions.length) * 100 : 0}%` }}
             />
           </div>
           <p className="shrink-0 text-sm font-extrabold tabular-nums">
-            {paperQuestions.length ? `${currentIndex + 1}/${paperQuestions.length}` : '—'}
+            {started && paperQuestions.length ? `${currentIndex + 1}/${paperQuestions.length}` : '—'}
           </p>
           <button
             type="button"
@@ -514,7 +558,7 @@ export default function TakeExam() {
           </button>
           <Button
             onClick={finishGuard.request}
-            disabled={submitting || loading || scheduled}
+            disabled={!started || submitting || loading || scheduled}
             className="shrink-0 px-3 py-1.5 text-xs"
           >
             {submitting ? '...' : t('quiz.finish')}
@@ -526,7 +570,7 @@ export default function TakeExam() {
             {exam?.title && exam?.subjectName ? ` · ${exam.title}` : ''}
           </p>
           <div className="flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-[var(--accent)]">
-            {!loading && !scheduled && secondsBudget > 0 ? (
+            {started && !loading && !scheduled && secondsBudget > 0 ? (
               <ExamTimer initialSeconds={secondsBudget} running={timerRunning} onExpire={onExpire} />
             ) : (
               <InfinityIcon size={18} />
@@ -552,6 +596,29 @@ export default function TakeExam() {
                 )}
                 <p className="mt-3 text-sm text-[#6B7280]">Suallar imtahan başlayanda görünəcək.</p>
                 <Button variant="secondary" className="mt-4" onClick={() => navigate('/student')}>Panelə qayıt</Button>
+              </Card>
+            </div>
+          ) : showGate ? (
+            <div className="flex flex-1 items-center justify-center p-6">
+              <Card className="max-w-lg border-[var(--line)] bg-[var(--card)] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">İmtahan qaydaları</p>
+                <h2 className="mt-2 text-xl font-black text-[var(--text)]">
+                  {exam?.title || exam?.subjectName || 'İmtahan'}
+                </h2>
+                <ul className="mt-4 space-y-3 text-sm font-semibold leading-relaxed text-[var(--muted)]">
+                  <li>
+                    Başqa tabə və ya sayta keçsəniz imtahan <span className="text-[var(--text)]">avtomatik bitəcək</span> və cavablar təhvil veriləcək.
+                  </li>
+                  <li>Sualları sağ klik və ya Copy/Paste ilə kopyalamaq bağlıdır.</li>
+                  <li>Sual və variant sırası hər şagird üçün avtomatik qarışdırılır.</li>
+                  {pendingCount ? <li>Sual sayı: {pendingCount}. Vaxt sayacı başlayandan sonra işə düşür.</li> : null}
+                </ul>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Button variant="secondary" onClick={() => navigate('/student')}>Geri</Button>
+                  <Button onClick={beginExam} disabled={starting}>
+                    {starting ? '...' : 'Qaydaları qəbul edirəm — başla'}
+                  </Button>
+                </div>
               </Card>
             </div>
           ) : (
@@ -599,7 +666,7 @@ export default function TakeExam() {
           )}
         </div>
       )}
-      {!loading && !scheduled && paperQuestions.length > 0 ? (
+      {started && !loading && !scheduled && paperQuestions.length > 0 ? (
         <div className="flex shrink-0 gap-3 border-t border-white/10 bg-[var(--bg)] px-4 py-3 sm:hidden" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
           <button
             type="button"
@@ -622,7 +689,7 @@ export default function TakeExam() {
           </button>
         </div>
       ) : null}
-      <ScreenGuard active={Boolean(watermarkName)} name={watermarkName} />
+      <ScreenGuard active={started && !submitting} name={watermarkName || 'ExamPulse'} onAbandon={onAbandonExam} />
       <ExamFinishConfirm
         open={finishGuard.open}
         busy={submitting}

@@ -200,15 +200,6 @@ export function markStorageRequestSeen(user, id) {
   return next;
 }
 
-const SUBJECT_CODE = {
-  riyaziyyat: 'math',
-  math: 'math',
-  'azərbaycan dili': 'azerbaijani',
-  azerbaijani: 'azerbaijani',
-  'ingilis dili': 'english',
-  english: 'english',
-};
-
 export async function requestStorageExam(user, mix, extras = {}) {
   const asan = Math.max(0, Math.round(Number(mix?.asan) || 0));
   const orta = Math.max(0, Math.round(Number(mix?.orta) || 0));
@@ -220,14 +211,36 @@ export async function requestStorageExam(user, mix, extras = {}) {
     throw err;
   }
   const cost = tokenCostForMix({ asan, orta, çətin: hard });
-  spendTokens(user, cost, 'Quiz tələb edildi', { asan, orta, çətin: hard });
+  // Balansı əvvəlcədən yoxla; jetoni yalnız uğurlu sifarişdən sonra sil.
+  if (!isTokenUnlimited(user)) {
+    const account = teacherTokenAccount(user);
+    if (account.balance < cost) {
+      const err = new Error('JETON_YOX');
+      err.code = 'JETON_YOX';
+      throw err;
+    }
+  }
+
   const language = String(extras.language || 'az');
   const subject = String(extras.subject || '');
   const grade = String(extras.grade || '11');
   const kind = String(extras.kind || 'Sınaq');
   const week = isoWeekKey();
+
+  const { fulfillTeacherBankOrder } = await import('./teacherBankOrder');
+  const result = await fulfillTeacherBankOrder(user, {
+    mix: { asan, orta, çətin: hard },
+    language,
+    subject,
+    grade,
+    kind,
+    topics: extras.topics,
+  });
+
+  spendTokens(user, cost, 'Quiz Anbara düşdü', { asan, orta, çətin: hard, examId: result.exam?.id });
+
   const row = {
-    id: `${week}-${Date.now()}`,
+    id: result.pack?.id || `${week}-${Date.now()}`,
     week,
     at: new Date().toISOString(),
     asan,
@@ -238,34 +251,20 @@ export async function requestStorageExam(user, mix, extras = {}) {
     subject,
     grade,
     kind,
+    topics: extras.topics || '',
     seen: false,
-    status: 'pending',
-    title: `Quiz tələbi · ${asan} asan, ${orta} orta, ${hard} çətin · ${language.toUpperCase()}`,
+    status: 'ready',
+    examId: result.exam?.id,
+    title: result.pack?.title || `Quiz · ${asan}/${orta}/${hard}`,
+    paper: {
+      exam_id: result.exam?.id,
+      title: result.pack?.title,
+      questions: result.questions,
+      latexSource: result.latexSource,
+    },
+    pack: result.pack,
   };
-  let paper = null;
-  try {
-    const { orderPipelineQuiz } = await import('./pipelineApi');
-    paper = await orderPipelineQuiz({
-      audience: 'teacher',
-      subject: SUBJECT_CODE[subject.toLocaleLowerCase('az')] || 'math',
-      language,
-      lang: language,
-      grade,
-      count: totalQuestions,
-      easy: asan,
-      medium: orta,
-      hard,
-      level: hard ? 'hard' : orta ? 'medium' : 'easy',
-      kind,
-    });
-    row.status = 'ready';
-    row.examId = paper?.exam_id || paper?.id || row.id;
-    row.paper = paper;
-    row.title = paper?.title || row.title;
-  } catch (err) {
-    row.status = err?.code === 'pipeline_unconfigured' ? 'waiting' : 'error';
-    row.error = err?.message || 'Pipeline cavab vermədi';
-  }
+
   const previous = readJson(requestsKey(user.id), []);
   writeJson(requestsKey(user.id), [row, ...(Array.isArray(previous) ? previous : [])]);
   emitTokens();

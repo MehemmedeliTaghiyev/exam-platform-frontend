@@ -140,7 +140,6 @@ export default function AppShell({ title, children, mainClassName = '', action =
   }, [user, role, onLeaveExam]);
   const links = (navByRole[role] || navByRole.Student).filter((item) => {
     if (!AI_FEATURE_OPEN && item.to === '/teacher/ai') return false;
-    if (item.to === '/teacher/storage' && !isNativeApp() && !import.meta.env.DEV) return false;
     if (user?.practice) {
       return item.to === '/teacher' || item.to === '/teacher/storage' || item.to === '/teacher/weak' || item.to === '/teacher/cabinet' || item.to === '/teacher/new-students' || item.to === '/admin' || item.to === '/admin/teachers' || item.to === '/admin/users' || item.to === '/admin/exams' || item.to === '/student' || item.to === '/student/syllabus' || item.to === '/student/public' || item.to === '/student/teachers' || item.to === '/student/republic' || item.to === '/student/account' || item.to === '/student/wallet' || item.to === '/student/weekend';
     }
@@ -174,10 +173,7 @@ export default function AppShell({ title, children, mainClassName = '', action =
   const mobileNav = role === 'Student'
     ? studentMobileNav
     : role === 'Teacher'
-      ? teacherMobileNav.filter((item) => {
-        if (item.to === '/teacher/storage' && !isNativeApp() && !import.meta.env.DEV) return false;
-        return true;
-      })
+      ? teacherMobileNav
       : role === 'Admin'
         ? adminMobileNav
         : links;

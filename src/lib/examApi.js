@@ -1171,6 +1171,35 @@ export async function createExam(payload) {
   return localExam;
 }
 
+export async function copyFromBank(examId, quota = {}) {
+  if (isPractice()) {
+    return {
+      examId,
+      added: 0,
+      copiedQnums: [],
+      warnings: ['Practice rejimində bankdan kopyalama yoxdur.'],
+    };
+  }
+  const body = {
+    audience: quota.audience,
+    kind: quota.kind,
+    grade: quota.grade,
+    difficultyLevel: quota.difficultyLevel || quota.DifficultyLevel,
+    topics: quota.topics,
+    Topics: quota.topics,
+    subject: quota.subject,
+    language: quota.language,
+    count: quota.count,
+    Count: quota.count,
+    mcqCount: quota.mcqCount,
+    openCodedCount: quota.openCodedCount,
+    writtenCount: quota.writtenCount,
+    situationCount: quota.situationCount,
+  };
+  const res = await API.post(`/Exams/${examId}/from-bank`, body, FAST);
+  return unwrapItem(res.data) || res.data || {};
+}
+
 export async function updateExam(id, payload) {
   if (isPractice()) return practiceUpdateExam(id, payload);
   const vis = payload.visibility || (payload.isPublic === true ? 'public' : payload.isPublic === false ? 'private' : undefined);

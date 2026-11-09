@@ -28,6 +28,7 @@ import {
   useTeacherTokens,
   WEEKLY_TOKENS,
 } from '../lib/tokens';
+import { calendarTopicSuggestions, teacherOrderedPacks } from '../lib/teacherBankOrder';
 
 const prefKey = (id) => `exampulse_storage_pref_${id || 'me'}`;
 const sharedKey = (id) => `exampulse_storage_shared_${id || 'me'}`;
@@ -42,7 +43,7 @@ function readJson(key, fallback) {
 }
 
 function resolveTeacherSubject(user) {
-  return teacherSubjectOf(user) || localDb.getTeacherSubject(user?.id, user?.email) || '';
+  return teacherSubjectOf(user) || localDb.getTeacherSubject(user?.id, user?.email) || 'Riyaziyyat';
 }
 
 function Seg({ options, value, onChange }) {
@@ -127,7 +128,9 @@ export default function TeacherStorage() {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [mix, setMix] = useState({ asan: 4, orta: 2, çətin: 0 });
+  const [topics, setTopics] = useState('Üçbucaqlar');
   const [language, setLanguage] = useState('az');
+  const [orderedPacks, setOrderedPacks] = useState([]);
   const [payWall, setPayWall] = useState(false);
   const [sending, setSending] = useState(false);
   const [downloadId, setDownloadId] = useState('');
@@ -136,10 +139,17 @@ export default function TeacherStorage() {
   const tokens = useTeacherTokens(user);
   const unlocked = canUseStorageSelection(user);
   const allowedKinds = useMemo(() => kindsForGrade(prefs.grade), [prefs.grade]);
-  const packs = useMemo(
-    () => pickStoragePacks({ ...prefs, subject }, catalog.packs.length ? catalog.packs : catalogPacks()),
-    [prefs, subject, catalog.packs],
-  );
+  const packs = useMemo(() => {
+    const catalogRows = pickStoragePacks({ ...prefs, subject }, catalog.packs.length ? catalog.packs : catalogPacks());
+    const mine = (orderedPacks || []).filter((pack) => {
+      if (subject && pack.subject && pack.subject !== subject) return false;
+      if (prefs.grade && pack.grade && String(pack.grade) !== String(prefs.grade)) return false;
+      if (prefs.kind && pack.kind && pack.kind !== prefs.kind) return false;
+      return true;
+    });
+    const seen = new Set(mine.map((p) => String(p.id)));
+    return [...mine, ...catalogRows.filter((p) => !seen.has(String(p.id)))];
+  }, [prefs, subject, catalog.packs, orderedPacks]);
   const requestCost = tokenCostForMix(mix);
   const availableJetons = tokens.unlimited
     ? (user?.practice ? WEEKLY_TOKENS : Number.POSITIVE_INFINITY)
@@ -151,6 +161,10 @@ export default function TeacherStorage() {
   useEffect(() => {
     loadQuizCatalog().then(setCatalog).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setOrderedPacks(teacherOrderedPacks(user?.id));
+  }, [user?.id]);
 
   useEffect(() => {
     if (!subject) return;
@@ -201,6 +215,8 @@ export default function TeacherStorage() {
         endTime: end.toISOString(),
         visibility: mixed ? 'private' : visibility,
         status: 'Live',
+        kind: 'teacher',
+        rankingEnabled: true,
         pdfFileUrl: driveViewUrl(pack.driveFileId || pack.pdfUrl) || pack.pdfUrl,
       });
       remember({
@@ -222,14 +238,23 @@ export default function TeacherStorage() {
     });
   };
 
-  const openPdf = (pack) => {
+  const openPdf = async (pack) => {
     if (!unlocked) return;
-    const url = driveViewUrl(pack.driveFileId);
-    if (!url) {
-      window.alert('PDF hələ bağlanmayıb. Drive faylı bazaya yazılanda buradan açılacaq. İstəsəniz «PDF yüklə» ilə LaTeX/TikZ-dən çevirin.');
+    const url = driveViewUrl(pack.driveFileId || pack.pdfUrl);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (pack.latexSource || pack.examId) {
+      try {
+        const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
+        await saveAndOpenPdf(blob, `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`);
+      } catch (err) {
+        setError(errorMessage(err, 'PDF açıla bilmədi.'));
+      }
+      return;
+    }
+    window.alert('PDF hələ yoxdur. Əvvəl quiz tələb edin və ya «PDF yüklə» basın.');
   };
 
   const downloadPack = async (pack) => {
@@ -238,8 +263,8 @@ export default function TeacherStorage() {
     setError('');
     try {
       const filename = `${String(pack.title || 'material').replace(/[^\w.\-əöüğçşıİƏÖÜĞÇŞ ]+/gi, '') || 'material'}.pdf`;
-      const driveUrl = driveDownloadUrl(pack.driveFileId);
-      if (driveUrl && pack.driveFileId) {
+      const driveUrl = driveDownloadUrl(pack.driveFileId || pack.pdfUrl);
+      if (driveUrl && (pack.driveFileId || /^https?:/i.test(String(pack.pdfUrl || '')))) {
         window.open(driveUrl, '_blank', 'noopener,noreferrer');
         return;
       }
@@ -271,17 +296,18 @@ export default function TeacherStorage() {
         subject,
         grade: prefs.grade,
         kind: prefs.kind,
+        topics,
       });
-      const questions = row?.paper?.questions || [];
-      const latex = questions.map((q) => q.latex || q.text).filter(Boolean).join('\n\n')
-        || row?.paper?.latexSource
+      setOrderedPacks(teacherOrderedPacks(user?.id));
+      const latex = row?.paper?.latexSource
+        || (row?.paper?.questions || []).map((q) => q.latex || q.text).filter(Boolean).join('\n\n')
         || '';
       if (latex) {
         try {
           const { blob } = await compileLatexPdf(latex, { title: row.title || 'Quiz' });
           await saveAndOpenPdf(blob, `${String(row.title || 'quiz').slice(0, 40)}.pdf`);
         } catch {
-          /* bildirişdə LaTeX qalır, PDF sonra */
+          setError('Sınaq Anbara düşdü, amma PDF indilik açıla bilmədi — «PDF yüklə» ilə yenidən cəhd edin.');
         }
       }
     } catch (err) {
@@ -291,6 +317,10 @@ export default function TeacherStorage() {
         navigate('/teacher/cabinet#odenis');
       } else if (err?.code === 'SUAL_YOX') {
         setError('Quiz tələb etmək üçün asan, orta və ya çətin sual sayını yazın.');
+      } else if (err?.code === 'MOVZU_YOX') {
+        setError('Adi sınaq üçün ən azı bir mövzu yazın (məs. Üçbucaqlar).');
+      } else if (err?.code === 'BANK_EMPTY') {
+        setError(err.message || 'Bankdan sual gəlmədi. Mövzu və ya çətinliyi dəyişin.');
       } else {
         setError(errorMessage(err, 'Quiz tələb edilmədi.'));
       }
@@ -423,6 +453,28 @@ export default function TeacherStorage() {
                 onChange={(n) => setMix((prev) => ({ ...prev, çətin: n }))}
               />
             </div>
+            {prefs.kind === 'Sınaq' ? (
+              <div className="mt-4">
+                <label className="block text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/40">
+                  Mövzu və ya interval
+                </label>
+                <input
+                  value={topics}
+                  onChange={(e) => setTopics(e.target.value)}
+                  placeholder="Üçbucaqlar;Faiz"
+                  list="anbar-topic-suggestions"
+                  className="mt-2 h-12 w-full rounded-[18px] bg-[#12141a] px-4 text-sm font-semibold text-white outline-none ring-1 ring-white/10"
+                />
+                <datalist id="anbar-topic-suggestions">
+                  {calendarTopicSuggestions().map((title) => (
+                    <option key={title} value={title} />
+                  ))}
+                </datalist>
+                <p className="mt-2 text-xs font-semibold text-white/40">
+                  Bir neçə mövzu üçün nöqtəli vergül: Üçbucaqlar;Nisbət. Tənasüb. Faiz
+                </p>
+              </div>
+            ) : null}
             <div className="mt-4 flex items-center gap-3">
               <div className="min-w-0 flex-1 rounded-[22px] bg-[#12141a] px-4 py-3">
                 <p className="text-xs font-semibold text-white/45">Bu göndəriş · {questionCount} sual</p>
@@ -514,7 +566,9 @@ export default function TeacherStorage() {
               const mixed = isMixedExamKind(pack.kind);
               const shortTitle = pack.weeklyGift
                 ? (pack.title || 'Həftəlik sınaq')
-                : `${pack.kind} ${String(pack.id).split('-').pop() || ''}`.trim();
+                : (pack.examId || pack.latexSource)
+                  ? (pack.title || pack.kind)
+                  : `${pack.kind} ${String(pack.id).split('-').pop() || ''}`.trim();
               return (
                 <article key={pack.id} className="rounded-[26px] bg-[#171a22] p-4 ring-1 ring-white/[0.06]">
                   <div className="flex items-start justify-between gap-3">

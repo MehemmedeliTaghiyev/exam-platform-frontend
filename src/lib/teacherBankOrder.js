@@ -55,12 +55,39 @@ export function calendarTopicSuggestions() {
   return rows;
 }
 
+const LEVEL_ORDER = ['Sadə', 'Orta', 'Çətin'];
+
 function difficultyCsv(mix) {
   const levels = [];
   if (Number(mix?.asan) > 0) levels.push(LEVEL_MAP.asan);
   if (Number(mix?.orta) > 0) levels.push(LEVEL_MAP.orta);
   if (Number(mix?.çətin ?? mix?.cetin) > 0) levels.push(LEVEL_MAP.çətin);
   return levels.join(';') || LEVEL_MAP.orta;
+}
+
+/** Exact levels + one step easier (Çətin→Orta, Orta→Sadə). */
+function difficultyWithFallback(csv) {
+  const set = new Set(String(csv || '').split(';').map((s) => s.trim()).filter(Boolean));
+  [...set].forEach((level) => {
+    const idx = LEVEL_ORDER.indexOf(level);
+    if (idx > 0) set.add(LEVEL_ORDER[idx - 1]);
+  });
+  return LEVEL_ORDER.filter((level) => set.has(level)).join(';') || LEVEL_MAP.orta;
+}
+
+async function copyBankWithDifficultyFallback(examId, baseQuota, count) {
+  const exact = baseQuota.difficultyLevel || LEVEL_MAP.orta;
+  let bank = await copyFromBank(examId, { ...baseQuota, difficultyLevel: exact, count });
+  if ((bank?.added || 0) > 0) return { bank, difficultyUsed: exact, fallback: false };
+
+  // Exact level empty → one step easier (Çətin→Orta, Orta→Sadə).
+  const soft = difficultyWithFallback(exact);
+  if (soft !== exact) {
+    bank = await copyFromBank(examId, { ...baseQuota, difficultyLevel: soft, count });
+    if ((bank?.added || 0) > 0) return { bank, difficultyUsed: soft, fallback: true };
+  }
+
+  return { bank, difficultyUsed: soft || exact, fallback: soft !== exact };
 }
 
 function questionLatexLine(q, index) {
@@ -151,15 +178,18 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     throw err;
   }
 
-  const bank = await copyFromBank(exam.id, {
-    audience: 'weekly',
-    kind: 'teacher',
-    grade: String(input.grade || '11'),
-    difficultyLevel: difficultyCsv({ asan, orta, çətin: hard }),
-    topics: topics.length ? topics : undefined,
+  const { bank, difficultyUsed, fallback } = await copyBankWithDifficultyFallback(
+    exam.id,
+    {
+      audience: 'weekly',
+      kind: 'teacher',
+      grade: String(input.grade || '11'),
+      difficultyLevel: difficultyCsv({ asan, orta, çətin: hard }),
+      topics: topics.length ? topics : undefined,
+      language: 'az',
+    },
     count,
-    language: input.language || 'az',
-  });
+  );
 
   if (!bank?.added) {
     const err = new Error(bank?.warnings?.join(' ') || 'Bankdan sual gəlmədi. Mövzu və ya çətinliyi dəyişin.');
@@ -180,7 +210,7 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
       rankingEnabled: true,
       visibility: 'private',
       isPublic: false,
-      description: `[[STORAGE:order]]\n${topicLabel}`,
+      description: `[[STORAGE:order]]\n${topicLabel}${fallback ? `\n[[DIFF_FALLBACK:${difficultyUsed}]]` : ''}`,
     });
   } catch {
     /* suallar artıq yazılıb */
@@ -188,6 +218,14 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
 
   const questions = await fetchQuestions(exam.id).catch(() => []);
   const latexSource = questionsToLatex(questions, title);
+  let pdfBlob = null;
+  try {
+    const { buildExamPaperPdf } = await import('./examPaperPdf');
+    pdfBlob = await buildExamPaperPdf(questions, title);
+  } catch {
+    pdfBlob = null;
+  }
+
   const pack = {
     id: `order-${exam.id}`,
     examId: exam.id,
@@ -195,12 +233,14 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     subject: subject.name || subjectName,
     grade: String(input.grade || '11'),
     kind,
-    language: input.language || 'az',
+    language: 'az',
     durationMinutes,
     totalQuestions: questions.length || bank.added || count,
     topics,
     mix: { asan, orta, çətin: hard },
     latexSource,
+    difficultyUsed,
+    difficultyFallback: Boolean(fallback),
     copiedQnums: bank.copiedQnums || [],
     at: new Date().toISOString(),
     driveFileId: '',
@@ -216,5 +256,7 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     questions,
     pack,
     latexSource,
+    pdfBlob,
+    difficultyFallback: Boolean(fallback),
   };
 }

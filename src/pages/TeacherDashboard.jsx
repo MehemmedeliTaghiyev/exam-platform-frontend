@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, Plus, Search } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Archive, BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, Plus, Search } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import ExamRow from '../components/ExamRow';
@@ -476,6 +476,18 @@ export default function TeacherDashboard() {
       )}
     >
       {isAdmin ? null : <TokenBanner user={periodUser || user} />}
+      {isAdmin ? null : (
+        <Link
+          to="/teacher/storage"
+          className="mb-4 flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-[#171a22] px-4 py-3 text-white ring-1 ring-white/10 min-[1024px]:hidden"
+        >
+          <span className="inline-flex items-center gap-2 text-sm font-extrabold">
+            <Archive size={18} className="text-[#a89bff]" />
+            Anbar — sınaq sifarişi və PDF
+          </span>
+          <ChevronRight size={18} className="text-white/40" />
+        </Link>
+      )}
       {notice && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           {notice}

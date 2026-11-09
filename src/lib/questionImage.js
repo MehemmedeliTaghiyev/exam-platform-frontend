@@ -1,12 +1,60 @@
+import { FIGURE_QNUMS } from './figureFiles';
+
 const IMG_PREFIX = '__IMG__';
 const IMG_SUFFIX = '__';
+const FIGURE_ORIGIN = 'https://raw.githubusercontent.com/MehemmedeliTaghiyev/exam-platform-frontend/figures-cdn';
+
+function publicFigureOrigin() {
+  return FIGURE_ORIGIN;
+}
+
+function isImageSrc(value) {
+  const src = String(value || '').trim().replace(/\\/g, '/');
+  if (!src) return '';
+  if (src.startsWith('data:image')) return src;
+  if (/^https?:\/\//i.test(src)) return src;
+  const relative = src.replace(/^\.\//, '');
+  if (/^figures\/[^/?#]+\.(png|jpe?g|gif|webp|svg)$/i.test(relative)) {
+    return `${publicFigureOrigin()}/${relative}`;
+  }
+  if (src.startsWith('/') && /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(src)) {
+    if (src.startsWith('/figures/')) return `${publicFigureOrigin()}${src}`;
+    return src;
+  }
+  return '';
+}
+
+function figureUrlForQnum(q) {
+  const qnum = String(q?.sourceQnum || q?.SourceQnum || q?.qnum || q?.Qnum || '')
+    .trim()
+    .toUpperCase();
+  if (!FIGURE_QNUMS.has(qnum)) return '';
+  return `${FIGURE_ORIGIN}/figures/${qnum}.png`;
+}
 
 export function parseQuestionImage(q) {
-  const direct = q?.imageUrl || q?.ImageUrl || q?.image || q?.Image || q?.photo || q?.Photo || '';
-  if (typeof direct === 'string' && (direct.startsWith('data:image') || /^https?:\/\//i.test(direct))) {
-    return direct.trim();
-  }
+  const fromQnum = figureUrlForQnum(q);
+  if (fromQnum) return fromQnum;
+  const direct = [
+    q?.imageUrl,
+    q?.ImageUrl,
+    q?.figureUrl,
+    q?.FigureUrl,
+    q?.figure_path,
+    q?.figure,
+    q?.figure_data_url,
+    q?.image,
+    q?.Image,
+    q?.photo,
+    q?.Photo,
+  ].map(isImageSrc).find(Boolean);
+  if (direct) return direct;
   const text = String(q?.text || q?.questionText || '');
+  const html = text.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+  if (html) {
+    const fromHtml = isImageSrc(html[1]);
+    if (fromHtml) return fromHtml;
+  }
   const start = text.indexOf(IMG_PREFIX);
   if (start !== 0) return '';
   const end = text.indexOf(IMG_SUFFIX, IMG_PREFIX.length);
@@ -15,11 +63,12 @@ export function parseQuestionImage(q) {
 }
 
 export function stripQuestionImage(text) {
-  const raw = String(text || '');
-  if (!raw.startsWith(IMG_PREFIX)) return raw.trim();
-  const end = raw.indexOf(IMG_SUFFIX, IMG_PREFIX.length);
-  if (end < 0) return raw.trim();
-  return raw.slice(end + IMG_SUFFIX.length).replace(/^\n/, '').trim();
+  let raw = String(text || '');
+  if (raw.startsWith(IMG_PREFIX)) {
+    const end = raw.indexOf(IMG_SUFFIX, IMG_PREFIX.length);
+    if (end >= 0) raw = raw.slice(end + IMG_SUFFIX.length).replace(/^\n/, '');
+  }
+  return raw.replace(/<img[^>]*>/gi, '').trim();
 }
 
 export function wrapQuestionImage(text, dataUrl) {

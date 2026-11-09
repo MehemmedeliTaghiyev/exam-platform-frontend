@@ -221,7 +221,7 @@ export async function requestStorageExam(user, mix, extras = {}) {
     }
   }
 
-  const language = String(extras.language || 'az');
+  const language = 'az';
   const subject = String(extras.subject || '');
   const grade = String(extras.grade || '11');
   const kind = String(extras.kind || 'Sınaq');
@@ -263,6 +263,7 @@ export async function requestStorageExam(user, mix, extras = {}) {
       latexSource: result.latexSource,
     },
     pack: result.pack,
+    pdfBlob: result.pdfBlob || null,
   };
 
   const previous = readJson(requestsKey(user.id), []);

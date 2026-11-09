@@ -6,7 +6,7 @@ import { useTeacherQuizOrder, useWeeklyPapers } from '../lib/pipeline/hooks';
 
 export default function DimBankPanel() {
   const navigate = useNavigate();
-  const [language, setLanguage] = useState('az');
+  const language = 'az'; // hələlik yalnız Azərbaycan
   const [grade, setGrade] = useState('11');
   const [subject, setSubject] = useState('math');
   const [count, setCount] = useState(10);
@@ -44,9 +44,17 @@ export default function DimBankPanel() {
                 <option key={s.code} value={s.code}>{s.label}{s.live ? '' : ' (tezliklə)'}</option>
               ))}
             </Select>
-            <Select label="Dil" value={language} onChange={(e) => setLanguage(e.target.value)}>
+            <Select
+              label="Dil"
+              value={language}
+              onChange={(e) => {
+                if (e.target.value !== 'az') return;
+              }}
+            >
               {LANGS.map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
+                <option key={l.code} value={l.code} disabled={l.code !== 'az'}>
+                  {l.label}{l.code !== 'az' ? ' (tezliklə)' : ''}
+                </option>
               ))}
             </Select>
             <Select label="Sinif" value={grade} onChange={(e) => setGrade(e.target.value)}>

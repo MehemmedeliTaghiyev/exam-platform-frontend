@@ -87,8 +87,8 @@ const teacherMobileNav = [
 const adminMobileNav = [
   { to: '/admin', labelKey: 'nav.home', icon: Home, end: true },
   { to: '/admin/teachers', labelKey: 'nav.teacher', icon: Mail },
-  { to: '/admin/users', labelKey: 'nav.account', icon: KeyRound },
   { to: '/teacher', labelKey: 'nav.exam', icon: BookOpen, end: true, activeWhen: isAdminExamNav },
+  { to: '/teacher/storage', labelKey: 'nav.storage', icon: Archive },
   { to: '/teacher/cabinet', labelKey: 'nav.cabinet', icon: Users },
 ];
 

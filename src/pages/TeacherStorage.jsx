@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import { EmptyState } from '../components/ui';
-import { createExam } from '../lib/examApi';
+import { createExam, fetchQuestions } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import {
   canUseStorageSelection,
@@ -16,6 +16,7 @@ import { Bell, Club, Download, Droplet, Eye, Gift, Minus, Package, Plus } from '
 import { PREFERENCE_OPTIONS, catalogPacks, defaultPreferences, driveDownloadUrl, driveViewUrl, gradeLabel, kindsForGrade, packLatexSource, pickStoragePacks, teacherSubjectOf } from '../lib/storageCatalog';
 import { loadQuizCatalog } from '../lib/quizPipeline';
 import { compileLatexPdf, saveAndOpenPdf } from '../lib/latexPdf';
+import { buildExamPaperPdf } from '../lib/examPaperPdf';
 import LatexText from '../components/LatexText';
 import { errorMessage } from '../lib/utils';
 import { isMixedExamKind, withMixedMark } from '../lib/syllabus';
@@ -49,15 +50,24 @@ function resolveTeacherSubject(user) {
 function Seg({ options, value, onChange }) {
   return (
     <div className="flex rounded-full bg-[#12141a] p-1">
-      {options.map(([id, label]) => {
+      {options.map(([id, label, locked]) => {
         const on = String(value) === String(id);
         return (
           <button
             key={id}
             type="button"
-            onClick={() => onChange(id)}
-            className={`min-h-10 flex-1 rounded-full px-2 text-[13px] font-extrabold ${
-              on ? 'bg-[#7c6aff] text-white' : 'text-white/40'
+            disabled={Boolean(locked)}
+            title={locked ? 'Tezliklə' : undefined}
+            onClick={() => {
+              if (locked) return;
+              onChange(id);
+            }}
+            className={`min-h-10 flex-1 rounded-full px-1.5 text-[12px] font-extrabold sm:px-2 sm:text-[13px] ${
+              locked
+                ? 'cursor-not-allowed text-white/25'
+                : on
+                  ? 'bg-[#7c6aff] text-white'
+                  : 'text-white/40'
             }`}
           >
             {label}
@@ -129,7 +139,7 @@ export default function TeacherStorage() {
   const [error, setError] = useState('');
   const [mix, setMix] = useState({ asan: 4, orta: 2, çətin: 0 });
   const [topics, setTopics] = useState('Üçbucaqlar');
-  const [language, setLanguage] = useState('az');
+  const language = 'az'; // hələlik yalnız Azərbaycan
   const [orderedPacks, setOrderedPacks] = useState([]);
   const [payWall, setPayWall] = useState(false);
   const [sending, setSending] = useState(false);
@@ -238,6 +248,19 @@ export default function TeacherStorage() {
     });
   };
 
+  const pdfForPack = async (pack) => {
+    if (pack.examId) {
+      const qs = await fetchQuestions(pack.examId).catch(() => []);
+      if (qs?.length) return buildExamPaperPdf(qs, pack.title || 'Sınaq');
+    }
+    if (pack.latexSource) {
+      const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
+      return blob;
+    }
+    const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
+    return blob;
+  };
+
   const openPdf = async (pack) => {
     if (!unlocked) return;
     const url = driveViewUrl(pack.driveFileId || pack.pdfUrl);
@@ -245,16 +268,12 @@ export default function TeacherStorage() {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
-    if (pack.latexSource || pack.examId) {
-      try {
-        const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
-        await saveAndOpenPdf(blob, `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`);
-      } catch (err) {
-        setError(errorMessage(err, 'PDF açıla bilmədi.'));
-      }
-      return;
+    try {
+      const blob = await pdfForPack(pack);
+      await saveAndOpenPdf(blob, `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`);
+    } catch (err) {
+      setError(errorMessage(err, 'PDF açıla bilmədi.'));
     }
-    window.alert('PDF hələ yoxdur. Əvvəl quiz tələb edin və ya «PDF yüklə» basın.');
   };
 
   const downloadPack = async (pack) => {
@@ -268,10 +287,7 @@ export default function TeacherStorage() {
         window.open(driveUrl, '_blank', 'noopener,noreferrer');
         return;
       }
-      const { blob } = await compileLatexPdf(packLatexSource(pack), {
-        title: pack.title,
-        filename,
-      });
+      const blob = await pdfForPack(pack);
       await saveAndOpenPdf(blob, filename);
     } catch (err) {
       setError(errorMessage(err, 'PDF yüklənmədi.'));
@@ -299,16 +315,17 @@ export default function TeacherStorage() {
         topics,
       });
       setOrderedPacks(teacherOrderedPacks(user?.id));
-      const latex = row?.paper?.latexSource
-        || (row?.paper?.questions || []).map((q) => q.latex || q.text).filter(Boolean).join('\n\n')
-        || '';
-      if (latex) {
-        try {
-          const { blob } = await compileLatexPdf(latex, { title: row.title || 'Quiz' });
-          await saveAndOpenPdf(blob, `${String(row.title || 'quiz').slice(0, 40)}.pdf`);
-        } catch {
-          setError('Sınaq Anbara düşdü, amma PDF indilik açıla bilmədi — «PDF yüklə» ilə yenidən cəhd edin.');
+      try {
+        const questions = row?.paper?.questions || [];
+        const blob = row?.pdfBlob
+          || (questions.length ? await buildExamPaperPdf(questions, row.title || 'Quiz') : null)
+          || (await compileLatexPdf(row?.paper?.latexSource || '', { title: row.title || 'Quiz' })).blob;
+        await saveAndOpenPdf(blob, `${String(row.title || 'quiz').slice(0, 40)}.pdf`);
+        if (row?.pack?.difficultyFallback) {
+          setError('Uyğun çətinlik az idi — bir səviyyə asan suallar da əlavə olundu. PDF Anbarda.');
         }
+      } catch {
+        setError('Sınaq Anbara düşdü, amma PDF indilik açıla bilmədi — «PDF yüklə» ilə yenidən cəhd edin.');
       }
     } catch (err) {
       if (err?.code === 'JETON_YOX') {
@@ -423,11 +440,11 @@ export default function TeacherStorage() {
                 <div className="mt-2">
                   <Seg
                     value={language}
-                    onChange={setLanguage}
+                    onChange={() => {}}
                     options={[
                       ['az', 'Azərbaycan'],
-                      ['ru', 'Rus'],
-                      ['en', 'İngilis'],
+                      ['ru', 'Rus · tezliklə', true],
+                      ['en', 'İngilis · tezliklə', true],
                     ]}
                   />
                 </div>

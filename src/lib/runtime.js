@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 
-export const LIVE_API = 'https://mahammadali-001-site1.jtempurl.com/api';
-export const LIVE_WEB = 'https://exam-platform-frontend-flax.vercel.app';
+export const LIVE_API = 'https://exampulse.az/api';
+export const LIVE_WEB = 'https://exampulse.az';
 
 export function isNativeApp() {
   try {

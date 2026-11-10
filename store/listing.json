@@ -1,0 +1,38 @@
+{
+  "name": "ExamPulse",
+  "bundleId": "az.exampulse.app",
+  "version": "1.0.0",
+  "supportEmail": "exampulse.az@gmail.com",
+  "web": "https://exampulse.az",
+  "promo": "/reklam",
+  "privacy": "/privacy",
+  "terms": "/terms",
+  "support": "/support",
+  "accountDeletion": "/delete-account",
+  "play": {
+    "title": "ExamPulse — imtahan",
+    "short": "Müəllim sınaq paylaşır, şagird kartla həll edir, nəticə dərhal görünür.",
+    "full": "ExamPulse Azərbaycan üçün imtahan platformasıdır — web, Android və iOS-da eyni hesab.\n\nŞagird: qrupa yazıl, sillabus üzrə mövzuları keç, A–E və ya açıq cavab ver, zəif tərəflərini gör. Ümumi qrupa icazəsiz daxil ol. Respublika sınağına qoşul.\n\nMüəllim: imtahan yarat, qrup linki paylaş, Anbar, AI ilə sual hazırla, LaTeX düsturları gör, nəticə və statistika izlə. Tək mövzu hamıya açıq ola bilər; Blok və Buraxılış yalnız öz tələbələrə gedir.\n\nAnbar: 30 ₼ buraxılışadək, 40 ₼ blokadək. Watermark +5 ₼.\n\nDəstək: exampulse.az@gmail.com"
+  },
+  "appStore": {
+    "subtitle": "İmtahanı ölç, anla, irəlilə",
+    "keywords": "imtahan,sınaq,məktəb,riyaziyyat,şagird,müəllim,azərbaycan,buraxılış,blok,DIM",
+    "description": "ExamPulse ilə müəllim sınağı hazırlayır, şagird telefonda kartlarla həll edir. Nəticə, zəif mövzular, sillabus, qruplar, Anbar və AI eyni yerdədir.\n\nÜmumi qrupa yazılan şagird dərhal daxil olur. Özəl qrupda müəllim icazəsi qalır.\n\nDüsturlar LaTeX kimi görünür. Şagird real kartda PDF görmür.\n\nWeb: exampulse.az\nDəstək: exampulse.az@gmail.com"
+  },
+  "ads": {
+    "tagline": "Kağız yox. İmtahan var.",
+    "whatsapp": "ExamPulse — imtahan artıq telefondadır.\n\nMüəllim sınağı hazırlayır, şagird kartlarla həll edir, nəticə dərhal görünür.\n\nWeb: https://exampulse.az\nQeydiyyat pulsuzdur. Şagirdəm / Müəlliməm.\n\nDəstək: exampulse.az@gmail.com",
+    "instagram": "İmtahan telefonda.\nMüəllim hazırlayır. Şagird həll edir. Nəticə dərhal.\n\nExamPulse — Azərbaycan üçün web + mobil.\nSillabus · qrup · Anbar · AI · LaTeX düsturlar\n\nLink bio-da. Qeydiyyat pulsuz.",
+    "facebook": "ExamPulse müəllim və şagird üçün imtahan platformasıdır.\n\n• Qrup linki ilə şagird qoşulur\n• Ümumi qrupa icazəsiz giriş\n• Telefonda yalnız sual kartları (PDF yox)\n• Nəticə, reytinq, zəif mövzular\n• AI ilə sual hazırlama\n• Anbar: 30 ₼ buraxılışadək, 40 ₼ blokadək\n\nWeb-də açın, tezliklə Play Store və App Store.\nhttps://exampulse.az",
+    "teacher": "Müəllimlər: qrup yaradın, dəvət linkini göndərin, sınağı dərc edin. AI və Anbar kabinetdədir. Blok/Buraxılış yalnız öz tələbələrinizə gedir.",
+    "student": "Şagirdlər: repetitor yoxdursa Ümumi qrupa yazılın. Repetitor varsa onun qrup linkini açın. İmtahan kartdır — A–E, taymer, nəticə."
+  },
+  "screenshots": [
+    "Ana səhifə — pulsuz başla",
+    "Şagird imtahan kartı A–E",
+    "Nəticə və mövzu hesabatı",
+    "Müəllim kabineti və qruplar",
+    "AI ilə sual hazırlama",
+    "Anbar ödənişi 30/40 ₼"
+  ]
+}

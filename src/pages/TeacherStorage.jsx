@@ -146,9 +146,49 @@ export default function TeacherStorage() {
   const [downloadId, setDownloadId] = useState('');
   const [allNotes, setAllNotes] = useState(false);
   const [catalog, setCatalog] = useState({ packs: [], weekly: [], connected: false });
+  const [arrivedFilter, setArrivedFilter] = useState('all'); // all | today | week | month
   const tokens = useTeacherTokens(user);
   const unlocked = canUseStorageSelection(user);
   const allowedKinds = useMemo(() => kindsForGrade(prefs.grade), [prefs.grade]);
+
+  const packArrivedAt = (pack) => {
+    const raw = pack?.at || pack?.createdAt || pack?.CreatedAt || pack?.arrivedAt;
+    const date = raw ? new Date(raw) : null;
+    return date && !Number.isNaN(date.getTime()) ? date : null;
+  };
+
+  const packInArrivedFilter = (pack) => {
+    if (arrivedFilter === 'all') return true;
+    const date = packArrivedAt(pack);
+    if (!date) return arrivedFilter === 'all';
+    const now = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (arrivedFilter === 'today') return date >= startToday;
+    if (arrivedFilter === 'week') {
+      const weekAgo = new Date(startToday);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return date >= weekAgo;
+    }
+    if (arrivedFilter === 'month') {
+      const monthAgo = new Date(startToday);
+      monthAgo.setDate(monthAgo.getDate() - 30);
+      return date >= monthAgo;
+    }
+    return true;
+  };
+
+  const formatArrived = (pack) => {
+    const date = packArrivedAt(pack);
+    if (!date) return '';
+    return date.toLocaleString('az-AZ', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const packs = useMemo(() => {
     const catalogRows = pickStoragePacks({ ...prefs, subject }, catalog.packs.length ? catalog.packs : catalogPacks());
     const mine = (orderedPacks || []).filter((pack) => {
@@ -158,8 +198,15 @@ export default function TeacherStorage() {
       return true;
     });
     const seen = new Set(mine.map((p) => String(p.id)));
-    return [...mine, ...catalogRows.filter((p) => !seen.has(String(p.id)))];
-  }, [prefs, subject, catalog.packs, orderedPacks]);
+    const merged = [...mine, ...catalogRows.filter((p) => !seen.has(String(p.id)))]
+      .filter(packInArrivedFilter)
+      .sort((a, b) => {
+        const ta = packArrivedAt(a)?.getTime() || 0;
+        const tb = packArrivedAt(b)?.getTime() || 0;
+        return tb - ta;
+      });
+    return merged;
+  }, [prefs, subject, catalog.packs, orderedPacks, arrivedFilter]);
   const requestCost = tokenCostForMix(mix);
   const availableJetons = tokens.unlimited
     ? (user?.practice ? WEEKLY_TOKENS : Number.POSITIVE_INFINITY)
@@ -336,7 +383,7 @@ export default function TeacherStorage() {
         setError('Quiz tələb etmək üçün asan, orta və ya çətin sual sayını yazın.');
       } else if (err?.code === 'MOVZU_YOX') {
         setError('Adi sınaq üçün ən azı bir mövzu yazın (məs. Üçbucaqlar).');
-      } else if (err?.code === 'BANK_EMPTY') {
+      } else if (err?.code === 'BANK_EMPTY' || err?.code === 'BANK_BAD_REQUEST') {
         setError(err.message || 'Bankdan sual gəlmədi. Mövzu və ya çətinliyi dəyişin.');
       } else {
         setError(errorMessage(err, 'Quiz tələb edilmədi.'));
@@ -347,16 +394,18 @@ export default function TeacherStorage() {
   };
 
   const questionCount = (Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0);
-  const notes = requests.map((row) => ({
-    id: row.id,
-    title: row.asan != null
-      ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin`
-      : row.title,
-    lang: String(row.language || 'az').toUpperCase(),
-    waiting: row.status !== 'ready',
-    cost: row.cost,
-    row,
-  }));
+  const notes = requests
+    .filter((row) => packInArrivedFilter({ at: row.at }))
+    .map((row) => ({
+      id: row.id,
+      title: row.asan != null
+        ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin`
+        : row.title,
+      lang: String(row.language || 'az').toUpperCase(),
+      waiting: row.status !== 'ready',
+      cost: row.cost,
+      row,
+    }));
   const weeklyPacks = useMemo(
     () => quizzes.map((quiz, index) => ({
       id: `weekly-${quiz.id || index + 1}`,
@@ -535,7 +584,7 @@ export default function TeacherStorage() {
             ) : null}
           </div>
           <p className="mt-1 text-sm font-semibold text-white/45">
-            Tələb etdiyiniz quizlər hazır olanda burada görünür.
+            Tələb etdiyiniz quizlər hazır olanda burada görünür — tarixə görə də filterləyin.
           </p>
           <ul className="mt-3 space-y-2">
             {shownNotes.length ? shownNotes.map((note) => {
@@ -545,8 +594,14 @@ export default function TeacherStorage() {
                   examId: note.row.examId,
                   title: note.row.title || note.title,
                   latexSource: note.row.paper?.latexSource,
+                  at: note.row.at,
                 }
                 : null;
+              const when = note.row?.at
+                ? new Date(note.row.at).toLocaleString('az-AZ', {
+                  day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                })
+                : '';
               return (
               <li key={note.id} className="rounded-[20px] bg-[#12141a] px-4 py-3">
                 <button
@@ -556,6 +611,7 @@ export default function TeacherStorage() {
                 >
                   <span>
                     <span className="block font-extrabold leading-snug">{note.title}</span>
+                    {when ? <span className="mt-1 block text-xs font-semibold text-white/40">{when}</span> : null}
                     <span className="mt-2 inline-flex items-center gap-2">
                       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-extrabold text-white/70">{note.lang}</span>
                       {note.waiting ? (
@@ -604,16 +660,38 @@ export default function TeacherStorage() {
 
         <section>
           <h2 className="text-2xl font-black tracking-tight">Hazır imtahanlar</h2>
-          <p className="mt-1 mb-4 text-sm font-semibold text-white/45">PDF-ə bax, yüklə və paylaşım səviyyəsini seç.</p>
+          <p className="mt-1 text-sm font-semibold text-white/45">PDF-ə bax, yüklə və paylaşım səviyyəsini seç.</p>
+          <div className="mt-3 mb-4 flex flex-wrap gap-2">
+            {[
+              ['all', 'Hamısı'],
+              ['today', 'Bu gün'],
+              ['week', '7 gün'],
+              ['month', '30 gün'],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setArrivedFilter(id)}
+                className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
+                  arrivedFilter === id
+                    ? 'bg-[#7c6aff] text-white'
+                    : 'bg-[#12141a] text-white/55 ring-1 ring-white/[0.06]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {subject && !packs.length && !weeklyPacks.length ? (
-            <EmptyState title="PDF tapılmadı" text="Bu fənn üçün uyğun PDF hələ bağlanmayıb." />
+            <EmptyState title="PDF tapılmadı" text="Bu filterdə / fənn üçün uyğun PDF yoxdur." />
           ) : null}
           <div className="grid gap-3 min-[768px]:grid-cols-2 min-[1100px]:grid-cols-3">
-            {[...weeklyPacks, ...packs].map((pack) => {
+            {[...weeklyPacks.filter(packInArrivedFilter), ...packs].map((pack) => {
               const state = shared[pack.id];
               const sharedOut = state?.examId;
               const vis = sharedOut ? state.visibility : state?.visibility;
               const mixed = isMixedExamKind(pack.kind);
+              const arrived = formatArrived(pack);
               const shortTitle = pack.weeklyGift
                 ? (pack.title || 'Həftəlik sınaq')
                 : (pack.examId || pack.latexSource)
@@ -632,6 +710,9 @@ export default function TeacherStorage() {
                       <p className="mt-2 text-sm font-semibold text-white/45">
                         {pack.subject} · {gradeLabel(pack.grade)} sinif · {pack.durationMinutes} dəq
                       </p>
+                      {arrived ? (
+                        <p className="mt-1 text-xs font-bold text-[#b4abff]">Gəlib: {arrived}</p>
+                      ) : null}
                       {mixed ? (
                         <p className="mt-2 text-sm font-semibold text-white/50">Qarışıq sınaq · yalnız öz tələbələr</p>
                       ) : null}

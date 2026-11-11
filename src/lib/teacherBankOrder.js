@@ -61,28 +61,43 @@ export function calendarTopicSuggestions() {
 }
 
 const LEVEL_ORDER = ['Sadə', 'Orta', 'Çətin'];
-const TEACHER_AUDIENCES = ['teacher', 'weekly', undefined];
 
 function easierLevel(level) {
   const idx = LEVEL_ORDER.indexOf(level);
   return idx > 0 ? LEVEL_ORDER[idx - 1] : level;
 }
 
-/** Try teacher bank first, then weekly, then unscoped. */
+function audienceFallbackChain(preferred) {
+  const first = preferred === undefined ? null : preferred;
+  const chain = [];
+  const push = (value) => {
+    const key = value === undefined || value === null || value === '' ? null : String(value);
+    if (chain.some((row) => row === key)) return;
+    chain.push(key);
+  };
+  push(first);
+  push('teacher');
+  push('weekly');
+  push(null);
+  return chain;
+}
+
+/** Preferred audience first, then teacher → weekly → unscoped. */
 async function copyFromBankWithAudience(examId, quota, count) {
   let last = { added: 0, warnings: [] };
-  for (const audience of TEACHER_AUDIENCES) {
+  for (const audience of audienceFallbackChain(quota.audience)) {
     const body = { ...quota, count };
     if (audience) body.audience = audience;
-    else {
-      delete body.audience;
-    }
+    else delete body.audience;
     try {
       const bank = await copyFromBank(examId, body);
       if ((bank?.added || 0) > 0) return bank;
       last = bank || last;
     } catch (err) {
-      last = { added: 0, warnings: [err?.message || 'Bank xətası'] };
+      last = {
+        added: 0,
+        warnings: [...(last.warnings || []), err?.message || 'Bank xətası'].filter(Boolean),
+      };
     }
   }
   return last;
@@ -225,14 +240,20 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     throw err;
   }
 
-  const topicCsv = topics.length ? topics.join(';') : undefined;
+  const bankKind = (() => {
+    const raw = String(kind || '').toLocaleLowerCase('az');
+    if (/blok|block|specialty/.test(raw)) return 'blok';
+    if (/burax/.test(raw)) return 'buraxılış';
+    return 'teacher';
+  })();
+  const bankAudience = bankKind === 'blok' ? 'specialty' : bankKind === 'buraxılış' ? undefined : 'teacher';
   const { bank, difficultyUsed, fallback } = await copyTeacherMixFromBank(
     exam.id,
     {
-      audience: 'teacher',
-      kind: 'teacher',
+      audience: bankAudience,
+      kind: bankKind,
       grade: String(input.grade || '11'),
-      topics: topicCsv,
+      topics: topics.length ? topics : undefined,
       subject: subject.name || subjectName,
       language: 'az',
     },
@@ -240,8 +261,13 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
   );
 
   if (!bank?.added) {
-    const err = new Error(bank?.warnings?.join(' ') || 'Bankdan sual gəlmədi. Mövzu və ya çətinliyi dəyişin.');
-    err.code = 'BANK_EMPTY';
+    const hint = (bank?.warnings || []).filter(Boolean).join(' · ');
+    const err = new Error(
+      hint && !/status code 400/i.test(hint)
+        ? hint
+        : 'Bankdan sual gəlmədi. Mövzu adını bankdakı kimi yazın (məs. Üçbucaqlar) və çətinliyi dəyişib yenidən yoxlayın.',
+    );
+    err.code = /400|BANK_BAD_REQUEST/i.test(hint) ? 'BANK_BAD_REQUEST' : 'BANK_EMPTY';
     throw err;
   }
 

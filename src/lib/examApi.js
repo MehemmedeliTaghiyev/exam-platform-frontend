@@ -1,7 +1,7 @@
 import API from '../api/axios';
 import axios from 'axios';
 import { localDb } from './localDb';
-import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption } from './utils';
+import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption, errorMessage } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
@@ -1171,6 +1171,16 @@ export async function createExam(payload) {
   return localExam;
 }
 
+function normalizeBankTopics(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map((row) => String(row || '').trim()).filter(Boolean);
+  }
+  return String(raw || '')
+    .split(/[;,\n]+/)
+    .map((row) => row.trim())
+    .filter(Boolean);
+}
+
 export async function copyFromBank(examId, quota = {}) {
   if (isPractice()) {
     return {
@@ -1180,24 +1190,39 @@ export async function copyFromBank(examId, quota = {}) {
       warnings: ['Practice rejimində bankdan kopyalama yoxdur.'],
     };
   }
+  // API Topics = List<string>; string göndərmək 400 BadRequest verir.
+  const topics = normalizeBankTopics(quota.topics ?? quota.Topics);
   const body = {
-    audience: quota.audience,
-    kind: quota.kind,
-    grade: quota.grade,
-    difficultyLevel: quota.difficultyLevel || quota.DifficultyLevel,
-    topics: quota.topics,
-    Topics: quota.topics,
-    subject: quota.subject,
-    language: quota.language,
-    count: quota.count,
-    Count: quota.count,
+    audience: quota.audience || undefined,
+    kind: quota.kind || undefined,
+    grade: quota.grade != null && quota.grade !== '' ? String(quota.grade) : undefined,
+    difficultyLevel: quota.difficultyLevel || quota.DifficultyLevel || undefined,
+    topics: topics.length ? topics : undefined,
+    subject: quota.subject || undefined,
+    language: quota.language || undefined,
+    count: quota.count != null ? Number(quota.count) : undefined,
     mcqCount: quota.mcqCount,
     openCodedCount: quota.openCodedCount,
     writtenCount: quota.writtenCount,
     situationCount: quota.situationCount,
   };
-  const res = await API.post(`/Exams/${examId}/from-bank`, body, FAST);
-  return unwrapItem(res.data) || res.data || {};
+  Object.keys(body).forEach((key) => {
+    if (body[key] === undefined || body[key] === null || body[key] === '') delete body[key];
+  });
+  try {
+    const res = await API.post(`/Exams/${examId}/from-bank`, body, FAST);
+    return unwrapItem(res.data) || res.data || {};
+  } catch (err) {
+    const status = err?.response?.status;
+    const detail = errorMessage(err, '');
+    if (status === 400) {
+      const soft = new Error(detail || 'Bank sorğusu yanlışdır (400). Mövzu və çətinliyi yoxlayın.');
+      soft.code = 'BANK_BAD_REQUEST';
+      soft.cause = err;
+      throw soft;
+    }
+    throw err;
+  }
 }
 
 export async function updateExam(id, payload) {

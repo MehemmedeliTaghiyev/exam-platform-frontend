@@ -10,10 +10,9 @@ import {
   STORAGE_PRICE,
   STORAGE_PRICE_BLOK,
   WATERMARK_PRICE,
-  weeklyPipelineQuizzes,
 } from '../lib/storageAccess';
 import { Bell, Club, Download, Droplet, Eye, Gift, Minus, Package, Plus } from 'lucide-react';
-import { PREFERENCE_OPTIONS, catalogPacks, defaultPreferences, driveDownloadUrl, driveViewUrl, gradeLabel, kindsForGrade, packLatexSource, pickStoragePacks, teacherSubjectOf } from '../lib/storageCatalog';
+import { PREFERENCE_OPTIONS, defaultPreferences, driveDownloadUrl, driveViewUrl, gradeLabel, kindsForGrade, packLatexSource, teacherSubjectOf } from '../lib/storageCatalog';
 import { loadQuizCatalog } from '../lib/quizPipeline';
 import { compileLatexPdf, saveAndOpenPdf } from '../lib/latexPdf';
 import { buildExamPaperPdf } from '../lib/examPaperPdf';
@@ -190,7 +189,8 @@ export default function TeacherStorage() {
   };
 
   const packs = useMemo(() => {
-    const catalogRows = pickStoragePacks({ ...prefs, subject }, catalog.packs.length ? catalog.packs : catalogPacks());
+    // Yalnız real sifarişlər + canlı kataloq (əlaqə varsa). Yalançı placeholder pack yoxdur.
+    const liveCatalog = catalog.connected ? (catalog.packs || []) : [];
     const mine = (orderedPacks || []).filter((pack) => {
       if (subject && pack.subject && pack.subject !== subject) return false;
       if (prefs.grade && pack.grade && String(pack.grade) !== String(prefs.grade)) return false;
@@ -198,22 +198,22 @@ export default function TeacherStorage() {
       return true;
     });
     const seen = new Set(mine.map((p) => String(p.id)));
-    const merged = [...mine, ...catalogRows.filter((p) => !seen.has(String(p.id)))]
+    return [...mine, ...liveCatalog.filter((p) => !seen.has(String(p.id)))]
       .filter(packInArrivedFilter)
       .sort((a, b) => {
         const ta = packArrivedAt(a)?.getTime() || 0;
         const tb = packArrivedAt(b)?.getTime() || 0;
         return tb - ta;
       });
-    return merged;
-  }, [prefs, subject, catalog.packs, orderedPacks, arrivedFilter]);
+  }, [prefs, subject, catalog.packs, catalog.connected, orderedPacks, arrivedFilter]);
   const requestCost = tokenCostForMix(mix);
   const availableJetons = tokens.unlimited
     ? (user?.practice ? WEEKLY_TOKENS : Number.POSITIVE_INFINITY)
     : Number(tokens.balance || 0);
   const overBudget = Number.isFinite(availableJetons) && requestCost > availableJetons;
   const requests = teacherTokenRequests(user);
-  const quizzes = catalog.weekly.length ? catalog.weekly : weeklyPipelineQuizzes();
+  // Yalançı həftəlik «pipeline» kartları göstərilmir — yalnız real weekly.
+  const quizzes = catalog.connected ? (catalog.weekly || []) : [];
 
   useEffect(() => {
     loadQuizCatalog().then(setCatalog).catch(() => {});
@@ -683,7 +683,10 @@ export default function TeacherStorage() {
             ))}
           </div>
           {subject && !packs.length && !weeklyPacks.length ? (
-            <EmptyState title="PDF tapılmadı" text="Bu filterdə / fənn üçün uyğun PDF yoxdur." />
+            <EmptyState
+              title="Hələ real sınaq yoxdur"
+              text="Yuxarıdan «Quiz tələb et» ilə bankdan PDF yığın. Yalançı nümunə imtahanlar silinib."
+            />
           ) : null}
           <div className="grid gap-3 min-[768px]:grid-cols-2 min-[1100px]:grid-cols-3">
             {[...weeklyPacks.filter(packInArrivedFilter), ...packs].map((pack) => {

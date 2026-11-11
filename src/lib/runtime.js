@@ -1,9 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 
-// Frontend apex → Vercel. API: api.exampulse.az DNS → SmarterASP, amma host binding/SSL hazır olmayana qədər jtempurl.
-export const LIVE_API = 'https://mahammadali-001-site1.jtempurl.com/api';
+export const LIVE_API = 'https://api.exampulse.az/api';
 export const LIVE_WEB = 'https://exampulse.az';
-// Hazır olanda: VITE_API_URL=https://api.exampulse.az/api
 
 export function isNativeApp() {
   try {

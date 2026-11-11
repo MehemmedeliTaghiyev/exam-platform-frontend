@@ -12,6 +12,7 @@ import { difficultyLabel } from '../lib/questionDifficulty';
 import { localDb } from '../lib/localDb';
 import { recordAiUsage } from '../lib/aiUsage';
 import DualExamRanking from '../components/DualExamRanking';
+import { examRankingEnabled } from '../lib/examKind';
 import LatexText from '../components/LatexText';
 
 export default function ExamStats() {
@@ -136,9 +137,11 @@ export default function ExamStats() {
             </Card>
           </div>
 
+          {examRankingEnabled(exam) ? (
           <div className="mt-6">
             <DualExamRanking ownRows={boards.own} generalRows={boards.general} />
           </div>
+          ) : null}
 
           <Card className="mt-6 overflow-x-auto p-0">
             <div className="border-b border-gray-200 px-5 py-4 dark:border-slate-800">

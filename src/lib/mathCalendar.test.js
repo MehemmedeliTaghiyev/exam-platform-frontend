@@ -4,8 +4,10 @@ import {
   intervalContaining,
   lastCompletedInterval,
   lastWeeklyOnOrBefore,
+  latestCoveredTopicForDay,
   studentTopicPlace,
   tbilisiYmd,
+  topicDurationsInInterval,
 } from './mathCalendar.js';
 import {
   examPulseAudience,
@@ -82,3 +84,17 @@ describe('weekly vs mixed routing', () => {
     assert.equal(lastCompletedInterval('2026-11-22').start, '2026-11-08');
   });
 });
+
+describe('topic duration pacing', () => {
+  it('splits interval days across topics (quiz count = days)', () => {
+    const interval = intervalContaining('2026-11-08');
+    const rows = topicDurationsInInterval(interval);
+    assert.equal(rows.length, 5);
+    assert.equal(rows.reduce((sum, row) => sum + row.days, 0), 14);
+    const first = latestCoveredTopicForDay('2026-11-08');
+    assert.equal(first.topic, 'Həqiqi ədədlər');
+    assert.equal(first.dayInTopic, 0);
+    assert.equal(first.days, rows[0].days);
+  });
+});
+

@@ -132,6 +132,112 @@ export function intervalContaining(ymd) {
   return MATH_CALENDAR.intervals.find((row) => row.start <= key && key <= row.end) || null;
 }
 
+/** Whole days from a→b in Asia/Tbilisi calendar keys (YYYY-MM-DD). */
+export function daysBetweenYmd(a, b) {
+  const start = Date.parse(`${a}T12:00:00+04:00`);
+  const end = Date.parse(`${b}T12:00:00+04:00`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 86400000));
+}
+
+export function addDaysYmd(ymd, days) {
+  const base = Date.parse(`${ymd}T12:00:00+04:00`);
+  if (!Number.isFinite(base)) return String(ymd || '');
+  return tbilisiYmd(new Date(base + Number(days || 0) * 86400000));
+}
+
+/** Calendar window for one topic inside an interval. */
+export function topicWindow(interval, topicTitle) {
+  const row = topicDurationsInInterval(interval).find((item) => item.title === topicTitle);
+  if (!interval || !row) return null;
+  return {
+    ...row,
+    startYmd: addDaysYmd(interval.start, row.startOffset),
+    endYmd: addDaysYmd(interval.start, row.endOffset),
+  };
+}
+
+export function topicHasEnded(interval, topicTitle, ymd = tbilisiYmd()) {
+  const win = topicWindow(interval, topicTitle);
+  if (!win) return false;
+  return String(ymd) > win.endYmd;
+}
+
+export function intervalDaySpan(interval) {
+  if (!interval?.start || !interval?.end) return 0;
+  return daysBetweenYmd(interval.start, interval.end) + 1;
+}
+
+/**
+ * How many calendar days (and quiz slots) each topic gets inside an interval.
+ * Same pacing as latestCoveredTopicForDay — quiz count = topic duration in days.
+ */
+export function topicDurationsInInterval(interval) {
+  const topics = interval?.topics || [];
+  const total = topics.length;
+  if (!interval || !total) return [];
+  const span = intervalDaySpan(interval);
+  return topics.map((title, index) => {
+    const startOffset = Math.ceil((index * span) / total);
+    const endOffset = Math.ceil(((index + 1) * span) / total) - 1;
+    const days = Math.max(1, endOffset - startOffset + 1);
+    return {
+      title,
+      index,
+      days,
+      startOffset,
+      endOffset: startOffset + days - 1,
+      intervalStart: interval.start,
+    };
+  });
+}
+
+export function topicDurationForTitle(topicTitle, interval) {
+  const rows = topicDurationsInInterval(interval);
+  const hit = rows.find((row) => row.title === topicTitle);
+  return hit?.days || 0;
+}
+
+/**
+ * Latest syllabus topic covered by our calendar date.
+ * Topics inside the current interval are paced across that window (no wrap-back).
+ * `days` = quiz count for that topic; `dayInTopic` = today's slot (0-based).
+ */
+export function latestCoveredTopicForDay(ymd = tbilisiYmd()) {
+  const key = String(ymd || tbilisiYmd());
+  if (key < MATH_CALENDAR.from) {
+    return { topic: '', interval: null, index: -1, days: 0, dayInTopic: 0 };
+  }
+  const interval = intervalContaining(key)
+    || (key > MATH_CALENDAR.to
+      ? MATH_CALENDAR.intervals[MATH_CALENDAR.intervals.length - 1]
+      : null);
+  const topics = interval?.topics || [];
+  if (!interval || !topics.length) {
+    return { topic: '', interval, index: -1, days: 0, dayInTopic: 0 };
+  }
+
+  const offset = daysBetweenYmd(interval.start, key <= interval.end ? key : interval.end);
+  const span = intervalDaySpan(interval);
+  const index = Math.min(
+    topics.length - 1,
+    Math.floor((offset / Math.max(1, span)) * topics.length),
+  );
+  const durations = topicDurationsInInterval(interval);
+  const row = durations[index];
+  const dayInTopic = row
+    ? Math.min(row.days - 1, Math.max(0, offset - row.startOffset))
+    : 0;
+  return {
+    topic: topics[index] || topics[0],
+    interval,
+    index,
+    days: row?.days || 1,
+    dayInTopic,
+    startOffset: row?.startOffset ?? 0,
+  };
+}
+
 export function weeklyIntervals() {
   return MATH_CALENDAR.intervals.filter((row) => row.send?.weekly);
 }

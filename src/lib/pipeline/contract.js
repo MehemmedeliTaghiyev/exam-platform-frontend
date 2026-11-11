@@ -144,7 +144,7 @@ export function mapPipelineQuestion(q, index = 0) {
     stem: q.stem || '',
     situationTitle: q.situation_title || '',
     situationId: q.situation_id ?? null,
-    imageUrl: q.figure || q.figure_data_url || q.imageUrl || '',
+    imageUrl: q.figureUrl || q.FigureUrl || q.figure || q.figure_data_url || q.imageUrl || '',
     difficultyLevel: q.difficulty_level || q.difficultyLevel || '',
     mainTopic: q.main_topic || '',
     type: options.length ? 'SingleChoice' : 'OpenEnded',

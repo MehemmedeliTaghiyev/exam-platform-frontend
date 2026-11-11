@@ -413,7 +413,10 @@ export default function TeacherStorage() {
           </section>
         ) : (
           <section className="rounded-[28px] bg-[#171a22] p-4 ring-1 ring-white/[0.06] min-[768px]:p-5">
-            <h2 className="text-xl font-black">Quiz tələb et</h2>
+            <h2 className="text-xl font-black">Quiz tələb et · PDF</h2>
+            <p className="mt-1 text-sm font-semibold text-white/45">
+              Mövzu və çətinliyi seçin — bankdan sınaq yığılır, PDF Anbara düşür.
+            </p>
             <div className="mt-4 grid gap-4 min-[768px]:grid-cols-3">
               <div>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/40">Sinif</p>
@@ -535,7 +538,16 @@ export default function TeacherStorage() {
             Tələb etdiyiniz quizlər hazır olanda burada görünür.
           </p>
           <ul className="mt-3 space-y-2">
-            {shownNotes.length ? shownNotes.map((note) => (
+            {shownNotes.length ? shownNotes.map((note) => {
+              const pack = note.row?.examId
+                ? {
+                  id: note.row.id,
+                  examId: note.row.examId,
+                  title: note.row.title || note.title,
+                  latexSource: note.row.paper?.latexSource,
+                }
+                : null;
+              return (
               <li key={note.id} className="rounded-[20px] bg-[#12141a] px-4 py-3">
                 <button
                   type="button"
@@ -549,18 +561,39 @@ export default function TeacherStorage() {
                       {note.waiting ? (
                         <span className="rounded-full bg-[#f0b429]/15 px-2 py-0.5 text-[11px] font-extrabold text-[#f0b429]">Gözlənilir</span>
                       ) : (
-                        <span className="rounded-full bg-[#7c6aff]/20 px-2 py-0.5 text-[11px] font-extrabold text-[#b4abff]">{note.cost} jeton</span>
+                        <span className="rounded-full bg-[#7c6aff]/20 px-2 py-0.5 text-[11px] font-extrabold text-[#b4abff]">{note.cost} jeton · PDF</span>
                       )}
                     </span>
                   </span>
                 </button>
+                {!note.waiting && pack ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={!unlocked}
+                      onClick={() => openPdf(pack)}
+                      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[#7c6aff] text-xs font-extrabold text-white disabled:opacity-50"
+                    >
+                      <Eye size={14} /> PDF-ə bax
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!unlocked || Boolean(downloadId)}
+                      onClick={() => downloadPack(pack)}
+                      className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-white/10 text-xs font-extrabold text-white disabled:opacity-50"
+                    >
+                      <Download size={14} /> PDF yüklə
+                    </button>
+                  </div>
+                ) : null}
                 {note.row?.paper?.questions?.slice(0, 4).map((q, qi) => (
                   <div key={q.id || qi} className="mt-2 text-xs font-medium text-white/70">
                     <LatexText text={q.latex || q.text} />
                   </div>
                 ))}
               </li>
-            )) : (
+              );
+            }) : (
               <li className="rounded-[20px] bg-[#1c2430] px-4 py-3 text-sm font-semibold text-white/40">
                 Hələ bildiriş yoxdur.
               </li>

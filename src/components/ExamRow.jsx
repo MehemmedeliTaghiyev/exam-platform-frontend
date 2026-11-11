@@ -6,6 +6,7 @@ import { displayExamDescription } from '../lib/driveLinks';
 import { examVisibility } from '../lib/examVisibility';
 import { localDb } from '../lib/localDb';
 import { examSubject } from '../lib/publicExams';
+import { examRankingEnabled, isRepublicExam, isWeeklyQuiz, setExamRankingEnabled } from '../lib/examKind';
 import { isExamLive, resolveExamStatus, studentResultsReady } from '../lib/utils';
 import { readExamOutcome } from '../lib/examOutcomes';
 import { isNewExam, markExamSeen } from '../lib/examFresh';
@@ -36,29 +37,33 @@ function ActionSheet({ open, title, onClose, children }) {
   );
 }
 
-export default function ExamRow({ exam, onOpen, onDelete, onStats, mine }) {
+export default function ExamRow({ exam, onOpen, onDelete, onStats, mine, onToggleRanking }) {
   const { user } = useContext(AuthContext);
   const canSave = Boolean(user?.id) && (user?.role === 'Student' || user?.practiceRole === 'Student');
   const [saved, setSaved] = useState(() => localDb.isExamSaved(user?.id, exam?.id));
   const [confirm, setConfirm] = useState(false);
   const [menu, setMenu] = useState(false);
-  const live = isExamLive(exam);
+  const weekly = isWeeklyQuiz(exam);
+  const live = !weekly && isExamLive(exam);
   const status = resolveExamStatus(exam);
+  const rankingOn = examRankingEnabled(exam);
   const questions = exam.totalQuestions ?? exam.questionCount ?? exam.QuestionCount ?? 0;
   const minutes = exam.durationMinutes ?? exam.DurationMinutes ?? 0;
   const taken = exam.submissionsCount ?? exam.SubmissionsCount ?? 0;
   const teacher = user?.role === 'Teacher' || user?.role === 'Admin';
   const title = examRowTitle(exam);
   const publicExam = examVisibility(exam) === 'public';
-  const badge = live
-    ? 'Canlı'
-    : status === 'Finished'
-      ? 'Bitib'
-      : status === 'Scheduled'
-        ? 'Gözləyir'
-        : status === 'Draft'
-          ? 'Qaralama'
-          : '';
+  const badge = weekly
+    ? 'Həftəlik quiz'
+    : live
+      ? 'Canlı'
+      : status === 'Finished'
+        ? 'Bitib'
+        : status === 'Scheduled'
+          ? 'Gözləyir'
+          : status === 'Draft'
+            ? 'Qaralama'
+            : '';
   const storedOutcome = readExamOutcome(user?.id, exam?.id);
   const localSub = localDb.getSubmissions().find((row) => (
     String(row.examId) === String(exam?.id) && String(row.studentId) === String(user?.id)
@@ -110,6 +115,22 @@ export default function ExamRow({ exam, onOpen, onDelete, onStats, mine }) {
             <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-extrabold text-white/55">
               {publicExam ? 'Açıq' : 'Özəl'}
             </span>
+            {weekly || isRepublicExam(exam) ? null : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = !rankingOn;
+                  setExamRankingEnabled(exam, next);
+                  onToggleRanking?.(exam, next);
+                }}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
+                  rankingOn ? 'bg-[#1f7a3a] text-[#b6f0c8]' : 'bg-white/10 text-white/55'
+                }`}
+              >
+                {rankingOn ? 'Sıralama açıq' : 'Sıralama bağlı'}
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -253,12 +274,12 @@ export default function ExamRow({ exam, onOpen, onDelete, onStats, mine }) {
           </button>
         ) : null}
       </div>
-      {resultsReady && (resultPercent != null || resultRank) ? (
+      {resultsReady && (resultPercent != null || (rankingOn && resultRank)) ? (
         <p className="mt-3 text-sm font-extrabold text-[#8fd4a4]">
           Nəticə: {resultPercent != null ? `${Math.round(Number(resultPercent))}%` : '—'}
-          {resultRank ? ` · Yer: #${resultRank}` : ''}
+          {rankingOn && resultRank ? ` · Yer: #${resultRank}` : ''}
         </p>
-      ) : submittedMine && !live ? (
+      ) : submittedMine && !live && !weekly ? (
         <p className="mt-3 text-xs font-extrabold text-[var(--muted)]">Təhvil verildi · nəticə imtahan bitəndə açılır</p>
       ) : badge ? (
         <span className={`mt-3 inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${

@@ -18,6 +18,12 @@ import {
   weekendResultFor,
   weekendWindow,
 } from '../lib/weekendWeakExam';
+import {
+  day6CycleInfo,
+  day6ResultFor,
+  ensureDay6Paper,
+  isDay6ReviewDay,
+} from '../lib/day6ReviewQuiz';
 import { countStreak, DAILY_EVENT, dailyDoneDays, dailyKey, dailyMine, dailyTopBoard, flameDying, flamePeak, syncDailyBoard, todaysQuestion, weekDots } from '../lib/dailyChallenge';
 import { examSortNewest, todaysTopicQuiz } from '../lib/dailyTopicQuiz';
 import { tbilisiYmd } from '../lib/mathCalendar';
@@ -142,6 +148,17 @@ export default function StudentDashboard() {
     };
   }, [user?.id, tick]);
 
+  const day6 = useMemo(() => {
+    const info = day6CycleInfo();
+    return {
+      info,
+      paper: ensureDay6Paper(user),
+      done: day6ResultFor(user?.id, info.cycleKey),
+      open: isDay6ReviewDay(),
+      visible: isDay6ReviewDay(),
+    };
+  }, [user?.id, tick]);
+
   const fenStats = useMemo(() => {
     const followed = new Set(localDb.followedTeacherIds(user?.id).map(String));
     const mine = user?.teacherId != null ? String(user.teacherId) : '';
@@ -216,19 +233,46 @@ export default function StudentDashboard() {
         </div>
       </button>
 
-      {dayQuiz.exam ? (
+      {day6.visible ? (
         <button
           type="button"
-          onClick={() => openExam(dayQuiz.exam)}
+          onClick={() => navigate(day6.done ? `/student/day6/result/${encodeURIComponent(day6.info.cycleKey)}` : '/student/day6')}
+          className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-2 ring-[var(--accent)]"
+        >
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">6-cı gün · təkrar</p>
+          <p className="mt-1 text-lg font-black">{day6.info.label}</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--muted)]">
+            {day6.done
+              ? `Verilib · ${day6.done.percent}%`
+              : `Əvvəlki 5 günün səhv və cavabsız sualları · ${day6.paper.questions?.length || 0} sual`}
+          </p>
+          <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
+            {day6.done ? 'Nəticəyə bax' : 'Təkrar sınağı aç'}
+          </span>
+        </button>
+      ) : null}
+
+      {dayQuiz.topic ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (dayQuiz.exam) openExam(dayQuiz.exam);
+            else navigate('/student/syllabus');
+          }}
           className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
         >
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">Günün sınağı</p>
-          <p className="mt-1 text-lg font-black">{dayQuiz.topic || dayQuiz.exam.title}</p>
+          <p className="mt-1 text-lg font-black">{dayQuiz.topic}</p>
           <p className="mt-1 line-clamp-2 text-sm font-semibold text-[var(--muted)]">
-            {String(dayQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim()}
+            {dayQuiz.exam
+              ? [
+                dayQuiz.bandLabel,
+                String(dayQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim(),
+              ].filter(Boolean).join(' · ')
+              : 'Tariximizə görə bu mövzudasınız · bankdan sınaq düşəndə burada açılacaq'}
           </p>
           <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
-            Sınağı aç
+            {dayQuiz.exam ? 'Sınağı aç' : 'Sillabusa bax'}
           </span>
         </button>
       ) : null}

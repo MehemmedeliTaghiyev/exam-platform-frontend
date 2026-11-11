@@ -1,3 +1,8 @@
+public/figures/*.png
+public/figures/*.jpg
+public/figures/*.jpeg
+public/figures/*.webp
+public/figures/*.svg
 node_modules/
 dist/
 .data/

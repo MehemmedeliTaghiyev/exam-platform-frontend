@@ -26,6 +26,7 @@ import {
   readPersistedShuffle,
   shuffleExamPaper,
 } from '../lib/examShuffle';
+import { logAttemptReview } from '../lib/attemptReviewLog';
 
 const OPEN_SENTINEL = 'open';
 const LETTER_KEYS = ['A', 'B', 'C', 'D', 'E'];
@@ -375,13 +376,19 @@ export default function TakeExam() {
     setSubmitting(true);
     try {
       const examKey = Number.isNaN(Number(id)) ? id : parseInt(id, 10);
+      const paperQs = paperQuestionsOf(questionsRef.current);
       await submitExam({
         studentExamId: sessionRef.current || 0,
         examId: examKey,
         studentId: user?.id,
         studentName: user?.fullName,
-        answers: serializeAnswers(answersRef.current, paperQuestionsOf(questionsRef.current)),
+        answers: serializeAnswers(answersRef.current, paperQs),
       });
+      try {
+        logAttemptReview(user, exam, paperQs, answersRef.current);
+      } catch {
+        /* day-6 pool optional */
+      }
       if (studentResultsReady(exam, user)) {
         navigate(`/student/exams/${examKey}/review`, { replace: true });
       } else {

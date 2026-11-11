@@ -7,6 +7,11 @@ import {
 } from './examApi';
 import { durationMinutesForQuestionCount } from './examDuration';
 import { MATH_CALENDAR } from './mathCalendar';
+import {
+  nextTopicQuizDifficulty,
+  topicQuizBankQuota,
+  topicQuizDifficultyLabel,
+} from './topicQuizDifficulty';
 
 const LEVEL_MAP = {
   asan: 'Sadə',
@@ -56,38 +61,80 @@ export function calendarTopicSuggestions() {
 }
 
 const LEVEL_ORDER = ['Sadə', 'Orta', 'Çətin'];
+const TEACHER_AUDIENCES = ['teacher', 'weekly', undefined];
 
-function difficultyCsv(mix) {
-  const levels = [];
-  if (Number(mix?.asan) > 0) levels.push(LEVEL_MAP.asan);
-  if (Number(mix?.orta) > 0) levels.push(LEVEL_MAP.orta);
-  if (Number(mix?.çətin ?? mix?.cetin) > 0) levels.push(LEVEL_MAP.çətin);
-  return levels.join(';') || LEVEL_MAP.orta;
+function easierLevel(level) {
+  const idx = LEVEL_ORDER.indexOf(level);
+  return idx > 0 ? LEVEL_ORDER[idx - 1] : level;
 }
 
-/** Exact levels + one step easier (Çətin→Orta, Orta→Sadə). */
-function difficultyWithFallback(csv) {
-  const set = new Set(String(csv || '').split(';').map((s) => s.trim()).filter(Boolean));
-  [...set].forEach((level) => {
-    const idx = LEVEL_ORDER.indexOf(level);
-    if (idx > 0) set.add(LEVEL_ORDER[idx - 1]);
-  });
-  return LEVEL_ORDER.filter((level) => set.has(level)).join(';') || LEVEL_MAP.orta;
+/** Try teacher bank first, then weekly, then unscoped. */
+async function copyFromBankWithAudience(examId, quota, count) {
+  let last = { added: 0, warnings: [] };
+  for (const audience of TEACHER_AUDIENCES) {
+    const body = { ...quota, count };
+    if (audience) body.audience = audience;
+    else {
+      delete body.audience;
+    }
+    try {
+      const bank = await copyFromBank(examId, body);
+      if ((bank?.added || 0) > 0) return bank;
+      last = bank || last;
+    } catch (err) {
+      last = { added: 0, warnings: [err?.message || 'Bank xətası'] };
+    }
+  }
+  return last;
 }
 
-async function copyBankWithDifficultyFallback(examId, baseQuota, count) {
-  const exact = baseQuota.difficultyLevel || LEVEL_MAP.orta;
-  let bank = await copyFromBank(examId, { ...baseQuota, difficultyLevel: exact, count });
-  if ((bank?.added || 0) > 0) return { bank, difficultyUsed: exact, fallback: false };
+/**
+ * Müəllim mix: hər çətinliyi ayrı-ayrı bankdan çək (DB mövzu+çətinliyə görə bölünüb).
+ * Exact level boşdursa bir səviyyə asanla doldur.
+ */
+async function copyTeacherMixFromBank(examId, baseQuota, mix) {
+  const bands = [
+    [Math.max(0, Math.round(Number(mix?.asan) || 0)), LEVEL_MAP.asan],
+    [Math.max(0, Math.round(Number(mix?.orta) || 0)), LEVEL_MAP.orta],
+    [Math.max(0, Math.round(Number(mix?.çətin ?? mix?.cetin) || 0)), LEVEL_MAP.çətin],
+  ].filter(([count]) => count > 0);
 
-  // Exact level empty → one step easier (Çətin→Orta, Orta→Sadə).
-  const soft = difficultyWithFallback(exact);
-  if (soft !== exact) {
-    bank = await copyFromBank(examId, { ...baseQuota, difficultyLevel: soft, count });
-    if ((bank?.added || 0) > 0) return { bank, difficultyUsed: soft, fallback: true };
+  let added = 0;
+  let fallback = false;
+  const used = [];
+  const copiedQnums = [];
+  const warnings = [];
+
+  for (const [count, level] of bands) {
+    let bank = await copyFromBankWithAudience(examId, {
+      ...baseQuota,
+      difficultyLevel: level,
+    }, count);
+    let usedLevel = level;
+    if (!(bank?.added > 0)) {
+      const soft = easierLevel(level);
+      if (soft !== level) {
+        bank = await copyFromBankWithAudience(examId, {
+          ...baseQuota,
+          difficultyLevel: soft,
+        }, count);
+        if (bank?.added > 0) {
+          fallback = true;
+          usedLevel = soft;
+        }
+      }
+    }
+    added += Number(bank?.added || 0);
+    if (bank?.copiedQnums?.length) copiedQnums.push(...bank.copiedQnums);
+    if (bank?.warnings?.length) warnings.push(...bank.warnings);
+    if (bank?.added > 0) used.push(usedLevel);
   }
 
-  return { bank, difficultyUsed: soft || exact, fallback: soft !== exact };
+  return {
+    bank: { added, copiedQnums, warnings },
+    difficultyUsed: used.join(';') || LEVEL_MAP.orta,
+    fallback,
+  };
 }
 
 function questionLatexLine(q, index) {
@@ -178,17 +225,18 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     throw err;
   }
 
-  const { bank, difficultyUsed, fallback } = await copyBankWithDifficultyFallback(
+  const topicCsv = topics.length ? topics.join(';') : undefined;
+  const { bank, difficultyUsed, fallback } = await copyTeacherMixFromBank(
     exam.id,
     {
-      audience: 'weekly',
+      audience: 'teacher',
       kind: 'teacher',
       grade: String(input.grade || '11'),
-      difficultyLevel: difficultyCsv({ asan, orta, çətin: hard }),
-      topics: topics.length ? topics : undefined,
+      topics: topicCsv,
+      subject: subject.name || subjectName,
       language: 'az',
     },
-    count,
+    { asan, orta, çətin: hard },
   );
 
   if (!bank?.added) {
@@ -260,3 +308,47 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     difficultyFallback: Boolean(fallback),
   };
 }
+
+/**
+ * Mövzu seriyası: bankdan yalnız o mövzu + o çətinlik (DB artıq bölünüb).
+ * Sıra: orta… → ortada 1 asan → son 2 çətin.
+ */
+export async function fulfillTopicSeriesOrder(user, input = {}) {
+  const topic = String(input.topic || parseTopicList(input.topics)[0] || '').trim();
+  if (!topic) {
+    const err = new Error('MOVZU_YOX');
+    err.code = 'MOVZU_YOX';
+    throw err;
+  }
+  const slot = Math.max(0, Math.round(Number(input.slot ?? input.existingCount) || 0));
+  const questionCount = Math.max(1, Math.round(Number(input.count) || 10));
+  const series = Math.max(1, Math.round(Number(input.series) || Number(input.days) || 0) || slot + 1);
+  const quota = topicQuizBankQuota(topic, slot, questionCount, series);
+  const bandLabel = topicQuizDifficultyLabel(quota.band);
+  const result = await fulfillTeacherBankOrder(user, {
+    ...input,
+    kind: input.kind || 'Sınaq',
+    topics: topic,
+    subject: input.subject || 'Riyaziyyat',
+    mix: quota.mix,
+    grade: input.grade || '11',
+  });
+  const markedTitle = `${result.exam?.title || topic} · ${bandLabel}`.slice(0, 180);
+  try {
+    await updateExam(result.exam.id, {
+      title: markedTitle,
+      description: `${result.pack?.topics?.join?.(', ') || topic}\n[[TOPIC_BAND:${quota.band}]]\nVIS:private`,
+    });
+    result.exam = { ...result.exam, title: markedTitle };
+    if (result.pack) {
+      result.pack.title = markedTitle;
+      result.pack.band = quota.band;
+      result.pack.plannedDifficulty = quota.difficultyLevel;
+    }
+  } catch {
+    /* title mark optional */
+  }
+  return { ...result, band: quota.band, bankDifficulty: quota.difficultyLevel };
+}
+
+export { nextTopicQuizDifficulty, topicQuizBankQuota };

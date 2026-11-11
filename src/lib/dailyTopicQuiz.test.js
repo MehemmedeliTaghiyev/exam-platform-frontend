@@ -1,23 +1,34 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { latestCoveredTopicForDay } from './mathCalendar.js';
 import {
-  DAILY_TOPIC_SENDS,
   examsMatchingTopic,
   topicTitleForDay,
   todaysTopicQuiz,
 } from './dailyTopicQuiz.js';
 
 describe('daily topic quiz', () => {
-  it('binds 9 Nov 2026 to Üçbucaqlar exam 99', () => {
-    assert.equal(topicTitleForDay('2026-11-09'), 'Üçbucaqlar');
-    const send = DAILY_TOPIC_SENDS.find((row) => row.ymd === '2026-11-09');
-    assert.equal(send?.examId, '99');
+  it('paces latest covered topic by calendar date inside the window', () => {
+    assert.equal(latestCoveredTopicForDay('2026-11-08').topic, 'Həqiqi ədədlər');
+    assert.equal(topicTitleForDay('2026-11-08'), 'Həqiqi ədədlər');
+    assert.equal(latestCoveredTopicForDay('2026-11-21').topic, 'Üçbucaqlar');
+    assert.equal(topicTitleForDay('2026-11-21'), 'Üçbucaqlar');
+  });
+
+  it('does not wrap back to earlier topics later in the same window', () => {
+    const mid = latestCoveredTopicForDay('2026-11-14');
+    const end = latestCoveredTopicForDay('2026-11-21');
+    assert.ok(mid.index <= end.index);
+    assert.equal(end.topic, 'Üçbucaqlar');
+  });
+
+  it('attaches newest matching paper for calendar topic', () => {
     const hit = todaysTopicQuiz([
       { id: 97, title: 'Həftəlik asan', kind: 'weekly' },
-      { id: 99, title: 'PNG fiqurlu · Üçbucaqlar · Orta', kind: 'weekly' },
-    ], '2026-11-09');
-    assert.equal(hit.topic, 'Üçbucaqlar');
-    assert.equal(String(hit.exam.id), '99');
+      { id: 101, title: 'PNG · Həqiqi ədədlər · Orta', kind: 'Sınaq' },
+    ], '2026-11-08');
+    assert.equal(hit.topic, 'Həqiqi ədədlər');
+    assert.equal(String(hit.exam.id), '101');
   });
 
   it('keeps topic papers only in matching section', () => {

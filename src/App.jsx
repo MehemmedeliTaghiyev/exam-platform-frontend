@@ -40,6 +40,9 @@ import StudentProgress from './pages/StudentProgress';
 import WeekendWeak from './pages/WeekendWeak';
 import WeekendTake from './pages/WeekendTake';
 import WeekendResult from './pages/WeekendResult';
+import Day6Review from './pages/Day6Review';
+import Day6Take from './pages/Day6Take';
+import Day6Result from './pages/Day6Result';
 import Legal from './pages/Legal';
 import UrgentBroadcastHost from './components/UrgentBroadcastHost';
 
@@ -288,6 +291,30 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <WeekendResult />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/day6"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <Day6Review />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/day6/take"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <Day6Take />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/day6/result/:cycleKey"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <Day6Result />
           </ProtectedRoute>
         }
       />

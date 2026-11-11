@@ -1,4 +1,10 @@
-import { intervalContaining, tbilisiYmd } from './mathCalendar.js';
+import { intervalContaining, latestCoveredTopicForDay, tbilisiYmd } from './mathCalendar.js';
+import {
+  annotateTopicPapers,
+  quizCountForTopic,
+  topicQuizDifficultyAt,
+  topicQuizDifficultyLabel,
+} from './topicQuizDifficulty.js';
 import { examIdOf, isHiddenWeeklyExam } from './weeklyMath.js';
 
 function stamp(value) {
@@ -7,11 +13,11 @@ function stamp(value) {
 }
 
 /**
- * Explicit day → topic quiz sends (newest first when listing).
- * Keep topic titles identical to MATH_CALENDAR interval topics.
+ * Optional day → published exam id for that calendar topic.
+ * Topic always comes from MATH_CALENDAR date pacing.
  */
 export const DAILY_TOPIC_SENDS = [
-  { ymd: '2026-11-09', topic: 'Üçbucaqlar', examId: '99' },
+  { ymd: '2026-11-09', examId: '99' },
 ];
 
 function normalize(value) {
@@ -25,23 +31,9 @@ function examBlob(exam) {
   return normalize(`${exam?.title || exam?.Title || ''} ${exam?.description || exam?.Description || ''}`);
 }
 
-function daysBetween(a, b) {
-  const start = Date.parse(`${a}T12:00:00+04:00`);
-  const end = Date.parse(`${b}T12:00:00+04:00`);
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
-  return Math.max(0, Math.round((end - start) / 86400000));
-}
-
-/** Pick one calendar topic for the day (rotates through the interval's topics). */
+/** Latest covered topic for the day — our calendar date only. */
 export function topicTitleForDay(ymd = tbilisiYmd()) {
-  const key = String(ymd || tbilisiYmd());
-  const forced = DAILY_TOPIC_SENDS.find((row) => row.ymd === key);
-  if (forced?.topic) return forced.topic;
-  const interval = intervalContaining(key);
-  const topics = interval?.topics || [];
-  if (!topics.length) return '';
-  const offset = daysBetween(interval.start, key);
-  return topics[offset % topics.length] || topics[0];
+  return latestCoveredTopicForDay(ymd).topic || '';
 }
 
 export function sendForDay(ymd = tbilisiYmd()) {
@@ -72,17 +64,44 @@ export function examsMatchingTopic(exams, topicTitle) {
     .sort(examSortNewest);
 }
 
-/** Today's topic quiz: explicit send, else newest exam matching that day's topic. */
+/**
+ * Every day: calendar → topic + day slot → difficulty band → matching sınaq.
+ * Quiz count for a topic = how many days that topic lasts on our calendar.
+ */
 export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
   const key = String(ymd || tbilisiYmd());
-  const topic = topicTitleForDay(key);
+  const covered = latestCoveredTopicForDay(key);
   const send = sendForDay(key);
+  const topic = covered.topic || '';
+  const series = topic ? quizCountForTopic(topic, covered.interval) : 1;
+  const slot = covered.dayInTopic ?? 0;
+  const band = topicQuizDifficultyAt(slot, series);
+  const rows = topic
+    ? annotateTopicPapers(examsMatchingTopic(exams, topic), series)
+    : [];
   let exam = null;
+
   if (send?.examId) {
-    exam = (exams || []).find((row) => examIdOf(row) === String(send.examId)) || null;
+    const hit = (exams || []).find((row) => examIdOf(row) === String(send.examId)) || null;
+    if (hit && (!topic || examMatchesTopicTitle(hit, topic))) exam = hit;
   }
-  if (!exam && topic) {
-    exam = examsMatchingTopic(exams, topic)[0] || null;
+  if (!exam && rows.length) {
+    exam = rows.find((row) => row.index === slot)?.exam
+      || rows.find((row) => row.planned === band)?.exam
+      || rows[Math.min(slot, rows.length - 1)]?.exam
+      || null;
   }
-  return { ymd: key, topic, exam, send };
+
+  return {
+    ymd: key,
+    topic,
+    exam,
+    send,
+    band,
+    bandLabel: topicQuizDifficultyLabel(band),
+    series,
+    slot,
+    interval: covered.interval || intervalContaining(key),
+    topicIndex: covered.index,
+  };
 }

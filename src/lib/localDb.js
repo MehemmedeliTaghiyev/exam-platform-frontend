@@ -158,6 +158,16 @@ export const localDb = {
     const map = read('exam_visibility', {});
     return map[String(id)] || '';
   },
+  getExamRanking(id) {
+    const map = read('exam_ranking', {});
+    return map[String(id)] || '';
+  },
+  setExamRanking(id, value) {
+    if (id == null) return;
+    const map = read('exam_ranking', {});
+    map[String(id)] = value === 'off' ? 'off' : 'on';
+    write('exam_ranking', map);
+  },
   setExamVisibility(id, visibility) {
     if (id == null) return;
     const map = read('exam_visibility', {});

@@ -25,8 +25,11 @@ import {
   formatIntervalRange,
   MATH_CALENDAR,
   studentTopicPlace,
+  tbilisiYmd,
+  topicHasEnded,
 } from '../lib/mathCalendar';
-import { DAILY_TOPIC_SENDS } from '../lib/dailyTopicQuiz';
+import { DAILY_TOPIC_SENDS, topicTitleForDay } from '../lib/dailyTopicQuiz';
+import { annotateTopicPapers, quizCountForTopic, topicAveragePercent } from '../lib/topicQuizDifficulty';
 import {
   archiveWeeklyWindows,
   examIdOf,
@@ -48,7 +51,7 @@ import {
 } from '../lib/weeklyDownloadPass';
 import { useStudentWallet } from '../lib/studentWallet';
 
-function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate }) {
+function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate, annotate = false, series }) {
   const list = papers.filter(Boolean);
   if (!list.length) {
     return (
@@ -57,9 +60,13 @@ function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate })
       </div>
     );
   }
+  const rows = annotate
+    ? annotateTopicPapers(list, series)
+    : list.map((exam) => ({ exam, bandLabel: '' }));
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
-      {list.map((exam) => {
+      {rows.map((row) => {
+        const exam = row.exam;
         const attempt = attemptByExam.get(String(exam.id));
         const done = Boolean(attempt);
         const started = entered.has(String(exam.id));
@@ -69,7 +76,7 @@ function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate })
             exam={exam}
             progress={done ? 'done' : undefined}
             entered={started}
-            resultText={resultLabel(attempt, exam, user)}
+            resultText={[row.bandLabel, resultLabel(attempt, exam, user)].filter(Boolean).join(' · ')}
             teacherName={exam.teacherName}
             actionLabel={
               done
@@ -98,6 +105,7 @@ export default function StudentSyllabus() {
   const defaultSubject = OPEN_SYLLABUS_SUBJECT;
   const [subject, setSubject] = useState(defaultSubject);
   const placement = useMemo(() => studentTopicPlace(user), [user]);
+  const dayQuizTopic = useMemo(() => topicTitleForDay(tbilisiYmd()), []);
   const windowStart = searchParams.get('pencere') || placement.place?.start;
   const viewed = findIntervalByStart(windowStart) || placement.place;
 
@@ -251,6 +259,8 @@ export default function StudentSyllabus() {
             user={user}
             openExam={openExam}
             navigate={navigate}
+            annotate
+            series={quizCountForTopic(calendarHit.topic.title, calendarHit.interval)}
           />
         )}
       </AppShell>
@@ -290,7 +300,7 @@ export default function StudentSyllabus() {
               <EmptyState title="Bu mövzuda sınaq yoxdur" text="Müəllim bu başlıqda imtahan paylaşanda burada görünəcək." />
             </div>
           ) : (
-            <PaperGrid papers={list} attemptByExam={attemptByExam} entered={entered} user={user} openExam={openExam} navigate={navigate} />
+            <PaperGrid papers={list} attemptByExam={attemptByExam} entered={entered} user={user} openExam={openExam} navigate={navigate} annotate />
           )}
         </AppShell>
       );
@@ -397,7 +407,9 @@ export default function StudentSyllabus() {
 
             <section>
               <h2 className="text-lg font-black">Mövzular</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">Noyabrdan fevraladək bütün fəsillər. Sınaq olanda uyğun mövzunun içinə düşür.</p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Tariximizə görə mövzu neçə gün davam edirsə, o qədər sınaq olur (son 2 çətin, ortada 1 asan, qalan orta).
+              </p>
               <div className="mt-3 space-y-8">
                 {MATH_CALENDAR.intervals.map((interval) => {
                   const rows = mathTopics.filter((row) => row.intervalStart === interval.start);
@@ -407,18 +419,21 @@ export default function StudentSyllabus() {
                       <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--muted)]">
                         {formatIntervalRange(interval)}
                         {current ? ' · indi' : ''}
-                        {interval.send?.weekly ? ' · həftəlik' : ' · blok'}
                       </p>
-                      <h3 className="mt-1 text-base font-black">{interval.title}</h3>
                       <div className="mt-3 grid gap-3">
                         {rows.map((row) => {
                           const papers = papersForTopic(row);
                           const started = papers.filter((exam) => entered.has(String(exam.id))).length;
                           const pending = Math.max(0, papers.length - started);
+                          const onTopic = current
+                            && dayQuizTopic
+                            && row.title === dayQuizTopic;
+                          const ended = topicHasEnded(interval, row.title, placement.today);
+                          const avg = ended ? topicAveragePercent(history, papers) : null;
                           return (
                             <Card
                               key={row.id}
-                              className="cursor-pointer"
+                              className={`cursor-pointer ${onTopic ? 'ring-2 ring-[var(--accent)]' : ''}`}
                               onClick={() => navigate(`/student/syllabus/${encodeURIComponent(row.id)}`)}
                             >
                               <div className="flex items-center gap-3">
@@ -426,14 +441,22 @@ export default function StudentSyllabus() {
                                   {row.order}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                  <p className="font-extrabold text-[var(--text)]">{row.title}</p>
+                                  <p className="font-extrabold text-[var(--text)]">
+                                    {row.title}
+                                    {onTopic ? ' · bu gün' : ''}
+                                  </p>
                                   <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
                                     {papers.length
                                       ? `${started}/${papers.length} sınağa daxil olub`
                                       : 'Hələ sınaq yoxdur'}
+                                    {ended && avg != null ? ` · orta ${avg}%` : ended ? ' · mövzu bitib' : ''}
                                   </p>
                                 </div>
-                                {pending > 0 ? (
+                                {ended && avg != null ? (
+                                  <span className="shrink-0 rounded-full bg-[#e7f6ea] px-2.5 py-1 text-sm font-black text-[#1f7a3a]">
+                                    {avg}%
+                                  </span>
+                                ) : pending > 0 ? (
                                   <span className="shrink-0 rounded-full bg-[#f0b429]/15 px-2.5 py-1 text-sm font-black text-[#f0b429]">
                                     +{pending}
                                   </span>

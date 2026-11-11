@@ -1903,7 +1903,7 @@ function countUsers(data) {
 }
 
 export async function fetchCommunityCounts() {
-  const root = String(import.meta.env.VITE_API_URL || 'https://exampulse.az/api').replace(/\/$/, '');
+  const root = String(import.meta.env.VITE_API_URL || 'https://mahammadali-001-site1.jtempurl.com/api').replace(/\/$/, '');
   const load = (role) => axios.get(`${root}/Users`, {
     params: { role, includeDeleted: false },
     timeout: 8000,

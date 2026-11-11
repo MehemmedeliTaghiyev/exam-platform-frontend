@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import BrandLogo from './BrandLogo';
 import './loadingScreen.css';
 
 const WORD = 'ExamPulse';
@@ -130,7 +131,10 @@ function LoadingMark() {
           <div className="ep-boot-mark">
             <div ref={glowRef} className="ep-boot-glow" />
             <div ref={ringRef} className="ep-boot-ring" />
-            <svg viewBox="0 0 120 120" width="132" height="132" aria-hidden="true">
+            <div className="ep-boot-brand" aria-hidden="true">
+              <BrandLogo size={72} showName={false} />
+            </div>
+            <svg viewBox="0 0 120 120" width="132" height="132" aria-hidden="true" className="ep-boot-cube-svg">
               <g ref={cubeRef}>
                 <polygon className="ep-boot-face" fill="#f0b429" data-dx="0" data-dy="-46" data-r="-14" points="60,12 101.6,36 60,60 18.4,36" />
                 <polygon className="ep-boot-face" fill="#1f6f4a" data-dx="-40" data-dy="26" data-r="10" points="18.4,36 60,60 60,108 18.4,84" />

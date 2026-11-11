@@ -156,9 +156,29 @@ button:active:not(:disabled) {
 }
 
 .exam-guard input,
-.exam-guard textarea {
-  -webkit-user-select: text;
-  user-select: text;
+.exam-guard textarea,
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+html.plat-android .shell-top,
+html.plat-ios .shell-top {
+  padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 10px));
+}
+
+html.plat-android .shell-content,
+html.plat-ios .shell-content {
+  padding-top: 4px;
+}
+
+html.plat-android .login-shell,
+html.plat-ios .login-shell,
+html.plat-android .login-page,
+html.plat-ios .login-page {
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
 }
 
 .ep-latex .katex {

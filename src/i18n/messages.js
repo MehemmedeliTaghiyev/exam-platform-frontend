@@ -93,9 +93,9 @@ export const messages = {
     },
     streak: {
       title: '{n} günlük seriya',
-      keep: 'Bu gün məşq et, seriyanı qoru',
+      keep: 'Bu gün test et, seriyanı qoru',
       start: 'Bu gün sınağa gir, seriyanı başlat',
-      fade: 'Alov sönür — bu gün məşq et',
+      fade: 'Alov sönür — bu gün test et',
       days: ['B.e', 'Ç.a', 'Ç', 'C.a', 'C', 'Ş', 'B'],
     },
     quiz: {

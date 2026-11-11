@@ -24,9 +24,9 @@
       "iconColor": "#f0b429"
     },
     "StatusBar": {
-      "overlaysWebView": true,
-      "style": "LIGHT",
-      "backgroundColor": "#FDFBF7"
+      "overlaysWebView": false,
+      "style": "DARK",
+      "backgroundColor": "#120E24"
     }
   }
 }

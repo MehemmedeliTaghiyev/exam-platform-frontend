@@ -13,6 +13,7 @@ import { examRetakeReady, formatDateTime, isExamEnded, isExamScheduled, isOpenCh
 import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
 import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
 import { isLiveWeeklyExamId, isStudentWeeklyExam } from '../lib/weeklyMath';
+import { weeklyPassActive } from '../lib/weeklyDownloadPass';
 import { teacherWatermarkText } from '../lib/storageAccess';
 import DrivePreview from '../components/DrivePreview';
 import ScreenGuard from '../components/ScreenGuard';
@@ -292,6 +293,10 @@ export default function TakeExam() {
           return;
         }
         const weeklyOk = isLiveWeeklyExamId(examId) || isStudentWeeklyExam(examData);
+        if (weeklyOk && !weeklyPassActive(user)) {
+          navigate('/student/syllabus', { replace: true });
+          return;
+        }
         if (!weeklyOk && !canEnterExam(user, examData)) {
           const owner = examTeacherId(examData);
           navigate(owner ? `/student/teachers/${owner}` : '/student/teachers', { replace: true });
@@ -625,6 +630,17 @@ export default function TakeExam() {
             <>
               <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-6">
                 <div className="mx-auto w-full max-w-3xl">
+                  {paperQuestions.length > 0 ? (
+                    <div className="mb-4 sm:hidden">
+                      <QuestionNav
+                        questions={paperQuestions}
+                        currentIndex={currentIndex}
+                        answers={answers}
+                        flagged={flagged}
+                        onJump={jumpTo}
+                      />
+                    </div>
+                  ) : null}
                   {paperQuestions.length > 0 ? (
                     <QuestionCanvas
                       question={active}

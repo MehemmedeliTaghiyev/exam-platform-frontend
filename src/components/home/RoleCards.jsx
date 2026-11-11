@@ -17,7 +17,7 @@ export default function RoleCards({ onStudent, onTeacher }) {
               </div>
             </div>
             <button type="button" onClick={onStudent} className="hp-btn hp-btn-gold hp-lift">
-              Məşqə başla
+              Testə başla
             </button>
           </article>
           <article className="hp-role">
@@ -32,6 +32,20 @@ export default function RoleCards({ onStudent, onTeacher }) {
             </div>
             <button type="button" onClick={onTeacher} className="hp-btn hp-btn-ghost hp-lift">
               Müəllim kimi başla
+            </button>
+          </article>
+          <article className="hp-role opacity-70">
+            <div className="hp-role-head">
+              <span className="hp-icon" aria-hidden="true">
+                <GraduationCap size={22} />
+              </span>
+              <div>
+                <h3>Magistratura</h3>
+                <p>Magistr hazırlığı tezliklə açılacaq.</p>
+              </div>
+            </div>
+            <button type="button" disabled className="hp-btn hp-btn-ghost cursor-not-allowed">
+              Tezliklə
             </button>
           </article>
         </div>

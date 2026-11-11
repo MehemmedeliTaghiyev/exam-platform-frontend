@@ -132,7 +132,7 @@ export default function StudentAccount() {
 
   const signOut = () => {
     logout();
-    navigate(user?.practice ? '/' : '/login');
+    navigate('/', { replace: true });
   };
 
   const onPhoto = async (event) => {

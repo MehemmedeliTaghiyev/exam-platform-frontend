@@ -27,7 +27,7 @@ export function ThemeProvider({ children }) {
     }
     if (!isNativeApp()) return undefined;
     import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
-      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+      StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
       StatusBar.setBackgroundColor({ color: dark ? '#120E24' : '#EFEAF8' }).catch(() => {});
       StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {});
     }).catch(() => {});

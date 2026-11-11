@@ -152,7 +152,7 @@ export default function AppShell({ title, children, mainClassName = '', action =
       return;
     }
     logout();
-    navigate(user?.practice ? '/' : '/login');
+    navigate('/', { replace: true });
   };
 
   const guardNav = (event) => {

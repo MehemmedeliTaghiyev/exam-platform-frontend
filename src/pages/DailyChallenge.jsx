@@ -10,14 +10,15 @@ import {
   dailyKey,
   dailyLabel,
   dailyMine,
-  dailyRanking,
+  dailyTopBoard,
   dailyDoneDays,
   dailyStreak,
   flameDying,
   flamePeak,
   formatCountdown,
   msUntilNextDaily,
-  submitDaily,
+  submitDailyRemote,
+  syncDailyBoard,
   todaysQuestion,
 } from '../lib/dailyChallenge';
 
@@ -28,6 +29,7 @@ export default function DailyChallenge() {
   const [mine, setMine] = useState(() => dailyMine(user?.id, question.day));
   const [pick, setPick] = useState(mine?.optionIndex ?? null);
   const [now, setNow] = useState(() => Date.now());
+  const [boardTick, setBoardTick] = useState(0);
   const started = useRef(new Date().toISOString());
 
   useEffect(() => {
@@ -35,19 +37,34 @@ export default function DailyChallenge() {
     return () => clearInterval(timer);
   }, []);
 
-  const board = useMemo(() => dailyRanking(user, question.day), [user, question.day, mine]);
+  useEffect(() => {
+    let live = true;
+    syncDailyBoard(user, question.day).finally(() => {
+      if (live) setBoardTick((n) => n + 1);
+    });
+    const timer = setInterval(() => {
+      syncDailyBoard(user, question.day).finally(() => {
+        if (live) setBoardTick((n) => n + 1);
+      });
+    }, 20000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [user?.id, question.day]);
+
+  const { board, top, you } = useMemo(() => dailyTopBoard(user, question.day, 5), [user, question.day, mine, boardTick]);
   const days = dailyDoneDays(user?.id);
   const streak = dailyStreak(user?.id);
   const dying = flameDying(days, new Date(now));
   const peak = flamePeak(days);
-  const you = board.find((row) => row.you);
-  const top = board.slice(0, 4);
   const left = formatCountdown(msUntilNextDaily(new Date(now)));
 
-  const send = () => {
+  const send = async () => {
     if (pick == null || mine) return;
-    const row = submitDaily(user, pick, { startedAt: started.current, day: question.day });
+    const row = await submitDailyRemote(user, pick, { startedAt: started.current, day: question.day });
     setMine(row);
+    setBoardTick((n) => n + 1);
   };
 
   return (
@@ -115,7 +132,7 @@ export default function DailyChallenge() {
                 <span className="w-12 text-right text-sm font-black tabular-nums">{formatHms(row.durationSeconds).slice(-5)}</span>
               </div>
             ))}
-            {you && you.rank > 4 ? (
+            {you && you.rank > 5 ? (
               <>
                 <p className="px-2 text-center text-[var(--muted)]">···</p>
                 <div className="rank-you flex items-center gap-3 rounded-2xl px-4 py-3">

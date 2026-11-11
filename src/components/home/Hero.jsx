@@ -141,7 +141,7 @@ export default function Hero({ onPractice, onTeacherPractice }) {
             </p>
             <div className="hp-hero-actions">
               <button type="button" onClick={onPractice} className="hp-btn hp-btn-gold hp-lift">
-                Şagird kimi məşq et
+                Şagird kimi test et
                 <ArrowRight size={16} aria-hidden="true" />
               </button>
               {onTeacherPractice ? (
@@ -149,6 +149,14 @@ export default function Hero({ onPractice, onTeacherPractice }) {
                   Müəllim kimi sınaq iştirakı et
                 </button>
               ) : null}
+              <button
+                type="button"
+                disabled
+                title="Tezliklə"
+                className="hp-btn hp-btn-ghost hp-lift opacity-55 cursor-not-allowed"
+              >
+                Magistratura · tezliklə
+              </button>
             </div>
             <div className="hp-chips" aria-label="Fənlər">
               {SUBJECTS.map((name) => (
@@ -161,6 +169,7 @@ export default function Hero({ onPractice, onTeacherPractice }) {
                 </span>
               ))}
               <span className="hp-chip hp-chip-more">+ digər fənlər</span>
+              <span className="hp-chip opacity-50" title="Tezliklə">Magistratura · tezliklə</span>
             </div>
             <div id="imkanlar" className="hp-features-wrap scroll-mt-24">
               <div

@@ -10,7 +10,7 @@ import { Button, Card, EmptyState, Skeleton } from '../components/ui';
 import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { examSubject, subjectProgress } from '../lib/publicExams';
-import { isExamOpen, isExamScheduled, resolveExamStatus } from '../lib/utils';
+import { formatHms, isExamOpen, isExamScheduled, resolveExamStatus } from '../lib/utils';
 import {
   ensureWeekendPaper,
   isWeekendDay,
@@ -18,7 +18,7 @@ import {
   weekendResultFor,
   weekendWindow,
 } from '../lib/weekendWeakExam';
-import { countStreak, dailyDoneDays, dailyKey, dailyMine, flameDying, flamePeak, todaysQuestion, weekDots } from '../lib/dailyChallenge';
+import { countStreak, DAILY_EVENT, dailyDoneDays, dailyKey, dailyMine, dailyTopBoard, flameDying, flamePeak, syncDailyBoard, todaysQuestion, weekDots } from '../lib/dailyChallenge';
 import { examSortNewest, todaysTopicQuiz } from '../lib/dailyTopicQuiz';
 import { tbilisiYmd } from '../lib/mathCalendar';
 import StreakFlame from '../components/StreakFlame';
@@ -38,8 +38,25 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     const timer = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(timer);
+    const bump = () => setTick((n) => n + 1);
+    window.addEventListener(DAILY_EVENT, bump);
+    window.addEventListener('storage', bump);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener(DAILY_EVENT, bump);
+      window.removeEventListener('storage', bump);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const day = todaysQuestion().day;
+    syncDailyBoard(user, day).finally(() => setTick((n) => n + 1));
+    const timer = setInterval(() => {
+      syncDailyBoard(user, day).finally(() => setTick((n) => n + 1));
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [user?.id]);
 
   useEffect(() => {
     const run = async () => {
@@ -100,6 +117,7 @@ export default function StudentDashboard() {
       if (!Number.isNaN(date.getTime())) days.add(dailyKey(date));
     });
     const now = new Date();
+    const board = dailyTopBoard(user, q.day, 5);
     return {
       q,
       done: dailyMine(user?.id, q.day),
@@ -107,8 +125,10 @@ export default function StudentDashboard() {
       peak: flamePeak(days),
       dying: flameDying(days, now),
       week: weekDots(days, now),
+      top: board.top,
+      you: board.you,
     };
-  }, [user?.id, history, tick]);
+  }, [user, history, tick]);
 
   const weekend = useMemo(() => {
     const now = new Date();
@@ -233,6 +253,38 @@ export default function StudentDashboard() {
           {daily.done ? t('daily.answered') : t('daily.open')}
         </span>
       </button>
+
+      <section className="card-vector mb-4 rounded-[24px] bg-[var(--card)] p-4 ring-1 ring-[var(--line)]">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">{t('daily.ranking')}</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--muted)]">Top 5 · hər yeni sualda sıfırlanır</p>
+          </div>
+          <button type="button" className="text-xs font-extrabold text-[var(--accent)]" onClick={() => navigate('/student/daily')}>
+            Aç
+          </button>
+        </div>
+        <div className="space-y-2">
+          {(daily.top || []).map((row) => (
+            <div key={row.id} className="flex items-center gap-3 rounded-2xl bg-[var(--bg)] px-3 py-2.5">
+              <span className="w-6 text-sm font-black text-[var(--muted)]">{row.rank}</span>
+              <span className={`min-w-0 flex-1 truncate text-sm font-extrabold ${row.you ? 'text-[var(--accent)]' : ''}`}>{row.name}</span>
+              <span className={row.correct ? 'text-[#22c55e]' : 'text-[#ef4444]'}>{row.correct ? '✓' : '✕'}</span>
+              <span className="w-12 text-right text-xs font-black tabular-nums">{formatHms(row.durationSeconds).slice(-5)}</span>
+            </div>
+          ))}
+          {daily.you && daily.you.rank > 5 ? (
+            <div className="rank-you flex items-center gap-3 rounded-2xl px-3 py-2.5">
+              <span className="w-6 text-sm font-black text-[var(--accent)]">{daily.you.rank}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-extrabold">{t('result.you')}</span>
+              <span className={daily.you.correct ? 'text-[#22c55e]' : 'text-[#ef4444]'}>{daily.you.correct ? '✓' : '✕'}</span>
+            </div>
+          ) : null}
+          {!daily.top?.length ? (
+            <p className="text-sm font-semibold text-[var(--muted)]">Hələ cavab yoxdur — ilk sən ol.</p>
+          ) : null}
+        </div>
+      </section>
 
       {weekend.visible ? (
       <button

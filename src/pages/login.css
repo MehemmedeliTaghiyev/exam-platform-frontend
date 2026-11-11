@@ -6,6 +6,7 @@
   background: #F2EDE0;
   color: #2a2418;
   font-family: Manrope, Inter, system-ui, sans-serif;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .login-scene {

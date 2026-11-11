@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, CreditCard, Database, Pencil, Shield, Users } from 'lucide-react';
 import BrandLogo from '../components/BrandLogo';
@@ -116,38 +117,50 @@ export default function Legal() {
   const navigate = useNavigate();
   const page = PAGES[pathname] || PAGES['/privacy'];
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const prevTheme = root.dataset.theme;
+    const prevDark = root.classList.contains('dark');
+    root.dataset.theme = 'dark';
+    root.classList.add('dark');
+    return () => {
+      if (prevTheme) root.dataset.theme = prevTheme;
+      root.classList.toggle('dark', prevDark);
+    };
+  }, [pathname]);
+
   const goBack = () => {
     if (key !== 'default') navigate(-1);
     else navigate('/');
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F6F3EC] px-5 py-6 text-[#1d2430] min-[768px]:px-10 min-[1100px]:px-16">
+    <div className="min-h-screen w-full bg-[#120E24] px-5 py-6 text-[#f3f0ea] min-[768px]:px-10 min-[1100px]:px-16" style={{ paddingTop: 'max(24px, env(safe-area-inset-top))' }}>
       <div className="mx-auto w-full max-w-[420px] pb-8 min-[768px]:max-w-[820px] min-[1100px]:max-w-[960px]">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={goBack}
             aria-label="Geri"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-[#1d2430] shadow-[0_1px_4px_rgba(28,40,28,0.08)]"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-[#f3f0ea] ring-1 ring-white/15"
           >
             <ArrowLeft size={18} />
           </button>
           <Link to="/" className="min-w-0">
-            <BrandLogo size={28} />
+            <BrandLogo size={28} nameClassName="text-[#f3f0ea]" />
           </Link>
         </div>
 
         <h1 className="mt-8 text-[32px] font-extrabold tracking-tight">{page.title}</h1>
         {page.intro ? (
-          <p className="mt-2 text-[15px] leading-6 text-[#6d756c]">{page.intro}</p>
+          <p className="mt-2 text-[15px] leading-6 text-white/55">{page.intro}</p>
         ) : null}
 
         {page.checks?.length ? (
           <ul className="mt-5 space-y-2.5">
             {page.checks.map((item) => (
-              <li key={item} className="flex items-center gap-2 text-[15px] font-semibold text-[#1f6f4a]">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-[#e7f3ea]">
+              <li key={item} className="flex items-center gap-2 text-[15px] font-semibold text-[#3eae72]">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-[#1f6f4a]/25">
                   <Check size={13} strokeWidth={3} />
                 </span>
                 {item}
@@ -160,14 +173,14 @@ export default function Legal() {
           {page.cards.map((card) => {
             const Icon = card.icon;
             return (
-              <article key={card.title} className="rounded-[22px] bg-white px-4 py-4 shadow-[0_1px_0_rgba(28,40,28,0.04)] ring-1 ring-black/[0.04]">
+              <article key={card.title} className="rounded-[22px] bg-[#1a1628] px-4 py-4 ring-1 ring-white/10">
                 <div className="flex gap-3">
                   <span className={`mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${TONE[card.tone] || TONE.green}`}>
                     <Icon size={18} />
                   </span>
                   <div className="min-w-0">
-                    <h2 className="text-[16px] font-extrabold">{card.title}</h2>
-                    <p className="mt-1 text-[14px] leading-6 text-[#6d756c]">{card.text}</p>
+                    <h2 className="text-[16px] font-extrabold text-[#f3f0ea]">{card.title}</h2>
+                    <p className="mt-1 text-[14px] leading-6 text-white/55">{card.text}</p>
                   </div>
                 </div>
               </article>

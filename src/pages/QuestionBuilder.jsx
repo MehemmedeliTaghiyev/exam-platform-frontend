@@ -303,36 +303,28 @@ export default function QuestionBuilder() {
 
   return (
     <AppShell title="İmtahan vərəqi">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => navigate('/teacher')}>
-            <ArrowLeft size={16} /> Geri
-          </Button>
-          <div>
-            <h2 className="text-xl font-bold">{exam?.title || `İmtahan #${id}`}</h2>
-            <p className="text-sm text-gray-500">{exam?.subjectName} · {questions.length} sual</p>
+      <div className="mb-5 rounded-[24px] bg-[var(--card)] p-4 ring-1 ring-[var(--line)]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Button variant="ghost" onClick={() => navigate('/teacher')}>
+              <ArrowLeft size={16} /> Geri
+            </Button>
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)]">Müəllim · sınaq</p>
+              <h2 className="mt-1 truncate text-xl font-black">{exam?.title || `İmtahan #${id}`}</h2>
+              <p className="mt-1 text-sm font-semibold text-[var(--muted)]">{exam?.subjectName} · {questions.length} sual</p>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            className="border border-gray-300 bg-white text-gray-900"
-            onClick={() => publishDraft('private')}
-          >
-            Özəl dərc et
-          </Button>
-          <Button
-            className="bg-brand-600 text-white"
-            onClick={() => publishDraft('public')}
-          >
-            Açıq dərc et
-          </Button>
-          <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
-            <BarChart3 size={16} /> Statistika
-          </Button>
-          <Button variant="secondary" onClick={() => exportExamToDocx(exam, questions)}>
-            <FileDown size={16} /> Word export
-          </Button>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <Button variant="secondary" onClick={() => publishDraft('private')}>Özəl dərc</Button>
+            <Button onClick={() => publishDraft('public')}>Açıq dərc</Button>
+            <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
+              <BarChart3 size={16} /> Statistika
+            </Button>
+            <Button variant="secondary" onClick={() => exportExamToDocx(exam, questions)}>
+              <FileDown size={16} /> Word
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -358,22 +350,31 @@ export default function QuestionBuilder() {
         </p>
       )}
 
-      <div className="mb-6 flex w-fit gap-1 rounded-xl bg-gray-100 p-1 dark:bg-slate-800">
+      <div className="mb-6 flex w-full gap-1 rounded-2xl bg-[var(--card)] p-1 ring-1 ring-[var(--line)] sm:w-fit">
         <button
+          type="button"
           onClick={() => setTab('edit')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
-            tab === 'edit' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-gray-500'
+          className={`min-h-11 flex-1 rounded-xl px-4 text-sm font-extrabold transition-all sm:flex-none ${
+            tab === 'edit' ? 'bg-[var(--accent)] text-[#3a2200]' : 'text-[var(--muted)]'
           }`}
         >
-          Sualları idarə et
+          Suallar
         </button>
         <button
+          type="button"
           onClick={() => setTab('paper')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
-            tab === 'paper' ? 'bg-white shadow-sm dark:bg-slate-700' : 'text-gray-500'
+          className={`min-h-11 flex-1 rounded-xl px-4 text-sm font-extrabold transition-all sm:flex-none ${
+            tab === 'paper' ? 'bg-[var(--accent)] text-[#3a2200]' : 'text-[var(--muted)]'
           }`}
         >
-          Vərəq görünüşü
+          Vərəq
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`/teacher/exams/${id}/stats`)}
+          className="min-h-11 flex-1 rounded-xl px-4 text-sm font-extrabold text-[var(--muted)] sm:flex-none"
+        >
+          Statistika
         </button>
       </div>
 

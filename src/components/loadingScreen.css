@@ -37,6 +37,18 @@
   height: 132px;
 }
 
+.ep-boot-brand {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+}
+
+.ep-boot-cube-svg {
+  opacity: 0.22;
+}
+
 .ep-boot-mark svg {
   position: relative;
   display: block;

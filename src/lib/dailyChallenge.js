@@ -1,3 +1,6 @@
+import API from '../api/axios';
+import { isPractice } from './practice';
+
 export const DAILY_EVENT = 'exampulse-daily';
 const STORE = 'exampulse_daily_attempts';
 
@@ -97,6 +100,38 @@ export function dailyMine(userId, day = dailyKey()) {
   return readAll().find((row) => row.day === day && String(row.userId) === String(userId)) || null;
 }
 
+function normalizeServerRow(row, user) {
+  const userId = row?.userId ?? row?.UserId;
+  const you = user?.id != null && String(userId) === String(user.id);
+  return {
+    id: row?.id || `${userId}-${row?.day || row?.Day}`,
+    userId,
+    name: you ? 'Sən' : (row?.name || row?.Name || 'Şagird'),
+    day: row?.day || row?.Day,
+    optionIndex: Number(row?.optionIndex ?? row?.OptionIndex ?? 0),
+    correct: Boolean(row?.correct ?? row?.Correct),
+    durationSeconds: Number(row?.durationSeconds ?? row?.DurationSeconds ?? 0),
+    at: row?.at || row?.SubmittedAt || new Date().toISOString(),
+    you,
+  };
+}
+
+/** Pull shared board from SmarterASP so all accounts see the same ranking. */
+export async function syncDailyBoard(user, day = dailyKey()) {
+  if (!user?.id || isPractice() || !localStorage.getItem('token')) {
+    return dailyRanking(user, day);
+  }
+  try {
+    const res = await API.get('/daily-challenge', { params: { day }, timeout: 12000 });
+    const board = (res.data?.board || res.data?.Board || []).map((row) => normalizeServerRow(row, user));
+    const kept = readAll().filter((row) => row.day !== day);
+    writeAll([...kept, ...board.map((row) => ({ ...row, you: undefined }))]);
+    return board.length ? board.map((row, index) => ({ ...row, rank: index + 1 })) : dailyRanking(user, day);
+  } catch {
+    return dailyRanking(user, day);
+  }
+}
+
 export function submitDaily(user, optionIndex, { startedAt, day } = {}) {
   const q = todaysQuestion();
   const key = day || q.day;
@@ -119,6 +154,25 @@ export function submitDaily(user, optionIndex, { startedAt, day } = {}) {
   return row;
 }
 
+/** Local save + SmarterASP sync (all phones share the same top board). */
+export async function submitDailyRemote(user, optionIndex, { startedAt, day } = {}) {
+  const row = submitDaily(user, optionIndex, { startedAt, day });
+  if (!user?.id || isPractice() || !localStorage.getItem('token')) return row;
+  try {
+    await API.post('/daily-challenge', {
+      day: row.day,
+      optionIndex: row.optionIndex,
+      correct: row.correct,
+      durationSeconds: row.durationSeconds,
+      name: user?.fullName || user?.email || 'Şagird',
+    }, { timeout: 12000 });
+    await syncDailyBoard(user, row.day);
+  } catch {
+    /* local board still works offline */
+  }
+  return row;
+}
+
 function ghostBoard(day) {
   const seed = hashDay(day);
   return GHOSTS.map((ghost, i) => ({
@@ -133,14 +187,35 @@ function ghostBoard(day) {
 }
 
 export function dailyRanking(user, day = dailyKey()) {
-  const mine = dailyMine(user?.id, day);
-  const people = [...ghostBoard(day)];
-  if (mine) people.push({ ...mine, name: 'Sən', you: true });
+  const byUser = new Map();
+  readAll()
+    .filter((row) => row.day === day && row.userId != null && !row.ghost)
+    .forEach((row) => {
+      byUser.set(String(row.userId), row);
+    });
+  const people = [...byUser.values()].map((row) => {
+    const you = user?.id != null && String(row.userId) === String(user.id);
+    return {
+      ...row,
+      you,
+      name: you ? 'Sən' : (row.name || 'Şagird'),
+    };
+  });
+  // Empty board: light demo ghosts so UI is not blank; cleared when real answers exist.
+  if (!people.length) people.push(...ghostBoard(day));
   people.sort((a, b) => {
     if (Boolean(b.correct) !== Boolean(a.correct)) return b.correct ? 1 : -1;
     return (a.durationSeconds || 9999) - (b.durationSeconds || 9999);
   });
   return people.map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+/** Top N for home / daily board. Resets automatically when `day` changes. */
+export function dailyTopBoard(user, day = dailyKey(), limit = 5) {
+  const board = dailyRanking(user, day);
+  const top = board.slice(0, limit);
+  const you = board.find((row) => row.you) || null;
+  return { board, top, you, day };
 }
 
 export function dailyDoneDays(userId) {

@@ -10,7 +10,7 @@ function pack(subject, grade, kind, index) {
     grade,
     kind,
     durationMinutes: kind === 'Blok' ? 180 : 90,
-    totalQuestions: kind === 'Blok' ? 50 : 25,
+    totalQuestions: kind === 'Blok' ? 30 : 25,
     driveFileId: '',
   };
 }

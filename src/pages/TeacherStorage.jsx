@@ -28,7 +28,7 @@ import {
   useTeacherTokens,
   WEEKLY_TOKENS,
 } from '../lib/tokens';
-import { calendarTopicSuggestions, teacherOrderedPacks } from '../lib/teacherBankOrder';
+import { calendarTopicSuggestions, questionsPerPaper, teacherOrderedPacks } from '../lib/teacherBankOrder';
 
 const prefKey = (id) => `exampulse_storage_pref_${id || 'me'}`;
 const sharedKey = (id) => `exampulse_storage_shared_${id || 'me'}`;
@@ -136,7 +136,7 @@ export default function TeacherStorage() {
   const [shared, setShared] = useState(() => readJson(sharedKey(user?.id), {}));
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
-  const [mix, setMix] = useState({ asan: 4, orta: 2, çətin: 0 });
+  const [mix, setMix] = useState({ asan: 1, orta: 1, çətin: 0 });
   const [topics, setTopics] = useState('Üçbucaqlar');
   const language = 'az'; // hələlik yalnız Azərbaycan
   const [orderedPacks, setOrderedPacks] = useState([]);
@@ -363,13 +363,23 @@ export default function TeacherStorage() {
       });
       setOrderedPacks(teacherOrderedPacks(user?.id));
       try {
-        const questions = row?.paper?.questions || [];
-        const blob = row?.pdfBlob
-          || (questions.length ? await buildExamPaperPdf(questions, row.title || 'Quiz') : null)
-          || (await compileLatexPdf(row?.paper?.latexSource || '', { title: row.title || 'Quiz' })).blob;
-        await saveAndOpenPdf(blob, `${String(row.title || 'quiz').slice(0, 40)}.pdf`);
+        const papers = row?.results?.length ? row.results : [row];
+        for (let i = 0; i < papers.length; i += 1) {
+          const paper = papers[i];
+          const questions = paper?.paper?.questions || [];
+          const blob = paper?.pdfBlob
+            || (questions.length ? await buildExamPaperPdf(questions, paper.title || 'Quiz') : null)
+            || (await compileLatexPdf(paper?.paper?.latexSource || '', { title: paper.title || 'Quiz' })).blob;
+          if (i === 0) {
+            await saveAndOpenPdf(blob, `${String(paper.title || 'quiz').slice(0, 40)}.pdf`);
+          }
+        }
+        const n = row?.paperCount || papers.length;
+        const per = row?.questionsPerPaper || questionsPerPaper(prefs.kind);
         if (row?.pack?.difficultyFallback) {
-          setError('Uyğun çətinlik az idi — bir səviyyə asan suallar da əlavə olundu. PDF Anbarda.');
+          setError(`Uyğun çətinlik az idi — bir səviyyə asan da əlavə olundu. ${n} quiz · hər biri ${per} sual — Anbarda.`);
+        } else if (n > 1) {
+          setError(`${n} quiz hazırdır (hər biri ${per} sual). İlk PDF açıldı, qalanı Anbardan yükləyin.`);
         }
       } catch {
         setError('Sınaq Anbara düşdü, amma PDF indilik açıla bilmədi — «PDF yüklə» ilə yenidən cəhd edin.');
@@ -380,10 +390,10 @@ export default function TeacherStorage() {
         setError(`Həftəlik ${WEEKLY_TOKENS} qəpik bitib. Bu tələb ${requestCost} qəpik istəyir.`);
         navigate('/teacher/cabinet#odenis');
       } else if (err?.code === 'SUAL_YOX') {
-        setError('Quiz tələb etmək üçün asan, orta və ya çətin sual sayını yazın.');
+        setError('Quiz tələb etmək üçün asan, orta və ya çətin quiz sayını yazın.');
       } else if (err?.code === 'MOVZU_YOX') {
         setError('Adi sınaq üçün ən azı bir mövzu yazın (məs. Üçbucaqlar).');
-      } else if (err?.code === 'BANK_EMPTY' || err?.code === 'BANK_BAD_REQUEST') {
+      } else if (err?.code === 'BANK_EMPTY' || err?.code === 'BANK_BAD_REQUEST' || err?.code === 'BANK_SHORT') {
         setError(err.message || 'Bankdan sual gəlmədi. Mövzu və ya çətinliyi dəyişin.');
       } else {
         setError(errorMessage(err, 'Quiz tələb edilmədi.'));
@@ -393,13 +403,14 @@ export default function TeacherStorage() {
     }
   };
 
-  const questionCount = (Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0);
+  const quizCount = (Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0);
+  const perPaper = questionsPerPaper(prefs.kind);
   const notes = requests
     .filter((row) => packInArrivedFilter({ at: row.at }))
     .map((row) => ({
       id: row.id,
-      title: row.asan != null
-        ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin`
+      title: row.asan != null && (row.asan + row.orta + row.çətin) > 0
+        ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin quiz`
         : row.title,
       lang: String(row.language || 'az').toUpperCase(),
       waiting: row.status !== 'ready',
@@ -429,7 +440,7 @@ export default function TeacherStorage() {
       <div className="desk-page space-y-4 text-white">
         <section className={`rounded-[28px] p-4 min-[768px]:p-6 ${overBudget ? 'bg-[#4a1d24]' : 'bg-[#171a22]'} ring-1 ring-white/[0.06]`}>
           <p className="text-[17px] font-black">Quiz tələbi üçün jeton qiyməti</p>
-          <p className="mt-1 text-sm font-semibold text-white/45">Hər sual üçün</p>
+          <p className="mt-1 text-sm font-semibold text-white/45">Hər quiz kağızı üçün</p>
           <div className="mt-4 grid grid-cols-3 gap-2 min-[1100px]:max-w-xl">
             {[
               [TOKEN_COSTS.asan, 'Asan'],
@@ -464,7 +475,7 @@ export default function TeacherStorage() {
           <section className="rounded-[28px] bg-[#171a22] p-4 ring-1 ring-white/[0.06] min-[768px]:p-5">
             <h2 className="text-xl font-black">Quiz tələb et · PDF</h2>
             <p className="mt-1 text-sm font-semibold text-white/45">
-              Mövzu və çətinliyi seçin — bankdan sınaq yığılır, PDF Anbara düşür.
+              Hər quiz = tam kağız: Sınaq/Buraxılış 25 sual, Blok 30. Asan/orta/çətin yalnız neçə quiz. Çatışmayan eyni çətinlik 9-dan.
             </p>
             <div className="mt-4 grid gap-4 min-[768px]:grid-cols-3">
               <div>
@@ -504,20 +515,20 @@ export default function TeacherStorage() {
             </div>
             <div className="mt-3 divide-y divide-white/[0.06] min-[768px]:mt-4 min-[768px]:grid min-[768px]:grid-cols-3 min-[768px]:gap-3 min-[768px]:divide-y-0">
               <Stepper
-                label="Asan"
-                hint={`${TOKEN_COSTS.asan} / sual`}
+                label="Asan quiz"
+                hint={`${TOKEN_COSTS.asan} / quiz · ${perPaper} sual`}
                 value={mix.asan}
                 onChange={(n) => setMix((prev) => ({ ...prev, asan: n }))}
               />
               <Stepper
-                label="Orta"
-                hint={`${TOKEN_COSTS.orta} / sual`}
+                label="Orta quiz"
+                hint={`${TOKEN_COSTS.orta} / quiz · ${perPaper} sual`}
                 value={mix.orta}
                 onChange={(n) => setMix((prev) => ({ ...prev, orta: n }))}
               />
               <Stepper
-                label="Çətin"
-                hint={`${TOKEN_COSTS.çətin} / sual`}
+                label="Çətin quiz"
+                hint={`${TOKEN_COSTS.çətin} / quiz · ${perPaper} sual`}
                 value={mix.çətin}
                 onChange={(n) => setMix((prev) => ({ ...prev, çətin: n }))}
               />
@@ -546,7 +557,9 @@ export default function TeacherStorage() {
             ) : null}
             <div className="mt-4 flex items-center gap-3">
               <div className="min-w-0 flex-1 rounded-[22px] bg-[#12141a] px-4 py-3">
-                <p className="text-xs font-semibold text-white/45">Bu göndəriş · {questionCount} sual</p>
+                <p className="text-xs font-semibold text-white/45">
+                  Bu göndəriş · {quizCount} quiz · {quizCount * perPaper} sual
+                </p>
                 <p className={`mt-1 inline-flex items-center gap-1 text-3xl font-black tabular-nums ${overBudget ? 'text-[#fb7185]' : 'text-[#f0b429]'}`}>
                   {requestCost} <Club size={18} fill="currentColor" />
                 </p>

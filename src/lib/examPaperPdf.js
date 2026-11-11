@@ -1,5 +1,9 @@
-import { parseQuestionImage, stripQuestionImage } from './questionImage';
+import { parseQuestionImage } from './questionImage';
+import { latexToPlain } from './examPaperText';
 
+export { latexToPlain } from './examPaperText';
+
+/** Helvetica PDF strings: Latin-1 only; escape ( ) \ for Tj. */
 function pdfSafe(text) {
   return String(text || '')
     .replace(/ə/g, 'e').replace(/Ə/g, 'E')
@@ -9,9 +13,21 @@ function pdfSafe(text) {
     .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
     .replace(/ç/g, 'c').replace(/Ç/g, 'C')
     .replace(/ş/g, 's').replace(/Ş/g, 'S')
-    .replace(/\$/g, '')
-    .replace(/[^\x20-\x7E]/g, ' ')
-    .replace(/[()\\]/g, ' ')
+    .replace(/√/g, 'kok')
+    .replace(/°/g, ' deg')
+    .replace(/∠/g, 'aci ')
+    .replace(/π/g, 'pi')
+    .replace(/×/g, 'x')
+    .replace(/·/g, '*')
+    .replace(/≤/g, '<=')
+    .replace(/≥/g, '>=')
+    .replace(/≠/g, '!=')
+    .replace(/△/g, 'ucbucaq')
+    .replace(/∪/g, 'U')
+    .replace(/∩/g, 'n')
+    .replace(/\\/g, '')
+    .replace(/\(/g, '[')
+    .replace(/\)/g, ']')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -31,11 +47,31 @@ function wrapLines(text, width = 78) {
   return lines;
 }
 
+function optionBody(opt) {
+  return String(opt?.optionText || opt?.OptionText || opt?.text || opt?.Text || '')
+    .replace(/^[A-F][\)\.\-:]\s*/i, '')
+    .trim();
+}
+
+function isStubOption(opt, index) {
+  const body = optionBody(opt);
+  const letter = String.fromCharCode(65 + index);
+  if (!body) return true;
+  if (/^aç[iı]q$/i.test(body) || /^open$/i.test(body)) return true;
+  if (body.toUpperCase() === letter) return true;
+  if (/^[A-F]$/i.test(body)) return true;
+  return false;
+}
+
 function optionLines(q) {
-  return (q?.options || []).map((o, oi) => {
+  const opts = q?.options || q?.Options || [];
+  const real = opts
+    .map((o, oi) => ({ o, oi }))
+    .filter(({ o, oi }) => !isStubOption(o, oi));
+  if (!real.length) return [];
+  return real.map(({ o, oi }) => {
     const letter = String.fromCharCode(65 + oi);
-    const text = pdfSafe(String(o.optionText || o.text || '').replace(/^[A-E][\)\.\-:]\s*/i, ''));
-    return text ? `   ${letter}) ${text}` : `   ${letter})`;
+    return `   ${letter}) ${pdfSafe(latexToPlain(optionBody(o)))}`;
   });
 }
 
@@ -49,8 +85,9 @@ async function loadJpeg(url) {
       img.onerror = reject;
       img.src = url;
     });
-    const maxW = 440;
-    const scale = Math.min(1, maxW / Math.max(1, img.width));
+    const maxW = 420;
+    const maxH = 220;
+    const scale = Math.min(1, maxW / Math.max(1, img.width), maxH / Math.max(1, img.height));
     const w = Math.max(1, Math.round(img.width * scale));
     const h = Math.max(1, Math.round(img.height * scale));
     const canvas = document.createElement('canvas');
@@ -60,7 +97,7 @@ async function loadJpeg(url) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
-    const b64 = canvas.toDataURL('image/jpeg', 0.84).split(',')[1] || '';
+    const b64 = canvas.toDataURL('image/jpeg', 0.88).split(',')[1] || '';
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
@@ -86,43 +123,48 @@ function join(parts) {
 }
 
 /**
- * Exam PDF with question text + embedded JPEG figures when available.
+ * Exam PDF: plain math text + real options + embedded figures (no [sekil] stub).
  */
 export async function buildExamPaperPdf(questions = [], title = 'Sinag') {
-  const heading = pdfSafe(title).slice(0, 80) || 'ExamPulse';
-  /** @type {{lines:string[], image:null|{bytes:Uint8Array,width:number,height:number}}[]} */
+  const heading = pdfSafe(latexToPlain(title)).slice(0, 80) || 'ExamPulse';
   const blocks = [];
 
   for (let i = 0; i < (questions || []).length; i += 1) {
     const q = questions[i];
-    const stem = pdfSafe(stripQuestionImage(q?.text || ''));
-    const lines = [`${i + 1}. ${stem}`, ...optionLines(q), ''];
+    const stem = pdfSafe(latexToPlain(q?.text || q?.Text || ''));
+    const opts = optionLines(q);
     const image = await loadJpeg(parseQuestionImage(q));
-    blocks.push({ lines, image });
+    const lines = [`${i + 1}. ${stem}`];
+    if (image) {
+      const imgLines = Math.max(4, Math.ceil((image.height + 12) / 15));
+      for (let s = 0; s < imgLines; s += 1) lines.push('');
+    }
+    lines.push(...opts, '');
+    blocks.push({ lines, image, imageAfter: 1 });
   }
-  if (!blocks.length) blocks.push({ lines: ['Suallar yoxdur.'], image: null });
+  if (!blocks.length) blocks.push({ lines: ['Suallar yoxdur.'], image: null, imageAfter: 0 });
 
-  // Pack into pages (approx lines; image ~10 lines)
   const pages = [];
   let cur = { lines: ['ExamPulse', heading, ''], images: [] };
   let used = 3;
   blocks.forEach((block) => {
-    const cost = block.lines.reduce((n, row) => n + wrapLines(row, 78).length, 0) + (block.image ? 12 : 0);
-    if (used + cost > 42 && used > 3) {
+    const cost = block.lines.reduce((n, row) => n + Math.max(1, wrapLines(row, 78).length), 0);
+    if (used + cost > 48 && used > 3) {
       pages.push(cur);
       cur = { lines: [], images: [] };
       used = 0;
     }
+    const startLine = cur.lines.length;
     block.lines.forEach((row) => {
-      wrapLines(row, 78).forEach((ln) => cur.lines.push(ln));
+      const wrapped = wrapLines(row, 78);
+      if (!wrapped.length) cur.lines.push('');
+      else wrapped.forEach((ln) => cur.lines.push(ln));
     });
     if (block.image) {
       cur.images.push({
         ...block.image,
-        anchor: cur.lines.length,
+        anchor: startLine + (block.imageAfter || 1),
       });
-      cur.lines.push('[sekil]');
-      cur.lines.push('');
     }
     used += cost;
   });
@@ -154,13 +196,13 @@ export async function buildExamPaperPdf(questions = [], title = 'Sinag') {
       ops.push(idx === 0 ? `(${safe}) Tj` : `0 -15 Td (${safe}) Tj`);
     });
     ops.push('ET');
-    imgIds.forEach(({ id, img }, n) => {
+    imgIds.forEach(({ img }, n) => {
       const maxW = 300;
-      const maxH = 150;
+      const maxH = 180;
       const scale = Math.min(maxW / img.width, maxH / img.height, 1);
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
-      const top = Math.max(70, 790 - (img.anchor || 8) * 15);
+      const top = Math.max(60, 800 - (img.anchor || 1) * 15 - 4);
       ops.push(`q ${w} 0 0 ${h} 48 ${top - h} cm /Im${n} Do Q`);
     });
     const stream = ops.join('\n');
@@ -175,13 +217,9 @@ export async function buildExamPaperPdf(questions = [], title = 'Sinag') {
     pageRefs.push(pageId);
   });
 
-  const pagesId = push({
-    type: 'pages',
-    kids: pageRefs,
-  });
+  const pagesId = push({ type: 'pages', kids: pageRefs });
   const catalogId = push({ type: 'catalog', pagesId });
 
-  // Serialize
   const parts = [enc('%PDF-1.4\n')];
   const offsets = [0];
   let size = parts[0].length;
@@ -202,13 +240,11 @@ export async function buildExamPaperPdf(questions = [], title = 'Sinag') {
     }
     if (obj.type === 'stream') {
       const body = obj.body;
-      const text = `${num} 0 obj\n<< /Length ${enc(body).length} >>\nstream\n${body}\nendstream\nendobj\n`;
-      writeObj(num, enc(text));
+      writeObj(num, enc(`${num} 0 obj\n<< /Length ${enc(body).length} >>\nstream\n${body}\nendstream\nendobj\n`));
       return;
     }
     if (obj.type === 'page') {
-      const text = `${num} 0 obj\n<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Contents ${obj.contentId} 0 R /Resources << /Font << /F1 ${obj.fontId} 0 R >> ${obj.xobj ? `/XObject << ${obj.xobj} >>` : ''} >> >>\nendobj\n`;
-      writeObj(num, enc(text));
+      writeObj(num, enc(`${num} 0 obj\n<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Contents ${obj.contentId} 0 R /Resources << /Font << /F1 ${obj.fontId} 0 R >> ${obj.xobj ? `/XObject << ${obj.xobj} >>` : ''} >> >>\nendobj\n`));
       return;
     }
     if (obj.type === 'pages') {

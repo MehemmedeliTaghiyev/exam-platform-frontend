@@ -82,7 +82,7 @@ export default function TokenPaymentCard({ user }) {
           <ul className="space-y-2 text-sm font-semibold text-[var(--text)]">
             {[
               `Hər həftə ${WEEKLY_TOKENS} qəpik hesabınıza düşür`,
-              `Asan ${TOKEN_COSTS.asan} · Orta ${TOKEN_COSTS.orta} · Çətin ${TOKEN_COSTS.çətin} qəpik`,
+              `Asan ${TOKEN_COSTS.asan} · Orta ${TOKEN_COSTS.orta} · Çətin ${TOKEN_COSTS.çətin} / quiz`,
               'Qəpiklə anbardan imtahan götürürsünüz. Paket ödənişi tezliklə',
               `Watermark istəsəniz əlavə ${formatManat(WATERMARK_PRICE)}`,
             ].map((line) => (

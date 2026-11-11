@@ -204,8 +204,8 @@ export async function requestStorageExam(user, mix, extras = {}) {
   const asan = Math.max(0, Math.round(Number(mix?.asan) || 0));
   const orta = Math.max(0, Math.round(Number(mix?.orta) || 0));
   const hard = Math.max(0, Math.round(Number(mix?.çətin) || 0));
-  const totalQuestions = asan + orta + hard;
-  if (!totalQuestions) {
+  const quizCount = asan + orta + hard;
+  if (!quizCount) {
     const err = new Error('SUAL_YOX');
     err.code = 'SUAL_YOX';
     throw err;
@@ -227,7 +227,9 @@ export async function requestStorageExam(user, mix, extras = {}) {
   const kind = String(extras.kind || 'Sınaq');
   const week = isoWeekKey();
 
-  const { fulfillTeacherBankOrder } = await import('./teacherBankOrder');
+  const { fulfillTeacherBankOrder, questionsPerPaper } = await import('./teacherBankOrder');
+  const perPaper = questionsPerPaper(kind);
+  // Anbar steppers = quiz kağızı sayı (hər biri 25 və ya Blokda 30).
   const result = await fulfillTeacherBankOrder(user, {
     mix: { asan, orta, çətin: hard },
     language,
@@ -235,18 +237,28 @@ export async function requestStorageExam(user, mix, extras = {}) {
     grade,
     kind,
     topics: extras.topics,
+    unit: 'papers',
+    asQuizCount: true,
   });
 
-  spendTokens(user, cost, 'Quiz Anbara düşdü', { asan, orta, çətin: hard, examId: result.exam?.id });
-
-  const row = {
-    id: result.pack?.id || `${week}-${Date.now()}`,
-    week,
-    at: new Date().toISOString(),
+  const examIds = (result.results || [result]).map((r) => r.exam?.id).filter(Boolean);
+  spendTokens(user, cost, `${quizCount} quiz Anbara düşdü`, {
     asan,
     orta,
     çətin: hard,
-    cost,
+    examId: result.exam?.id,
+    examIds,
+    questionsPerPaper: perPaper,
+  });
+
+  const rows = (result.results || [result]).map((one, index) => ({
+    id: one.pack?.id || `${week}-${Date.now()}-${index}`,
+    week,
+    at: new Date().toISOString(),
+    asan: index === 0 ? asan : 0,
+    orta: index === 0 ? orta : 0,
+    çətin: index === 0 ? hard : 0,
+    cost: index === 0 ? cost : 0,
     language,
     subject,
     grade,
@@ -254,20 +266,22 @@ export async function requestStorageExam(user, mix, extras = {}) {
     topics: extras.topics || '',
     seen: false,
     status: 'ready',
-    examId: result.exam?.id,
-    title: result.pack?.title || `Quiz · ${asan}/${orta}/${hard}`,
+    examId: one.exam?.id,
+    title: one.pack?.title || `Quiz · ${asan}/${orta}/${hard}`,
     paper: {
-      exam_id: result.exam?.id,
-      title: result.pack?.title,
-      questions: result.questions,
-      latexSource: result.latexSource,
+      exam_id: one.exam?.id,
+      title: one.pack?.title,
+      questions: one.questions,
+      latexSource: one.latexSource,
     },
-    pack: result.pack,
-    pdfBlob: result.pdfBlob || null,
-  };
+    pack: one.pack,
+    pdfBlob: one.pdfBlob || null,
+    paperCount: quizCount,
+    questionsPerPaper: perPaper,
+  }));
 
   const previous = readJson(requestsKey(user.id), []);
-  writeJson(requestsKey(user.id), [row, ...(Array.isArray(previous) ? previous : [])]);
+  writeJson(requestsKey(user.id), [...rows, ...(Array.isArray(previous) ? previous : [])]);
   emitTokens();
   try {
     const { notifyTeacherQuizSuccess } = await import('./teacherQuizReminders');
@@ -275,7 +289,20 @@ export async function requestStorageExam(user, mix, extras = {}) {
   } catch {
     /* bildiriş olmasa da quiz qalır */
   }
-  return row;
+  // UI: ilk PDF + bütün nəticələr
+  return {
+    ...rows[0],
+    results: rows,
+    pdfBlobs: rows.map((r) => r.pdfBlob).filter(Boolean),
+    paperCount: quizCount,
+    questionsPerPaper: perPaper,
+    pack: {
+      ...rows[0].pack,
+      difficultyFallback: Boolean(result.difficultyFallback),
+      paperCount: quizCount,
+      questionsPerPaper: perPaper,
+    },
+  };
 }
 
 export function useTeacherTokens(user) {

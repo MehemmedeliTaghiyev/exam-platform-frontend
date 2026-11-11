@@ -20,7 +20,7 @@ export default function TokenBanner({ user }) {
             {account.unlimited ? 'Limitsiz' : `${account.balance} qəpik`}
           </p>
           <p className="mt-1 text-sm font-semibold text-[var(--muted)]">
-            Asan {TOKEN_COSTS.asan} · Orta {TOKEN_COSTS.orta} · Çətin {TOKEN_COSTS.çətin}.
+            Asan {TOKEN_COSTS.asan} · Orta {TOKEN_COSTS.orta} · Çətin {TOKEN_COSTS.çətin} / quiz.
             Hər həftə {WEEKLY_TOKENS} qəpik düşür. Quiz götürəndə silinir.
           </p>
           <p className="mt-1 text-xs font-semibold text-[var(--muted)]">

@@ -62,6 +62,27 @@ export function parseQuestionImage(q) {
   return text.slice(IMG_PREFIX.length, end).replace(/\s/g, '');
 }
 
+/**
+ * True only when the payload itself embeds a figure.
+ * Do NOT use FIGURE_QNUMS CDN guess here — that strips almost every bank item from PDF.
+ */
+export function questionHasEmbeddedFigure(q) {
+  if (!q) return false;
+  const direct = q?.figureUrl || q?.FigureUrl || q?.imageUrl || q?.ImageUrl || q?.figure || q?.figure_path;
+  if (direct && String(direct).trim()) return true;
+  const text = String(q?.text || q?.Text || q?.questionText || '');
+  if (/\[şəkil\]|\[sekil\]|\[şekil\]|\[figure\]/i.test(text)) return true;
+  if (/<img\b/i.test(text)) return true;
+  if (/!\[[^\]]*\]\([^)]+\)/.test(text)) return true;
+  if (text.startsWith('__IMG__')) return true;
+  return false;
+}
+
+/** @deprecated use questionHasEmbeddedFigure for paper filtering */
+export function questionHasFigure(q) {
+  return questionHasEmbeddedFigure(q);
+}
+
 export function stripQuestionImage(text) {
   let raw = String(text || '');
   if (raw.startsWith(IMG_PREFIX)) {

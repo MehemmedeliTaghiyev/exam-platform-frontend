@@ -1196,7 +1196,9 @@ export async function copyFromBank(examId, quota = {}) {
     audience: quota.audience || undefined,
     kind: quota.kind || undefined,
     grade: quota.grade != null && quota.grade !== '' ? String(quota.grade) : undefined,
+    gradeStrict: quota.gradeStrict === true ? true : quota.gradeStrict === false ? false : undefined,
     difficultyLevel: quota.difficultyLevel || quota.DifficultyLevel || undefined,
+    difficultyStrict: quota.difficultyStrict === true ? true : quota.difficultyStrict === false ? false : undefined,
     topics: topics.length ? topics : undefined,
     subject: quota.subject || undefined,
     language: quota.language || undefined,
@@ -1205,13 +1207,23 @@ export async function copyFromBank(examId, quota = {}) {
     openCodedCount: quota.openCodedCount,
     writtenCount: quota.writtenCount,
     situationCount: quota.situationCount,
+    excludeFigures: quota.excludeFigures === true ? true : undefined,
   };
   Object.keys(body).forEach((key) => {
     if (body[key] === undefined || body[key] === null || body[key] === '') delete body[key];
   });
   try {
     const res = await API.post(`/Exams/${examId}/from-bank`, body, FAST);
-    return unwrapItem(res.data) || res.data || {};
+    const raw = unwrapItem(res.data) || res.data || {};
+    return {
+      ...raw,
+      added: Number(raw.added ?? raw.Added ?? 0) || 0,
+      copiedQnums: raw.copiedQnums || raw.CopiedQnums || [],
+      warnings: raw.warnings || raw.Warnings || [],
+      mcq: Number(raw.mcq ?? raw.Mcq ?? 0) || 0,
+      written: Number(raw.written ?? raw.Written ?? 0) || 0,
+      situation: Number(raw.situation ?? raw.Situation ?? 0) || 0,
+    };
   } catch (err) {
     const status = err?.response?.status;
     const detail = errorMessage(err, '');

@@ -3,7 +3,7 @@
     { "source": "/drive-pdf", "destination": "/api/drive-pdf" },
     { "source": "/drive-extract", "destination": "/api/drive-extract" },
     { "source": "/drive-folder", "destination": "/api/drive-folder" },
-    { "source": "/pipeline/:path*", "destination": "/api/pipeline?path=:path*" },
+    { "source": "/pipeline/:path+", "destination": "/api/pipeline?path=:path" },
     { "source": "/pipeline", "destination": "/api/pipeline" },
     { "source": "/urgent", "destination": "/api/urgent" },
     { "source": "/monthly-quiz", "destination": "/api/monthly-quiz" },

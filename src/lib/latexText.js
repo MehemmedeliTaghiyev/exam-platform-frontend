@@ -1,4 +1,6 @@
 import katex from 'katex';
+import { latexToPlain } from './examPaperText.js';
+import { needsMathRender, universalMathParser } from './universalMath.js';
 
 function escapeHtml(value) {
   return String(value || '')
@@ -18,9 +20,7 @@ function unwrapDocument(source) {
 }
 
 export function looksLikeLatex(value) {
-  const text = String(value || '');
-  if (!text) return false;
-  return /\$|\\\[|\\\(|\\begin\{|\\frac|\\sqrt|\\sum|\\int|\\cdot|\\times|\\le|\\ge|\\neq|\\pi|\\alpha|\\beta|\\gamma|\\theta|\\lambda|\\overline|\\mathrm|\\text\{|\\left|\\right|\\dfrac|\\tfrac|\\vec|\\hat|\\overline/.test(text);
+  return needsMathRender(value) || /\\[a-zA-Z]{2,}/.test(String(value || ''));
 }
 
 function renderMath(math, display) {
@@ -54,6 +54,16 @@ function nextDelim(text, from) {
   return best;
 }
 
+function restAsHtml(chunk) {
+  const piece = String(chunk || '');
+  if (!piece) return '';
+  // Qalıq LaTeX əmri (delimiter olmadan)
+  if (/\\[A-Za-z]{2,}/.test(piece) && !piece.includes('$')) {
+    return renderMath(piece.replace(/\n+/g, ' '), /\\begin\{|\\\\/.test(piece));
+  }
+  return escapeHtml(piece).replace(/\n/g, '<br />');
+}
+
 function splitAndRender(source) {
   const text = unwrapDocument(source);
   if (!text) return '';
@@ -78,18 +88,35 @@ function splitAndRender(source) {
   return html;
 }
 
-function restAsHtml(chunk) {
-  const piece = String(chunk || '');
-  if (!piece) return '';
-  if (looksLikeLatex(piece) && /\\[a-zA-Z]/.test(piece) && !piece.includes('$')) {
-    return renderMath(piece.replace(/\n+/g, ' '), /\\begin\{|\\\\/.test(piece));
+/**
+ * Sual/option mətnini ekranda KaTeX ilə göstər.
+ * Plain (∠, √, π), şablon (kok, aci) və klassik LaTeX dəstəklənir.
+ */
+export function renderLatexHtml(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  if (!needsMathRender(raw) && !/\\[a-zA-Z]{2,}/.test(raw)) {
+    return escapeHtml(raw).replace(/\n/g, '<br />');
   }
-  return escapeHtml(piece).replace(/\n/g, '<br />');
+
+  try {
+    const prepared = universalMathParser(raw);
+    const html = splitAndRender(prepared);
+    if (!html) return escapeHtml(raw).replace(/\n/g, '<br />');
+    // KaTeX uğursuz qalıq əmr buraxıbsa — oxunaqlı plain
+    if (/\\[A-Za-z]{2,}/.test(html.replace(/<[^>]+>/g, ''))) {
+      return escapeHtml(latexToPlain(raw)).replace(/\n/g, '<br />');
+    }
+    return html;
+  } catch {
+    return escapeHtml(latexToPlain(raw)).replace(/\n/g, '<br />');
+  }
 }
 
-export function renderLatexHtml(value) {
-  const text = String(value || '').trim();
-  if (!text) return '';
-  if (!looksLikeLatex(text)) return escapeHtml(text).replace(/\n/g, '<br />');
-  return splitAndRender(text);
-}
+export {
+  fixCorruptedEncoding,
+  universalMathParser,
+  wrapMathExpressions,
+  needsMathRender,
+} from './universalMath.js';

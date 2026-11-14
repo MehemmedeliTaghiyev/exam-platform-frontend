@@ -1,12 +1,13 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import { saveAs } from 'file-saver';
+import { latexToPlain } from './examPaperText';
 
 export async function exportExamToDocx(exam, questions) {
   const children = [
     new Paragraph({
       alignment: AlignmentType.CENTER,
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: exam?.title || 'İmtahan', bold: true })],
+      children: [new TextRun({ text: latexToPlain(exam?.title || 'İmtahan'), bold: true })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -34,7 +35,7 @@ export async function exportExamToDocx(exam, questions) {
         spacing: { before: 200, after: 80 },
         children: [
           new TextRun({ text: `${idx + 1}. `, bold: true }),
-          new TextRun({ text: q.text || '' }),
+          new TextRun({ text: latexToPlain(q.text || '') }),
         ],
       }),
     );
@@ -43,7 +44,9 @@ export async function exportExamToDocx(exam, questions) {
       children.push(
         new Paragraph({
           indent: { left: 360 },
-          children: [new TextRun({ text: `${letter}) ${opt.optionText || opt.text || ''}` })],
+          children: [new TextRun({
+            text: `${letter}) ${latexToPlain(opt.optionText || opt.text || '')}`,
+          })],
         }),
       );
     });

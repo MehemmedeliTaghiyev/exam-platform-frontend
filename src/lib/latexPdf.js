@@ -1,6 +1,7 @@
 import { isNativeApp } from './runtime';
+import { latexToPlain } from './examPaperText';
 
-function pdfSafe(text) {
+function pdfLatin(text) {
   return String(text || '')
     .replace(/ə/g, 'e').replace(/Ə/g, 'E')
     .replace(/ı/g, 'i').replace(/İ/g, 'I')
@@ -9,17 +10,32 @@ function pdfSafe(text) {
     .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
     .replace(/ç/g, 'c').replace(/Ç/g, 'C')
     .replace(/ş/g, 's').replace(/Ş/g, 'S')
+    .replace(/°/g, ' deg')
     .replace(/[^\x20-\x7E]/g, ' ')
-    .replace(/[()\\]/g, ' ');
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function pdfEscape(text) {
+  return String(text || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+}
+
+function pdfSafe(text) {
+  return pdfEscape(pdfLatin(text));
 }
 
 function latexPlain(source) {
-  return String(source || '')
-    .replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, ' [TikZ sxem] ')
-    .replace(/\\[a-zA-Z]+\*?(\[[^\]]*\])?(\{[^}]*\})?/g, ' ')
-    .replace(/[{}%]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const body = String(source || '')
+    .replace(/\\documentclass[\s\S]*?\\begin\{document\}/i, '')
+    .replace(/\\end\{document\}/i, '')
+    .replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/gi, ' ')
+    .replace(/\\(?:title|author|date|maketitle|tableofcontents)(\{[^}]*\})?/gi, ' ')
+    .replace(/\\section\*?\{([^}]*)\}/g, '\n$1\n')
+    .replace(/\\subsection\*?\{([^}]*)\}/g, '\n$1\n');
+  return latexToPlain(body);
 }
 
 function wrapLines(text, width = 78) {
@@ -129,9 +145,12 @@ export async function compileLatexPdf(source, { title = 'ExamPulse', filename = 
         body: JSON.stringify({ source, title, filename }),
       });
       if (res.ok) {
-        const blob = await res.blob();
         const fallback = res.headers.get('X-Latex-Fallback') === '1';
-        return { blob, fallback };
+        // TeX stub / fail → plain text PDF (LaTeX əmrləri mətnə çevrilir).
+        if (fallback) {
+          return { blob: latexToPdfBlob(source, title), fallback: true, local: true };
+        }
+        return { blob: await res.blob(), fallback: false };
       }
     } catch {
       /* telefon və ya server yoxdursa yerli çevirmə */

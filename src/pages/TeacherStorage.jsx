@@ -24,11 +24,18 @@ import {
   requestStorageExam,
   teacherTokenRequests,
   TOKEN_COSTS,
-  tokenCostForMix,
+  KIND_TOKEN_COSTS,
+  tokenCostForStorageOrder,
   useTeacherTokens,
   WEEKLY_TOKENS,
 } from '../lib/tokens';
-import { calendarTopicSuggestions, questionsPerPaper, teacherOrderedPacks } from '../lib/teacherBankOrder';
+import {
+  calendarTopicSuggestions,
+  isStandardKind,
+  questionsPerPaper,
+  SINAQ_LEVEL_HINTS,
+  teacherOrderedPacks,
+} from '../lib/teacherBankOrder';
 
 const prefKey = (id) => `exampulse_storage_pref_${id || 'me'}`;
 const sharedKey = (id) => `exampulse_storage_shared_${id || 'me'}`;
@@ -137,6 +144,7 @@ export default function TeacherStorage() {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [mix, setMix] = useState({ asan: 1, orta: 1, çətin: 0 });
+  const [standardCount, setStandardCount] = useState(1);
   const [topics, setTopics] = useState('Üçbucaqlar');
   const language = 'az'; // hələlik yalnız Azərbaycan
   const [orderedPacks, setOrderedPacks] = useState([]);
@@ -149,6 +157,7 @@ export default function TeacherStorage() {
   const tokens = useTeacherTokens(user);
   const unlocked = canUseStorageSelection(user);
   const allowedKinds = useMemo(() => kindsForGrade(prefs.grade), [prefs.grade]);
+  const standardKind = isStandardKind(prefs.kind);
 
   const packArrivedAt = (pack) => {
     const raw = pack?.at || pack?.createdAt || pack?.CreatedAt || pack?.arrivedAt;
@@ -206,7 +215,7 @@ export default function TeacherStorage() {
         return tb - ta;
       });
   }, [prefs, subject, catalog.packs, catalog.connected, orderedPacks, arrivedFilter]);
-  const requestCost = tokenCostForMix(mix);
+  const requestCost = tokenCostForStorageOrder(prefs.kind, mix, standardCount);
   const availableJetons = tokens.unlimited
     ? (user?.practice ? WEEKLY_TOKENS : Number.POSITIVE_INFINITY)
     : Number(tokens.balance || 0);
@@ -298,7 +307,13 @@ export default function TeacherStorage() {
   const pdfForPack = async (pack) => {
     if (pack.examId) {
       const qs = await fetchQuestions(pack.examId).catch(() => []);
-      if (qs?.length) return buildExamPaperPdf(qs, pack.title || 'Sınaq');
+      if (qs?.length) {
+        return buildExamPaperPdf(qs, pack.title || 'Sınaq', {
+          preferFigures: true,
+          includeAnswerKey: true,
+          meta: [pack.subject, pack.grade, pack.kind].filter(Boolean).join(' · ').slice(0, 60),
+        });
+      }
     }
     if (pack.latexSource) {
       const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
@@ -310,15 +325,16 @@ export default function TeacherStorage() {
 
   const openPdf = async (pack) => {
     if (!unlocked) return;
-    const url = driveViewUrl(pack.driveFileId || pack.pdfUrl);
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return;
-    }
+    // Həmişə lokal rebuild — Drive köhnə PDF saxlayır, parser düzəlişləri görünmür.
     try {
       const blob = await pdfForPack(pack);
       await saveAndOpenPdf(blob, `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`);
     } catch (err) {
+      const url = driveViewUrl(pack.driveFileId || pack.pdfUrl);
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
       setError(errorMessage(err, 'PDF açıla bilmədi.'));
     }
   };
@@ -329,13 +345,20 @@ export default function TeacherStorage() {
     setError('');
     try {
       const filename = `${String(pack.title || 'material').replace(/[^\w.\-əöüğçşıİƏÖÜĞÇŞ ]+/gi, '') || 'material'}.pdf`;
+      // Əvvəl lokal rebuild (təzə latexToPlain); Drive yalnız rebuild alınmasa.
+      try {
+        const blob = await pdfForPack(pack);
+        await saveAndOpenPdf(blob, filename);
+        return;
+      } catch {
+        /* fall through to Drive */
+      }
       const driveUrl = driveDownloadUrl(pack.driveFileId || pack.pdfUrl);
       if (driveUrl && (pack.driveFileId || /^https?:/i.test(String(pack.pdfUrl || '')))) {
         window.open(driveUrl, '_blank', 'noopener,noreferrer');
         return;
       }
-      const blob = await pdfForPack(pack);
-      await saveAndOpenPdf(blob, filename);
+      setError('PDF yüklənmədi.');
     } catch (err) {
       setError(errorMessage(err, 'PDF yüklənmədi.'));
     } finally {
@@ -360,6 +383,7 @@ export default function TeacherStorage() {
         grade: prefs.grade,
         kind: prefs.kind,
         topics,
+        standardCount,
       });
       setOrderedPacks(teacherOrderedPacks(user?.id));
       try {
@@ -368,7 +392,13 @@ export default function TeacherStorage() {
           const paper = papers[i];
           const questions = paper?.paper?.questions || [];
           const blob = paper?.pdfBlob
-            || (questions.length ? await buildExamPaperPdf(questions, paper.title || 'Quiz') : null)
+            || (questions.length
+              ? await buildExamPaperPdf(questions, paper.title || 'Quiz', {
+                preferFigures: true,
+                includeAnswerKey: true,
+                meta: [paper.subject, paper.grade, paper.kind].filter(Boolean).join(' · ').slice(0, 60),
+              })
+              : null)
             || (await compileLatexPdf(paper?.paper?.latexSource || '', { title: paper.title || 'Quiz' })).blob;
           if (i === 0) {
             await saveAndOpenPdf(blob, `${String(paper.title || 'quiz').slice(0, 40)}.pdf`);
@@ -390,7 +420,9 @@ export default function TeacherStorage() {
         setError(`Həftəlik ${WEEKLY_TOKENS} qəpik bitib. Bu tələb ${requestCost} qəpik istəyir.`);
         navigate('/teacher/cabinet#odenis');
       } else if (err?.code === 'SUAL_YOX') {
-        setError('Quiz tələb etmək üçün asan, orta və ya çətin quiz sayını yazın.');
+        setError(standardKind
+          ? 'Ən azı 1 standart quiz seçin.'
+          : 'Quiz tələb etmək üçün asan, orta və ya çətin quiz sayını yazın.');
       } else if (err?.code === 'MOVZU_YOX') {
         setError('Adi sınaq üçün ən azı bir mövzu yazın (məs. Üçbucaqlar).');
       } else if (err?.code === 'BANK_EMPTY' || err?.code === 'BANK_BAD_REQUEST' || err?.code === 'BANK_SHORT') {
@@ -403,15 +435,19 @@ export default function TeacherStorage() {
     }
   };
 
-  const quizCount = (Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0);
+  const quizCount = standardKind
+    ? Math.max(1, Number(standardCount) || 1)
+    : (Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0);
   const perPaper = questionsPerPaper(prefs.kind);
   const notes = requests
     .filter((row) => packInArrivedFilter({ at: row.at }))
     .map((row) => ({
       id: row.id,
-      title: row.asan != null && (row.asan + row.orta + row.çətin) > 0
-        ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin quiz`
-        : row.title,
+      title: row.standardCount > 0
+        ? `${row.kind || 'Standart'} · ${row.standardCount} quiz`
+        : row.asan != null && (row.asan + row.orta + row.çətin) > 0
+          ? `${row.kind && row.kind !== 'Quiz' ? row.kind : 'Quiz tələbi'} · ${row.asan} asan, ${row.orta} orta, ${row.çətin} çətin quiz`
+          : row.title,
       lang: String(row.language || 'az').toUpperCase(),
       waiting: row.status !== 'ready',
       cost: row.cost,
@@ -441,11 +477,13 @@ export default function TeacherStorage() {
         <section className={`rounded-[28px] p-4 min-[768px]:p-6 ${overBudget ? 'bg-[#4a1d24]' : 'bg-[#171a22]'} ring-1 ring-white/[0.06]`}>
           <p className="text-[17px] font-black">Quiz tələbi üçün jeton qiyməti</p>
           <p className="mt-1 text-sm font-semibold text-white/45">Hər quiz kağızı üçün</p>
-          <div className="mt-4 grid grid-cols-3 gap-2 min-[1100px]:max-w-xl">
+          <div className="mt-4 grid grid-cols-2 gap-2 min-[768px]:grid-cols-5 min-[1100px]:max-w-3xl">
             {[
-              [TOKEN_COSTS.asan, 'Asan'],
-              [TOKEN_COSTS.orta, 'Orta'],
-              [TOKEN_COSTS.çətin, 'Çətin'],
+              [TOKEN_COSTS.asan, 'Sınaq · Asan'],
+              [TOKEN_COSTS.orta, 'Sınaq · Orta'],
+              [TOKEN_COSTS.çətin, 'Sınaq · Çətin'],
+              [KIND_TOKEN_COSTS.buraxılış, 'Buraxılış'],
+              [KIND_TOKEN_COSTS.blok, 'Blok'],
             ].map(([n, label]) => (
               <div key={label} className="rounded-[20px] bg-[#12141a] py-4 text-center ring-1 ring-white/[0.04]">
                 <p className="inline-flex items-center gap-1 text-3xl font-black tabular-nums text-[#f0b429]">
@@ -475,7 +513,9 @@ export default function TeacherStorage() {
           <section className="rounded-[28px] bg-[#171a22] p-4 ring-1 ring-white/[0.06] min-[768px]:p-5">
             <h2 className="text-xl font-black">Quiz tələb et · PDF</h2>
             <p className="mt-1 text-sm font-semibold text-white/45">
-              Hər quiz = tam kağız: Sınaq/Buraxılış 25 sual, Blok 30. Asan/orta/çətin yalnız neçə quiz. Çatışmayan eyni çətinlik 9-dan.
+              {standardKind
+                ? `Buraxılış və Blok — sabit DİM standartı (çətinlik seçimi yoxdur). Hər kağız ${perPaper} sual.`
+                : `Adi sınaq: asan/orta/çətin səviyyə seçin. Hər kağız 25 sual — daxili bölgü cədvələ görə.`}
             </p>
             <div className="mt-4 grid gap-4 min-[768px]:grid-cols-3">
               <div>
@@ -513,26 +553,68 @@ export default function TeacherStorage() {
                 </div>
               </div>
             </div>
-            <div className="mt-3 divide-y divide-white/[0.06] min-[768px]:mt-4 min-[768px]:grid min-[768px]:grid-cols-3 min-[768px]:gap-3 min-[768px]:divide-y-0">
-              <Stepper
-                label="Asan quiz"
-                hint={`${TOKEN_COSTS.asan} / quiz · ${perPaper} sual`}
-                value={mix.asan}
-                onChange={(n) => setMix((prev) => ({ ...prev, asan: n }))}
-              />
-              <Stepper
-                label="Orta quiz"
-                hint={`${TOKEN_COSTS.orta} / quiz · ${perPaper} sual`}
-                value={mix.orta}
-                onChange={(n) => setMix((prev) => ({ ...prev, orta: n }))}
-              />
-              <Stepper
-                label="Çətin quiz"
-                hint={`${TOKEN_COSTS.çətin} / quiz · ${perPaper} sual`}
-                value={mix.çətin}
-                onChange={(n) => setMix((prev) => ({ ...prev, çətin: n }))}
-              />
-            </div>
+            {standardKind ? (
+              <div className="mt-3 min-[768px]:mt-4 min-[768px]:max-w-sm">
+                <Stepper
+                  label={`${prefs.kind} quiz`}
+                  hint={`${/blok/i.test(prefs.kind) ? KIND_TOKEN_COSTS.blok : KIND_TOKEN_COSTS.buraxılış} / quiz · ${perPaper} sual · standart bölgü`}
+                  value={standardCount}
+                  onChange={(n) => setStandardCount(Math.max(1, n))}
+                />
+                <p className="mt-2 text-xs font-semibold text-white/40">
+                  {/blok/i.test(prefs.kind)
+                    ? 'Blok: 8–10 asan · 13–15 orta · 6–7 çətin (cəm 30).'
+                    : 'Buraxılış: 8–9 asan · 11–12 orta · 4–5 çətin (cəm 25).'}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 divide-y divide-white/[0.06] min-[768px]:mt-4 min-[768px]:grid min-[768px]:grid-cols-3 min-[768px]:gap-3 min-[768px]:divide-y-0">
+                  <Stepper
+                    label="Asan sınaq"
+                    hint={`${TOKEN_COSTS.asan} / quiz · ${perPaper} sual`}
+                    value={mix.asan}
+                    onChange={(n) => setMix((prev) => ({ ...prev, asan: n }))}
+                  />
+                  <Stepper
+                    label="Orta sınaq"
+                    hint={`${TOKEN_COSTS.orta} / quiz · ${perPaper} sual`}
+                    value={mix.orta}
+                    onChange={(n) => setMix((prev) => ({ ...prev, orta: n }))}
+                  />
+                  <Stepper
+                    label="Çətin sınaq"
+                    hint={`${TOKEN_COSTS.çətin} / quiz · ${perPaper} sual`}
+                    value={mix.çətin}
+                    onChange={(n) => setMix((prev) => ({ ...prev, çətin: n }))}
+                  />
+                </div>
+                <div className="mt-4 overflow-x-auto rounded-[20px] bg-[#12141a] ring-1 ring-white/[0.06]">
+                  <table className="w-full min-w-[520px] text-left text-xs font-semibold text-white/70">
+                    <thead>
+                      <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-[0.12em] text-white/40">
+                        <th className="px-3 py-2.5 font-extrabold">Səviyyə</th>
+                        <th className="px-3 py-2.5 font-extrabold">Asan</th>
+                        <th className="px-3 py-2.5 font-extrabold">Orta</th>
+                        <th className="px-3 py-2.5 font-extrabold">Çətin</th>
+                        <th className="px-3 py-2.5 font-extrabold">Kimlər üçün</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {SINAQ_LEVEL_HINTS.map((row) => (
+                        <tr key={row.key} className="border-b border-white/[0.04] last:border-0">
+                          <td className="px-3 py-2.5 font-extrabold text-white">{row.title}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{row.asan}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{row.orta}</td>
+                          <td className="px-3 py-2.5 tabular-nums">{row.çətin}</td>
+                          <td className="px-3 py-2.5 text-white/55">{row.forWho}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
             {prefs.kind === 'Sınaq' ? (
               <div className="mt-4">
                 <label className="block text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/40">

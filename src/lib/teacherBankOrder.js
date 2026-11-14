@@ -18,6 +18,8 @@ import {
   paperCopyQuota,
   questionsPerPaper,
 } from './paperQuota';
+import { mixTotal, questionMixForPaper, isStandardKind } from './paperMix';
+import { latexToPlain } from './examPaperText';
 
 export {
   bankKindForExam,
@@ -25,6 +27,7 @@ export {
   paperCopyQuota,
   questionsPerPaper,
 } from './paperQuota';
+export { questionMixForPaper, SINAQ_LEVEL_HINTS, isStandardKind } from './paperMix';
 
 const LEVEL_MAP = {
   asan: 'Sadə',
@@ -51,6 +54,33 @@ function writePacks(userId, list) {
 
 export function teacherOrderedPacks(userId) {
   return readPacks(userId);
+}
+
+/** Son Anbar kağızlarından eyni mövzu üçün istifadə olunmuş Qnum-lar (təkrar olmasın). */
+export function recentPackQnums(userId, topics = [], { limitPacks = 12, limitQnums = 300 } = {}) {
+  const want = new Set(
+    (Array.isArray(topics) ? topics : parseTopicList(topics))
+      .map((t) => foldTopic(t))
+      .filter(Boolean),
+  );
+  const out = [];
+  const seen = new Set();
+  const packs = readPacks(userId).slice(0, limitPacks);
+  for (const pack of packs) {
+    const packTopics = (pack?.topics || []).map((t) => foldTopic(t));
+    const sameTopic = !want.size
+      || packTopics.some((t) => want.has(t))
+      || [...want].some((w) => packTopics.some((t) => t.includes(w) || w.includes(t)));
+    if (!sameTopic) continue;
+    (pack?.copiedQnums || []).forEach((q) => {
+      const key = String(q || '').trim();
+      if (!key || seen.has(key.toLowerCase())) return;
+      seen.add(key.toLowerCase());
+      out.push(key);
+    });
+    if (out.length >= limitQnums) break;
+  }
+  return out.slice(0, limitQnums);
 }
 
 export function parseTopicList(raw) {
@@ -124,12 +154,17 @@ function bankQuotaVariants(baseQuota) {
 async function copyFromBankOnce(examId, quota, count) {
   let last = { added: 0, warnings: [] };
   const want = typeof count === 'number' && count > 0 ? count : null;
+  const hasBands = (Number(quota.asanCount) || 0) + (Number(quota.ortaCount) || 0) + (Number(quota.cetinCount) || 0) > 0;
   for (const variant of bankQuotaVariants(quota)) {
     const body = {
       ...variant,
       excludeFigures: quota.excludeFigures === true,
       gradeStrict: quota.gradeStrict === true,
-      difficultyStrict: quota.difficultyStrict !== false,
+      difficultyStrict: hasBands ? false : quota.difficultyStrict !== false,
+      asanCount: quota.asanCount,
+      ortaCount: quota.ortaCount,
+      cetinCount: quota.cetinCount,
+      excludeQnums: quota.excludeQnums,
     };
     if (want != null && body.count == null && body.mcqCount == null && body.situationCount == null) {
       body.count = want;
@@ -139,16 +174,38 @@ async function copyFromBankOnce(examId, quota, count) {
     }
     try {
       const bank = await copyFromBank(examId, body);
-      if ((bank?.added || 0) > 0) return bank;
-      last = bank || last;
+      const added = Number(bank?.added || 0);
+      if (added > Number(last.added || 0)) last = bank || last;
+      // Əvvəl: added>0 olanda dərhal qayıdırdı (7/25). İndi tam kağız gözləyirik.
+      if (want != null && added >= want) return bank;
+      if (want == null && added > 0) return bank;
     } catch (err) {
       last = {
-        added: 0,
+        added: Number(last.added || 0),
+        copiedQnums: last.copiedQnums || [],
         warnings: [...(last.warnings || []), err?.message || 'Bank xətası'].filter(Boolean),
       };
     }
   }
   return last;
+}
+
+/** Uzun mövzu adını bank soft-match üçün hissələrə böl. */
+function topicSearchList(topics) {
+  const out = [];
+  const seen = new Set();
+  (topics || []).forEach((topic) => {
+    const full = String(topic || '').trim();
+    if (!full) return;
+    const parts = [full, ...full.split(/[.;·|/]+/).map((p) => p.trim()).filter((p) => p.length >= 4)];
+    parts.forEach((p) => {
+      const key = p.toLocaleLowerCase('az');
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(p);
+    });
+  });
+  return out;
 }
 
 /**
@@ -205,157 +262,117 @@ async function copyTeacherMixFromBank(examId, baseQuota, mix) {
 }
 
 /**
- * Tam kağız (25/30) mütləq. Bank böyükdür — filtrləri addım-addım açırıq:
- * 1) 11 üstün + eyni çətinlik + şəkilsiz
- * 2) eyni çətinlik, bütün siniflər, şəkilsiz
- * 3) eyni çətinlik + şəkilli də (FigureUrl boş olmayanlar)
- * 4) Blok strukturu işləməsə → sadə count:30
- * 5) son çarə: mövzu saxla, çətinlik yumşaq (əvvəl istənilən)
+ * Bir kağız: cədvəl üzrə asan/orta/çətin sual sayı (AsanCount/OrtaCount/CetinCount).
+ * Sinif soft (11→9). Çətin/qrafik və həndəsə mövzularında şəkilli suallar əvvəl açılır —
+ * əks halda fiqurlu pool boş qalıb Orta ilə doldurulurdu.
  */
-async function copyOnePaperFromBank(examId, baseMeta, difficultyLevel, kind) {
-  const needed = questionsPerPaper(kind);
+async function copyOnePaperFromBank(examId, baseMeta, kind, sınaqLevel) {
+  const qMix = questionMixForPaper(kind, sınaqLevel);
+  const needed = mixTotal(qMix) || questionsPerPaper(kind);
   const topics = baseMeta.topics;
+  const topicParts = topicSearchList(topics);
   const language = baseMeta.language || 'az';
   const grade = baseMeta.grade || undefined;
+  const excludeQnums = Array.isArray(baseMeta.excludeQnums) ? baseMeta.excludeQnums : [];
+  const bandLabel = isStandardKind(kind) ? 'standart' : (sınaqLevel || 'orta');
+  // Şəkilli S* bankdan çıxarılıb — from-bank yalnız şəkilsiz götürsün.
+  const preferFiguresFirst = false;
+  const figureOrder = [true];
 
-  const attempts = [
-    {
-      label: 'grade+diff+nofig',
-      grade,
-      excludeFigures: true,
-      difficultyStrict: true,
-      difficultyLevel,
-      fillAny: true,
-    },
-    {
-      label: 'allgrade+diff+nofig',
-      grade: undefined,
-      excludeFigures: true,
-      difficultyStrict: true,
-      difficultyLevel,
-      fillAny: true,
-    },
-    {
-      label: 'grade+diff+figok',
-      grade,
-      excludeFigures: false,
-      difficultyStrict: true,
-      difficultyLevel,
-      fillAny: true,
-    },
-    {
-      label: 'allgrade+diff+figok',
-      grade: undefined,
-      excludeFigures: false,
-      difficultyStrict: true,
-      difficultyLevel,
-      fillAny: true,
-    },
+  const topicAttempts = [
+    topics,
+    topicParts.length ? topicParts : undefined,
+    undefined, // mövzu filtri yox — kağızı 25/30-a çatdır
   ];
-
-  // Blok: əvvəl rəsmi 22+5+3, sonra fillAny 30.
-  if (isBlokKind(kind)) {
-    attempts.unshift({
-      label: 'blok-structure',
-      grade,
-      excludeFigures: true,
-      difficultyStrict: true,
-      difficultyLevel,
-      fillAny: false,
-    });
-  }
-
-  // Son çarə — eyni mövzu, çətinlik geniş (bankda mütləq dolsun).
-  attempts.push({
-    label: 'topic-anydiff',
-    grade: undefined,
-    excludeFigures: false,
-    difficultyStrict: false,
-    difficultyLevel: ['Çətin', 'Orta', 'Sadə'].includes(difficultyLevel)
-      ? `${difficultyLevel};Orta;Sadə;Çətin`
-      : difficultyLevel,
-    fillAny: true,
-  });
 
   let best = { added: 0, copiedQnums: [], warnings: [] };
   let fallback = false;
-  let usedLevel = difficultyLevel;
+  let allowFigures = preferFiguresFirst;
 
-  for (const step of attempts) {
-    // fillAny: kind göndərmə — əks halda Blok PaperQuotas count-u əzir (22+5+3).
-    const quota = step.fillAny
-      ? {
-        count: needed,
-        difficultyLevel: step.difficultyLevel,
-        topics,
-        language,
-        grade: step.grade,
-        excludeFigures: step.excludeFigures,
+  for (const topicSet of topicAttempts) {
+    for (const excludeFigures of figureOrder) {
+      for (const gradeOpt of [grade, undefined]) {
+        const useBands = Array.isArray(topicSet) && topicSet.length > 0;
+        const structured = isStandardKind(kind)
+          ? paperCopyQuota(kind, undefined, grade || gradeOpt || '11')
+          : null;
+        const body = {
+          topics: topicSet,
+          language,
+          grade: gradeOpt,
+          excludeFigures,
+          gradeStrict: false,
+          count: needed,
+          excludeQnums: excludeQnums.length ? excludeQnums : undefined,
+          ...(structured
+            ? {
+              kind: structured.kind,
+              audience: structured.audience,
+              mcqCount: structured.mcqCount,
+              openCodedCount: structured.openCodedCount,
+              writtenCount: structured.writtenCount,
+              situationCount: structured.situationCount,
+            }
+            : {}),
+          ...(useBands
+            ? { asanCount: qMix.asan, ortaCount: qMix.orta, cetinCount: qMix.çətin }
+            : {
+              difficultyStrict: false,
+              difficultyLevel: sınaqLevel === 'asan'
+                ? 'Sadə;Orta;Çətin'
+                : sınaqLevel === 'çətin'
+                  ? 'Çətin;Orta;Sadə'
+                  : 'Orta;Çətin;Sadə',
+            }),
+        };
+        const bank = await copyFromBankOnce(examId, body, needed);
+        const added = Number(bank?.added || 0);
+        if (added > Number(best.added || 0)) {
+          best = bank;
+          allowFigures = !excludeFigures;
+          if (topicSet !== topics || gradeOpt !== grade || excludeFigures === !preferFiguresFirst) {
+            fallback = true;
+          }
+        }
+        if (added >= needed) {
+          return {
+            bank,
+            difficultyUsed: topicSet ? bandLabel : `${bandLabel}+geniş`,
+            questionMix: qMix,
+            fallback: Boolean(fallback || !topicSet),
+            needed,
+            allowFigures: !excludeFigures,
+          };
+        }
       }
-      : {
-        ...paperCopyQuota(kind, difficultyLevel),
-        topics,
-        language,
-        grade: step.grade,
-        excludeFigures: step.excludeFigures,
-        difficultyLevel: step.difficultyLevel,
-      };
-
-    const body = {
-      ...quota,
-      gradeStrict: false,
-      difficultyStrict: step.difficultyStrict,
-      excludeFigures: step.excludeFigures,
-    };
-
-    const bank = await copyFromBankOnce(examId, body, needed);
-    const added = Number(bank?.added || 0);
-    if (added > Number(best.added || 0)) {
-      best = bank;
-      if (step.label !== 'grade+diff+nofig') fallback = true;
-      if (step.label === 'topic-anydiff') usedLevel = `${difficultyLevel}+geniş`;
-    }
-    if (added >= needed) {
-      return {
-        bank,
-        difficultyUsed: usedLevel,
-        fallback: step.label !== 'grade+diff+nofig',
-        needed,
-      };
     }
   }
 
   return {
     bank: best || { added: 0, copiedQnums: [], warnings: [] },
-    difficultyUsed: usedLevel,
-    fallback,
+    difficultyUsed: `${bandLabel}+geniş`,
+    questionMix: qMix,
+    fallback: true,
     needed,
+    allowFigures,
   };
 }
 
-function questionLatexLine(q, index) {
-  const stem = String(q?.text || q?.Text || '').replace(/__IMG__[\s\S]*?__\n?/g, '').trim();
+/** Pack/export source: LaTeX → oxunaqlı mətn (PDF/DOCX üçün). */
+function questionPlainLine(q, index) {
+  const stem = latexToPlain(String(q?.text || q?.Text || ''));
   const opts = (q?.options || []).map((o, oi) => {
     const letter = String.fromCharCode(65 + oi);
-    const text = String(o.optionText || o.text || '').replace(/^[A-E][\)\.\-:]\s*/i, '');
+    const text = latexToPlain(String(o.optionText || o.text || '').replace(/^[A-E][\)\.\-:]\s*/i, ''));
     return `${letter}) ${text}`;
-  }).join(' \\quad ');
-  return `${index + 1}. ${stem}${opts ? `\\\\\n${opts}` : ''}`;
+  }).join('  ');
+  return `${index + 1}. ${stem}${opts ? `\n${opts}` : ''}`;
 }
 
 export function questionsToLatex(questions, title = 'Sınaq') {
-  const body = (questions || []).map(questionLatexLine).join('\n\n');
-  const safeTitle = String(title || 'Sınaq').replace(/[{}]/g, '');
-  return `\\documentclass[12pt,a4paper]{article}
-\\usepackage[T1]{fontenc}
-\\usepackage[utf8]{inputenc}
-\\usepackage{amsmath,amssymb}
-\\usepackage{geometry}
-\\geometry{margin=18mm}
-\\begin{document}
-\\section*{${safeTitle}}
-${body || 'Suallar yoxdur.'}
-\\end{document}`;
+  const body = (questions || []).map(questionPlainLine).join('\n\n');
+  const safeTitle = latexToPlain(String(title || 'Sınaq'));
+  return `${safeTitle}\n\n${body || 'Suallar yoxdur.'}`;
 }
 
 async function resolveSubject(input) {
@@ -388,6 +405,7 @@ async function createFilledTeacherExam(user, input = {}) {
           : null);
 
   const kind = String(input.kind || 'Sınaq');
+  const standardPaper = isStandardKind(kind);
   const topics = resolveBankTopics(input.topics);
   if (kind === 'Sınaq' && topics.length === 0) {
     const err = new Error('MOVZU_YOX');
@@ -396,7 +414,7 @@ async function createFilledTeacherExam(user, input = {}) {
   }
 
   const perPaper = questionsPerPaper(kind);
-  // Anbar kağızı: Sınaq/Buraxılış = 25, Blok = 30. Mix heç vaxt sual sayı deyil.
+  // Anbar kağızı: Sınaq/Buraxılış = 25, Blok = 30. Mix = quiz sayı (sual sayı deyil).
   const count = paperMode ? perPaper : ((asan + orta + hard) || perPaper);
   if (!paperMode && !(asan + orta + hard)) {
     const err = new Error('SUAL_YOX');
@@ -404,12 +422,23 @@ async function createFilledTeacherExam(user, input = {}) {
     throw err;
   }
 
+  const sınaqLevel = standardPaper
+    ? 'standart'
+    : (singleLevel === LEVEL_MAP.asan
+      ? 'asan'
+      : singleLevel === LEVEL_MAP.çətin
+        ? 'çətin'
+        : 'orta');
+  const qMix = paperMode ? questionMixForPaper(kind, sınaqLevel) : null;
+
   const { subject, subjectName } = await resolveSubject(input);
   const durationMinutes = durationMinutesForQuestionCount(count);
   const start = new Date();
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
   const topicLabel = topics.length ? topics.join(', ') : kind;
-  const bandLabel = singleLevel || '';
+  const bandLabel = standardPaper
+    ? 'standart'
+    : (sınaqLevel === 'asan' ? 'Asan' : sınaqLevel === 'çətin' ? 'Çətin' : paperMode ? 'Orta' : (singleLevel || ''));
   const paperTag = input.paperIndex && input.paperTotal
     ? ` · ${input.paperIndex}/${input.paperTotal}`
     : '';
@@ -439,31 +468,34 @@ async function createFilledTeacherExam(user, input = {}) {
   }
 
   // Sinif soft: 11 üstün, çatışmayanı 9 doldurur (API Grade soft + Difficulty soft).
+  const priorExclude = Array.isArray(input.excludeQnums)
+    ? input.excludeQnums
+    : recentPackQnums(user?.id, topics);
   const baseMeta = {
     grade: String(input.grade || '11'),
     topics: topics.length ? topics : undefined,
     language: 'az',
     excludeFigures: true,
+    excludeQnums: priorExclude,
   };
 
   let bank;
   let difficultyUsed;
   let fallback = false;
+  let usedMix = qMix;
 
-  if (paperMode && singleLevel) {
-    const copied = await copyOnePaperFromBank(exam.id, baseMeta, singleLevel, kind);
+  let allowFigures = false;
+  if (paperMode) {
+    const copied = await copyOnePaperFromBank(exam.id, baseMeta, kind, sınaqLevel);
     bank = copied.bank;
     difficultyUsed = copied.difficultyUsed;
     fallback = copied.fallback;
-  } else if (paperMode) {
-    // paperMode amma singleLevel yox — yenə tam kağız (orta default).
-    const copied = await copyOnePaperFromBank(exam.id, baseMeta, LEVEL_MAP.orta, kind);
-    bank = copied.bank;
-    difficultyUsed = copied.difficultyUsed;
-    fallback = copied.fallback;
+    usedMix = copied.questionMix || qMix;
+    allowFigures = copied.allowFigures !== false;
   } else {
     const bankKind = bankKindForExam(kind);
     const bankAudience = bankKind === 'blok' ? 'specialty' : null;
+    const hardMix = hard > 0;
     const copied = await copyTeacherMixFromBank(
       exam.id,
       {
@@ -472,13 +504,35 @@ async function createFilledTeacherExam(user, input = {}) {
         grade: baseMeta.grade,
         topics: baseMeta.topics,
         language: 'az',
-        excludeFigures: true,
+        excludeFigures: !hardMix,
+        excludeQnums: baseMeta.excludeQnums,
       },
       { asan, orta, çətin: hard },
     );
     bank = copied.bank;
     difficultyUsed = copied.difficultyUsed;
     fallback = copied.fallback;
+    allowFigures = hardMix;
+    if (!(bank?.added > 0) && !hardMix) {
+      const retry = await copyTeacherMixFromBank(
+        exam.id,
+        {
+          ...(bankAudience ? { audience: bankAudience } : {}),
+          ...(bankKind ? { kind: bankKind } : {}),
+          grade: undefined,
+          topics: baseMeta.topics,
+          language: 'az',
+          excludeFigures: false,
+        },
+        { asan, orta, çətin: hard },
+      );
+      if ((retry?.bank?.added || 0) > 0) {
+        bank = retry.bank;
+        difficultyUsed = retry.difficultyUsed;
+        fallback = true;
+        allowFigures = true;
+      }
+    }
   }
 
   if (!bank?.added) {
@@ -523,12 +577,15 @@ async function createFilledTeacherExam(user, input = {}) {
   }
 
   const rawQuestions = await fetchQuestions(exam.id).catch(() => []);
-  // Yalnız gövdədə real şəkil olanları kənarlaşdır — FIGURE_QNUMS ilə kağızı 1 suala endirmə.
-  const { questionHasEmbeddedFigure } = await import('./questionImage');
+  // Şəkilə icazə verilənləri saxla (qrafik/çətin/həndəsə). Əks halda gövdə şəkilsizlər.
+  // image_meta=2 (mətn+fiqur şəkildə): əlavə «şəkilsiz» filtri tətbiq etmə — fiqur artıq şəkildədir.
   let questions = rawQuestions || [];
-  if (paperMode) {
-    const textOnly = questions.filter((q) => !questionHasEmbeddedFigure(q));
-    // Filtr demək olar hər şeyi silirsə, tam siyahını saxla (şəkilsiz render).
+  if (paperMode && !allowFigures) {
+    const { questionHasEmbeddedFigure, questionIsPipelineFullImage } = await import('./questionImage');
+    const textOnly = questions.filter((q) => {
+      if (questionIsPipelineFullImage(q)) return true;
+      return !questionHasEmbeddedFigure(q);
+    });
     if (textOnly.length >= Math.min(count, questions.length) * 0.6) {
       questions = textOnly;
     }
@@ -537,7 +594,12 @@ async function createFilledTeacherExam(user, input = {}) {
   let pdfBlob = null;
   try {
     const { buildExamPaperPdf } = await import('./examPaperPdf');
-    pdfBlob = await buildExamPaperPdf(questions, title);
+    // Şəkilli suallar: bank FigureUrl / CDN → PDF-ə yapışdır (müəllim kağızı).
+    pdfBlob = await buildExamPaperPdf(questions, title, {
+      preferFigures: false,
+      includeAnswerKey: true,
+      meta: [kind, String(input.grade || ''), topicLabel].filter(Boolean).join(' · ').slice(0, 60),
+    });
   } catch {
     pdfBlob = null;
   }
@@ -554,7 +616,13 @@ async function createFilledTeacherExam(user, input = {}) {
     totalQuestions: count,
     topics,
     mix: paperMode
-      ? { asan: singleLevel === LEVEL_MAP.asan ? 1 : 0, orta: singleLevel === LEVEL_MAP.orta ? 1 : 0, çətin: singleLevel === LEVEL_MAP.çətin ? 1 : 0 }
+      ? {
+        asan: standardPaper ? 0 : (sınaqLevel === 'asan' ? 1 : 0),
+        orta: standardPaper ? 0 : (sınaqLevel === 'orta' ? 1 : 0),
+        çətin: standardPaper ? 0 : (sınaqLevel === 'çətin' ? 1 : 0),
+        standard: standardPaper ? 1 : 0,
+        questionMix: usedMix || undefined,
+      }
       : { asan, orta, çətin: hard },
     latexSource,
     difficultyUsed,
@@ -594,10 +662,20 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     return createFilledTeacherExam(user, input);
   }
 
+  const kind = String(input.kind || 'Sınaq');
   const slots = [];
-  for (let i = 0; i < asan; i += 1) slots.push(LEVEL_MAP.asan);
-  for (let i = 0; i < orta; i += 1) slots.push(LEVEL_MAP.orta);
-  for (let i = 0; i < hard; i += 1) slots.push(LEVEL_MAP.çətin);
+
+  if (isStandardKind(kind)) {
+    const n = Math.max(
+      1,
+      Math.round(Number(input.standardCount) || (asan + orta + hard) || 1),
+    );
+    for (let i = 0; i < n; i += 1) slots.push(null);
+  } else {
+    for (let i = 0; i < asan; i += 1) slots.push(LEVEL_MAP.asan);
+    for (let i = 0; i < orta; i += 1) slots.push(LEVEL_MAP.orta);
+    for (let i = 0; i < hard; i += 1) slots.push(LEVEL_MAP.çətin);
+  }
 
   if (!slots.length) {
     const err = new Error('SUAL_YOX');
@@ -607,21 +685,30 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
 
   const results = [];
   let anyFallback = false;
+  const usedQnums = [...recentPackQnums(user?.id, resolveBankTopics(input.topics))];
   for (let i = 0; i < slots.length; i += 1) {
+    const level = slots[i];
     const one = await createFilledTeacherExam(user, {
       ...input,
       unit: 'papers',
       asQuizCount: true,
-      difficultyLevel: slots[i],
-      mix: {
-        asan: slots[i] === LEVEL_MAP.asan ? 1 : 0,
-        orta: slots[i] === LEVEL_MAP.orta ? 1 : 0,
-        çətin: slots[i] === LEVEL_MAP.çətin ? 1 : 0,
-      },
+      difficultyLevel: level || undefined,
+      excludeQnums: usedQnums,
+      mix: level
+        ? {
+          asan: level === LEVEL_MAP.asan ? 1 : 0,
+          orta: level === LEVEL_MAP.orta ? 1 : 0,
+          çətin: level === LEVEL_MAP.çətin ? 1 : 0,
+        }
+        : { asan: 0, orta: 0, çətin: 0 },
       paperIndex: i + 1,
       paperTotal: slots.length,
     });
     if (one.difficultyFallback) anyFallback = true;
+    (one.bank?.copiedQnums || one.pack?.copiedQnums || []).forEach((q) => {
+      const key = String(q || '').trim();
+      if (key) usedQnums.push(key);
+    });
     results.push(one);
   }
 
@@ -633,7 +720,7 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
     pdfBlobs: results.map((r) => r.pdfBlob).filter(Boolean),
     difficultyFallback: anyFallback,
     paperCount: results.length,
-    questionsPerPaper: questionsPerPaper(input.kind),
+    questionsPerPaper: questionsPerPaper(kind),
   };
 }
 

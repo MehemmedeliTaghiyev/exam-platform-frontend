@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   intervalContaining,
+  intervalTopicsForGrade,
   lastCompletedInterval,
   lastWeeklyOnOrBefore,
   latestCoveredTopicForDay,
@@ -11,13 +12,14 @@ import {
 } from './mathCalendar.js';
 import {
   examPulseAudience,
-  LIVE_WEEKLY_EASY_EXAM_ID,
+  LIVE_WEEKLY_EXAM_ID,
   LIVE_WEEKLY_MEDIUM_EXAM_ID,
   REPUBLIC_NOV_2026_EXAM_ID,
   WEEKLY_SMOKE_EXAM_ID,
   republicMixedExams,
-  weeklyPairForInterval,
+  weeklyPaperForInterval,
 } from './weeklyMath.js';
+import { GRADE_10_TOPICS, fromBankGradeFields, topicAllowedForGrade } from './gradeSyllabus.js';
 
 describe('student topic place', () => {
   it('on-time 8 Nov 2026 sits at current weekly window', () => {
@@ -42,29 +44,28 @@ describe('student topic place', () => {
 });
 
 describe('weekly vs mixed routing', () => {
-  it('binds live weekly 97 asan and 98 orta, never 94 or 96', () => {
+  it('binds one live weekly paper 97, never 94/96/98', () => {
     const interval = intervalContaining('2026-11-08');
-    const pair = weeklyPairForInterval(interval, [
+    const row = weeklyPaperForInterval(interval, [
       { id: 94, title: 'Respublika sınağı · Noyabr 2026', kind: 'Sınaq' },
       { id: 96, title: 'smoke', kind: 'Sınaq' },
-      { id: 97, title: 'Həftəlik asan', kind: 'Sınaq' },
+      { id: 97, title: 'Həftəlik sınaq', kind: 'Sınaq' },
       { id: 98, title: 'Həftəlik orta', kind: 'Sınaq' },
     ]);
-    assert.equal(String(pair.easy.id), LIVE_WEEKLY_EASY_EXAM_ID);
-    assert.equal(String(pair.medium.id), LIVE_WEEKLY_MEDIUM_EXAM_ID);
+    assert.equal(String(row.exam.id), LIVE_WEEKLY_EXAM_ID);
     assert.equal(examPulseAudience({ id: 94, title: 'Respublika sınağı · Noyabr 2026', kind: 'Sınaq' }), 'mixed');
     assert.equal(examPulseAudience({ id: 96, title: 'smoke', kind: 'Sınaq' }), 'hidden');
     assert.equal(examPulseAudience({ id: 97, kind: 'Sınaq' }), 'weekly');
-    assert.equal(examPulseAudience({ id: 98, kind: 'Sınaq' }), 'weekly');
-    assert.notEqual(String(pair.easy.id), REPUBLIC_NOV_2026_EXAM_ID);
-    assert.notEqual(String(pair.medium.id), WEEKLY_SMOKE_EXAM_ID);
-    const empty = weeklyPairForInterval(interval, []);
-    assert.equal(empty.easy, null);
-    assert.equal(empty.medium, null);
+    assert.equal(examPulseAudience({ id: 98, title: 'Həftəlik orta', kind: 'Sınaq' }), 'hidden');
+    assert.notEqual(String(row.exam.id), REPUBLIC_NOV_2026_EXAM_ID);
+    assert.notEqual(String(row.exam.id), WEEKLY_SMOKE_EXAM_ID);
+    assert.notEqual(String(row.exam.id), LIVE_WEEKLY_MEDIUM_EXAM_ID);
+    const empty = weeklyPaperForInterval(interval, []);
+    assert.equal(empty.exam, null);
     const mixed = republicMixedExams([
       { id: 94, title: 'Respublika sınağı · Noyabr 2026', kind: 'Sınaq' },
       { id: 96, title: 'Noyabr 2026 həftəlik', kind: 'Sınaq' },
-      { id: 97, title: 'Həftəlik asan', kind: 'Sınaq' },
+      { id: 97, title: 'Həftəlik sınaq', kind: 'Sınaq' },
       { id: 98, title: 'Həftəlik orta', kind: 'Sınaq' },
     ]);
     assert.equal(mixed.map((exam) => String(exam.id)).join(','), REPUBLIC_NOV_2026_EXAM_ID);
@@ -83,6 +84,11 @@ describe('weekly vs mixed routing', () => {
     assert.equal(lastWeeklyOnOrBefore(blok).start, '2026-11-08');
     assert.equal(lastCompletedInterval('2026-11-22').start, '2026-11-08');
   });
+
+  it('weekly window is one paper, not asan+orta pair', () => {
+    const interval = intervalContaining('2026-11-08');
+    assert.deepEqual(interval.send.papers, ['weekly']);
+  });
 });
 
 describe('topic duration pacing', () => {
@@ -98,3 +104,32 @@ describe('topic duration pacing', () => {
   });
 });
 
+describe('grade 10 overlap syllabus', () => {
+  it('uses official 10th-grade chapters, not invented calculus from Feb G11', () => {
+    assert.equal(topicAllowedForGrade('Törəmə və onun tətbiqləri', 10), false);
+    assert.equal(topicAllowedForGrade('İbtidai funksiya və inteqral', 10), false);
+    assert.equal(topicAllowedForGrade('Fırlanma fiqurları, onların səthi və həcmi', 10), false);
+    assert.equal(topicAllowedForGrade('Ədədi ardıcıllıqlar. Silsilələr', 10), false);
+    assert.ok(GRADE_10_TOPICS.includes('Üçbucaqlar'));
+    assert.ok(GRADE_10_TOPICS.includes('Kompleks ədədlər'));
+    assert.ok(GRADE_10_TOPICS.includes('Fəzada nöqtə, düz xətt, müstəvi'));
+  });
+
+  it('filters the G11 send window to overlapping grade-10 topics only', () => {
+    const window5 = intervalContaining('2027-01-10');
+    const g10 = intervalTopicsForGrade(window5, 10);
+    assert.ok(g10.includes('Bərabərsizliklər'));
+    assert.ok(g10.includes('Funksiyalar və qrafiklər'));
+    assert.ok(g10.includes('Triqonometrik funksiyalar. Triqonometrik tənliklər'));
+    assert.ok(!g10.includes('Ədədi ardıcıllıqlar. Silsilələr'));
+    assert.ok(!g10.includes('Koordinatlar üsulu. Hərəkət. Oxşarlıq. Vektorlar'));
+    const g11 = intervalTopicsForGrade(window5, 11);
+    assert.ok(g11.includes('Ədədi ardıcıllıqlar. Silsilələr'));
+  });
+
+  it('from-bank grade 10 contract is multi-grade (9+10+11 tags)', () => {
+    const fields = fromBankGradeFields(10);
+    assert.equal(fields.grade, '10');
+    assert.deepEqual(fields.grades, ['9', '10', '11']);
+  });
+});

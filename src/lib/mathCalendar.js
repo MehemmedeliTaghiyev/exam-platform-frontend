@@ -1,4 +1,9 @@
-/** Grade-11 math send windows. Source: Project store february-topic-schedule. Asia/Tbilisi. */
+/** Grade-11 math send windows. Source: Project store february-topic-schedule. Asia/Tbilisi.
+ * Grade 10 does not get a copied February calendar — it reuses these windows but
+ * only topics that also exist on the official 10th-grade DİM syllabus.
+ */
+
+import { allowedTopicsForGrade, normalizeGrade } from './gradeSyllabus.js';
 
 export const MATH_CALENDAR_TZ = 'Asia/Tbilisi';
 
@@ -10,9 +15,9 @@ export const MATH_CALENDAR = {
     {
       start: '2026-11-08',
       end: '2026-11-21',
-      title: 'Asan bünövrə (həftəlik sınaq)',
+      title: 'Bünövrə (həftəlik sınaq)',
       difficulty: 'easy',
-      send: { weekly: true, papers: ['easy', 'medium'] },
+      send: { weekly: true, papers: ['weekly'] },
       topics: [
         'Həqiqi ədədlər',
         'Ölçmə. Statistika. Çoxluqlar. Birləşmələr və ehtimal',
@@ -36,9 +41,9 @@ export const MATH_CALENDAR = {
     {
       start: '2026-12-06',
       end: '2026-12-19',
-      title: 'Orta tənlik və çevrə (həftəlik sınaq)',
+      title: 'Tənlik və çevrə (həftəlik sınaq)',
       difficulty: 'medium',
-      send: { weekly: true, papers: ['easy', 'medium'] },
+      send: { weekly: true, papers: ['weekly'] },
       topics: [
         'Birdəyişənli tənliklər və məsələ həlli',
         'Çevrə və dairə',
@@ -60,9 +65,9 @@ export const MATH_CALENDAR = {
     {
       start: '2027-01-03',
       end: '2027-01-16',
-      title: 'Orta funksiya və koordinat (həftəlik sınaq)',
+      title: 'Funksiya və koordinat (həftəlik sınaq)',
       difficulty: 'medium',
-      send: { weekly: true, papers: ['easy', 'medium'] },
+      send: { weekly: true, papers: ['weekly'] },
       topics: [
         'Bərabərsizliklər',
         'Ədədi ardıcıllıqlar. Silsilələr',
@@ -85,9 +90,9 @@ export const MATH_CALENDAR = {
     {
       start: '2027-01-31',
       end: '2027-02-13',
-      title: 'Qarışıq təkrar (həftəlik sınaq)',
+      title: 'Təkrar (həftəlik sınaq)',
       difficulty: 'mixed',
-      send: { weekly: true, papers: ['easy', 'medium'] },
+      send: { weekly: true, papers: ['weekly'] },
       topics: [
         'Fəzada nöqtə, düz xətt, müstəvi',
         'Çoxüzlülər, onların səthi və həcmi',
@@ -172,8 +177,8 @@ export function intervalDaySpan(interval) {
  * How many calendar days (and quiz slots) each topic gets inside an interval.
  * Same pacing as latestCoveredTopicForDay — quiz count = topic duration in days.
  */
-export function topicDurationsInInterval(interval) {
-  const topics = interval?.topics || [];
+export function topicDurationsInInterval(interval, grade = MATH_CALENDAR.grade) {
+  const topics = intervalTopicsForGrade(interval, grade);
   const total = topics.length;
   if (!interval || !total) return [];
   const span = intervalDaySpan(interval);
@@ -192,8 +197,8 @@ export function topicDurationsInInterval(interval) {
   });
 }
 
-export function topicDurationForTitle(topicTitle, interval) {
-  const rows = topicDurationsInInterval(interval);
+export function topicDurationForTitle(topicTitle, interval, grade = MATH_CALENDAR.grade) {
+  const rows = topicDurationsInInterval(interval, grade);
   const hit = rows.find((row) => row.title === topicTitle);
   return hit?.days || 0;
 }
@@ -203,7 +208,7 @@ export function topicDurationForTitle(topicTitle, interval) {
  * Topics inside the current interval are paced across that window (no wrap-back).
  * `days` = quiz count for that topic; `dayInTopic` = today's slot (0-based).
  */
-export function latestCoveredTopicForDay(ymd = tbilisiYmd()) {
+export function latestCoveredTopicForDay(ymd = tbilisiYmd(), grade = MATH_CALENDAR.grade) {
   const key = String(ymd || tbilisiYmd());
   if (key < MATH_CALENDAR.from) {
     return { topic: '', interval: null, index: -1, days: 0, dayInTopic: 0 };
@@ -212,7 +217,7 @@ export function latestCoveredTopicForDay(ymd = tbilisiYmd()) {
     || (key > MATH_CALENDAR.to
       ? MATH_CALENDAR.intervals[MATH_CALENDAR.intervals.length - 1]
       : null);
-  const topics = interval?.topics || [];
+  const topics = intervalTopicsForGrade(interval, grade);
   if (!interval || !topics.length) {
     return { topic: '', interval, index: -1, days: 0, dayInTopic: 0 };
   }
@@ -223,7 +228,7 @@ export function latestCoveredTopicForDay(ymd = tbilisiYmd()) {
     topics.length - 1,
     Math.floor((offset / Math.max(1, span)) * topics.length),
   );
-  const durations = topicDurationsInInterval(interval);
+  const durations = topicDurationsInInterval(interval, grade);
   const row = durations[index];
   const dayInTopic = row
     ? Math.min(row.days - 1, Math.max(0, offset - row.startOffset))
@@ -320,22 +325,31 @@ export function calendarTopicId(title) {
     .replace(/\s+/g, '-')}`;
 }
 
-export function topicsForInterval(interval) {
+export function intervalTopicsForGrade(interval, grade = MATH_CALENDAR.grade) {
+  const titles = interval?.topics || [];
+  const key = normalizeGrade(grade, String(MATH_CALENDAR.grade));
+  if (String(key) === String(MATH_CALENDAR.grade)) return titles.slice();
+  const allowed = new Set(allowedTopicsForGrade(key));
+  return titles.filter((title) => allowed.has(title));
+}
+
+export function topicsForInterval(interval, grade = MATH_CALENDAR.grade) {
   if (!interval) return [];
-  return (interval.topics || []).map((title, index) => ({
+  return intervalTopicsForGrade(interval, grade).map((title, index) => ({
     id: `${calendarTopicId(title)}__${interval.start}`,
     subject: 'Riyaziyyat',
     title,
     order: index + 1,
     intervalStart: interval.start,
     weekly: Boolean(interval.send?.weekly),
+    grade: normalizeGrade(grade, String(MATH_CALENDAR.grade)),
   }));
 }
 
-export function allCalendarTopics() {
+export function allCalendarTopics(grade = MATH_CALENDAR.grade) {
   let order = 0;
   return MATH_CALENDAR.intervals.flatMap((interval) => (
-    topicsForInterval(interval).map((topic) => ({
+    topicsForInterval(interval, grade).map((topic) => ({
       ...topic,
       order: ++order,
       interval,
@@ -343,13 +357,17 @@ export function allCalendarTopics() {
   ));
 }
 
-export function findCalendarTopic(id) {
+export function findCalendarTopic(id, grade = MATH_CALENDAR.grade) {
   let raw = String(id || '');
   try { raw = decodeURIComponent(raw); } catch { /* keep */ }
-  const all = allCalendarTopics();
+  const all = allCalendarTopics(grade);
   const exact = all.find((topic) => topic.id === raw);
   if (exact) return { topic: exact, interval: exact.interval };
   const legacy = all.find((topic) => calendarTopicId(topic.title) === raw);
   if (legacy) return { topic: legacy, interval: legacy.interval };
+  const anyGrade = allCalendarTopics();
+  const fallback = anyGrade.find((topic) => topic.id === raw)
+    || anyGrade.find((topic) => calendarTopicId(topic.title) === raw);
+  if (fallback) return { topic: fallback, interval: fallback.interval };
   return { topic: null, interval: null };
 }

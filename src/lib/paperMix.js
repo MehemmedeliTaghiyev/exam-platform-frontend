@@ -18,28 +18,12 @@ export const BLOK_MIX = { asan: 9, orta: 14, çətin: 7 }; // 8–10 / 13–15 /
 
 export const SINAQ_LEVEL_HINTS = [
   {
-    key: 'asan',
-    title: 'Asan sınaq',
-    asan: '13–15',
-    orta: '8–10',
-    çətin: '1–2',
-    forWho: 'Mövzunu yeni öyrənənlər — baza və özünəinam.',
-  },
-  {
-    key: 'orta',
-    title: 'Orta (standart) sınaq',
-    asan: '7–8',
-    orta: '11–12',
-    çətin: '5–6',
-    forWho: 'DİM buraxılış standartına yaxın ölçmə.',
-  },
-  {
-    key: 'çətin',
-    title: 'Çətin (ağır) sınaq',
-    asan: '3–5',
-    orta: '10–12',
-    çətin: '9–11',
-    forWho: 'Yüksək nəticə (22+/25) hədəfləyənlər.',
+    key: 'mixed',
+    title: 'Sınaq',
+    asan: 8,
+    orta: 11,
+    çətin: 6,
+    forWho: 'Hər kağızda suallar qarışır; imtahanın özü asan/orta/çətin deyil.',
   },
 ];
 

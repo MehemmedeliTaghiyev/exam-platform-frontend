@@ -2,8 +2,9 @@ import { displayExamDescription } from './driveLinks';
 import { examVisibility } from './examVisibility';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { studentResultsReady } from './utils';
-import { MATH_CALENDAR, calendarTopicId } from './mathCalendar';
+import { MATH_CALENDAR, allCalendarTopics, calendarTopicId } from './mathCalendar';
 import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
+import { allowedTopicsForGrade, normalizeGrade } from './gradeSyllabus';
 
 const MIXED_MARK = '[[MIXED]]';
 
@@ -153,25 +154,33 @@ export function isMixedMarked(exam) {
   return /qar[iı][sş][iı]q|blok sınaq|ümumi sınaq|bir neçə mövzu/i.test(raw);
 }
 
-function mathCalendarTopicPool() {
+function mathCalendarTopicPool(grade = MATH_CALENDAR.grade) {
   const seen = new Set();
   const rows = [];
-  MATH_CALENDAR.intervals.forEach((interval) => {
-    (interval.topics || []).forEach((title) => {
+  const key = normalizeGrade(grade, String(MATH_CALENDAR.grade));
+  allCalendarTopics(key).forEach((topic) => {
+    const id = calendarTopicId(topic.title);
+    if (seen.has(id)) return;
+    seen.add(id);
+    rows.push({ id, subject: OPEN_SYLLABUS_SUBJECT, title: topic.title });
+  });
+  // Grade 10 syllabus chapters that never appear in the G11 send windows still show.
+  if (String(key) !== String(MATH_CALENDAR.grade)) {
+    allowedTopicsForGrade(key).forEach((title) => {
       const id = calendarTopicId(title);
       if (seen.has(id)) return;
       seen.add(id);
       rows.push({ id, subject: OPEN_SYLLABUS_SUBJECT, title });
     });
-  });
+  }
   return rows;
 }
 
-export function examSyllabusTopics(exam) {
+export function examSyllabusTopics(exam, grade = MATH_CALENDAR.grade) {
   const subject = String(exam?.subjectName || exam?.subject || exam?.SubjectName || '').trim();
   const blob = examBlob(exam);
   if (!subject || subject === OPEN_SYLLABUS_SUBJECT) {
-    const calendarHits = mathCalendarTopicPool().filter((topic) => blob.includes(normalize(topic.title)));
+    const calendarHits = mathCalendarTopicPool(grade).filter((topic) => blob.includes(normalize(topic.title)));
     if (calendarHits.length) return calendarHits;
   }
   const pool = subject && SYLLABUS_BY_SUBJECT[subject]

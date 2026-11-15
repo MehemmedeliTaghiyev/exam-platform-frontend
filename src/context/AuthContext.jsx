@@ -41,6 +41,7 @@ function normalizeUser(raw) {
     lastName: user.lastName || user.LastName || '',
     driveFolderUrl: user.driveFolderUrl || user.DriveFolderUrl || teacherDriveFolderUrl(user),
     teachingSubject: teacherSubjectOf(user) || localDb.getTeacherSubject(id, user.email),
+    grade: user.grade || user.Grade || user.classYear || user.ClassYear || localDb.getStudentGrade(id) || '',
   };
 }
 

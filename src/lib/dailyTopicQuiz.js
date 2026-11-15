@@ -1,6 +1,7 @@
 import {
   daysBetweenYmd,
   intervalContaining,
+  intervalTopicsForGrade,
   latestCoveredTopicForDay,
   MATH_CALENDAR,
   tbilisiYmd,
@@ -38,8 +39,8 @@ function examBlob(exam) {
 }
 
 /** Latest covered topic for the day — our calendar date only. */
-export function topicTitleForDay(ymd = tbilisiYmd()) {
-  return latestCoveredTopicForDay(ymd).topic || '';
+export function topicTitleForDay(ymd = tbilisiYmd(), grade = MATH_CALENDAR.grade) {
+  return latestCoveredTopicForDay(ymd, grade).topic || '';
 }
 
 export function sendForDay(ymd = tbilisiYmd()) {
@@ -74,15 +75,15 @@ export function examsMatchingTopic(exams, topicTitle) {
  * All syllabus topics covered from calendar start through `ymd`
  * (completed intervals + current topic and earlier ones in the active window).
  */
-export function coveredTopicsThrough(ymd = tbilisiYmd()) {
+export function coveredTopicsThrough(ymd = tbilisiYmd(), grade = MATH_CALENDAR.grade) {
   const key = String(ymd || tbilisiYmd());
   if (key < MATH_CALENDAR.from) return [];
 
   const out = [];
-  const current = latestCoveredTopicForDay(key);
+  const current = latestCoveredTopicForDay(key, grade);
   for (const interval of MATH_CALENDAR.intervals) {
     if (interval.start > key) break;
-    const topics = interval.topics || [];
+    const topics = intervalTopicsForGrade(interval, grade);
     if (!topics.length) continue;
 
     if (interval.end < key) {
@@ -91,7 +92,7 @@ export function coveredTopicsThrough(ymd = tbilisiYmd()) {
           topic,
           interval,
           index,
-          series: quizCountForTopic(topic, interval),
+          series: quizCountForTopic(topic, interval, grade),
           current: false,
         });
       });
@@ -107,7 +108,7 @@ export function coveredTopicsThrough(ymd = tbilisiYmd()) {
         topic,
         interval,
         index,
-        series: quizCountForTopic(topic, interval),
+        series: quizCountForTopic(topic, interval, grade),
         current: index === maxIndex && current.interval?.start === interval.start,
       });
     });
@@ -118,9 +119,9 @@ export function coveredTopicsThrough(ymd = tbilisiYmd()) {
 /**
  * One prior topic for today's review quiz (rotates through earlier covered topics).
  */
-export function reviewTopicForDay(ymd = tbilisiYmd()) {
+export function reviewTopicForDay(ymd = tbilisiYmd(), grade = MATH_CALENDAR.grade) {
   const key = String(ymd || tbilisiYmd());
-  const covered = coveredTopicsThrough(key);
+  const covered = coveredTopicsThrough(key, grade);
   const priors = covered.filter((row) => !row.current);
   if (!priors.length) return null;
 
@@ -176,11 +177,11 @@ function quizForTopic(exams, topic, interval, slot, series, ymd) {
  * Every day: calendar → topic + day slot → difficulty band → matching sınaq.
  * Quiz count for a topic = how many days that topic lasts on our calendar.
  */
-export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
+export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd(), grade = MATH_CALENDAR.grade) {
   const key = String(ymd || tbilisiYmd());
-  const covered = latestCoveredTopicForDay(key);
+  const covered = latestCoveredTopicForDay(key, grade);
   const topic = covered.topic || '';
-  const series = topic ? quizCountForTopic(topic, covered.interval) : 1;
+  const series = topic ? quizCountForTopic(topic, covered.interval, grade) : 1;
   const slot = covered.dayInTopic ?? 0;
   return {
     ...quizForTopic(exams, topic, covered.interval, slot, series, key),
@@ -192,10 +193,10 @@ export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
  * Primary = latest covered topic; review = one earlier covered topic (rotating).
  * Personal papers fill in when no published exam exists.
  */
-export function dailyTopicQuizPlan(exams = [], ymd = tbilisiYmd()) {
+export function dailyTopicQuizPlan(exams = [], ymd = tbilisiYmd(), grade = MATH_CALENDAR.grade) {
   const key = String(ymd || tbilisiYmd());
-  const primary = todaysTopicQuiz(exams, key);
-  const reviewMeta = reviewTopicForDay(key);
+  const primary = todaysTopicQuiz(exams, key, grade);
+  const reviewMeta = reviewTopicForDay(key, grade);
   const review = reviewMeta
     ? {
       ...quizForTopic(
@@ -214,6 +215,6 @@ export function dailyTopicQuizPlan(exams = [], ymd = tbilisiYmd()) {
     ymd: key,
     primary: { ...primary, role: 'primary' },
     review,
-    covered: coveredTopicsThrough(key),
+    covered: coveredTopicsThrough(key, grade),
   };
 }

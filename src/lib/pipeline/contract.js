@@ -16,9 +16,9 @@ export const SUBJECTS = [
   { code: 'azerbaijani', label: 'Azərbaycan dili', live: false },
 ];
 
+/** @deprecated Weekly is one paper; bands are question-level only. */
 export const WEEKLY_BANDS = [
-  { code: 'easy', label: 'Asan' },
-  { code: 'medium', label: 'Orta' },
+  { code: 'weekly', label: 'Həftəlik' },
 ];
 
 export const AUDIENCE = {
@@ -67,7 +67,8 @@ const LANG_ALIAS = {
  * @property {boolean} generated
  * @property {boolean} complete
  * @property {string[]} missing
- * @property {{ easy?: WeeklyPaper, medium?: WeeklyPaper }} pair
+ * @property {WeeklyPaper} [paper]
+ * @property {{ weekly?: WeeklyPaper, easy?: WeeklyPaper, medium?: WeeklyPaper }} [pair]
  */
 
 /**

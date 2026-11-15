@@ -19,7 +19,7 @@ import {
 } from '../lib/examApi';
 import { studentSubscriptions } from '../lib/groupSubscriptions';
 import { DAILY_TOPIC_SENDS } from '../lib/dailyTopicQuiz';
-import { LIVE_WEEKLY_EASY_EXAM_ID, LIVE_WEEKLY_MEDIUM_EXAM_ID } from '../lib/weeklyMath';
+import { LIVE_WEEKLY_EXAM_ID } from '../lib/weeklyMath';
 
 function clockKey(userId, ymd, role) {
   return `exampulse_daily_topic_clock:${userId}:${ymd}:${role}`;
@@ -74,15 +74,14 @@ export default function DailyTopicTake() {
         ...studentSubscriptions(user.id).map((row) => row.teacherId),
       ].filter((id) => id != null && id !== ''))];
       const dailyIds = [...new Set(DAILY_TOPIC_SENDS.map((row) => row.examId).filter(Boolean))];
-      const [mine, pubs, listed, easy, medium, ...dailyExams] = await Promise.all([
+      const [mine, pubs, listed, weekly, ...dailyExams] = await Promise.all([
         fetchExams().catch(() => []),
         fetchAllPublicExams().catch(() => []),
         Promise.all(teacherIds.map((id) => fetchListedExamsForTeacher(id).catch(() => []))),
-        fetchExam(LIVE_WEEKLY_EASY_EXAM_ID).catch(() => null),
-        fetchExam(LIVE_WEEKLY_MEDIUM_EXAM_ID).catch(() => null),
+        fetchExam(LIVE_WEEKLY_EXAM_ID).catch(() => null),
         ...dailyIds.map((id) => fetchExam(id).catch(() => null)),
       ]);
-      const exams = [...mine, ...pubs, ...listed.flat(), easy, medium, ...dailyExams]
+      const exams = [...mine, ...pubs, ...listed.flat(), weekly, ...dailyExams]
         .filter((exam, i, all) => exam?.id != null && all.findIndex((row) => String(row.id) === String(exam.id)) === i);
       const next = await ensureDailyTopicPaperAsync(user, role, ymd, exams);
       if (!cancelled && next?.questions?.length) setPaper(next);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, FormError, Input, Select } from './ui';
-import { GRADES, LANGS, SUBJECTS, WEEKLY_BANDS, isoWeek } from '../lib/pipeline/contract';
+import { GRADES, LANGS, SUBJECTS, isoWeek } from '../lib/pipeline/contract';
 import { useTeacherQuizOrder, useWeeklyPapers } from '../lib/pipeline/hooks';
 
 export default function DimBankPanel() {
@@ -10,7 +10,6 @@ export default function DimBankPanel() {
   const [grade, setGrade] = useState('11');
   const [subject, setSubject] = useState('math');
   const [count, setCount] = useState(10);
-  const [level, setLevel] = useState('medium');
   const [topics, setTopics] = useState('');
   const teacher = useTeacherQuizOrder();
   const weekly = useWeeklyPapers({ grade, groupId: 'general', subject, language });
@@ -20,14 +19,14 @@ export default function DimBankPanel() {
     event.preventDefault();
     if (!live) return;
     try {
-      const exam = await teacher.order({ language, grade, subject, count, level, topics });
+      const exam = await teacher.order({ language, grade, subject, count, topics });
       if (exam?.exam_id) navigate(`/teacher/dim/${exam.exam_id}?lang=${language}`);
     } catch {
       /* error on hook */
     }
   };
 
-  const pair = weekly.payload?.pair || {};
+  const paper = weekly.payload?.paper || weekly.payload?.pair?.easy || weekly.payload?.pair?.weekly || null;
 
   return (
     <div className="mb-8 grid gap-5 lg:grid-cols-2">
@@ -35,7 +34,7 @@ export default function DimBankPanel() {
         <p className="text-xs font-extrabold uppercase tracking-wider text-[var(--muted)]">DİM bankı · müəllim sifarişi</p>
         <h2 className="mt-1 text-lg font-extrabold">Öz quiz-inizi yığın</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Fənn, dil, sinif, çətinlik və fəsillər. Unikallıq və dublikat kəsimi bankda qalır.
+          Fənn, dil, sinif və fəsillər. Quiz-in özünün çətinliyi yoxdur — yalnız suallar asan/orta/çətin ola bilər.
         </p>
         <form onSubmit={orderQuiz} className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -61,11 +60,6 @@ export default function DimBankPanel() {
               {GRADES.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
-            </Select>
-            <Select label="Çətinlik" value={level} onChange={(e) => setLevel(e.target.value)}>
-              <option value="easy">Asan</option>
-              <option value="medium">Orta</option>
-              <option value="hard">Çətin</option>
             </Select>
           </div>
           <Input
@@ -93,33 +87,27 @@ export default function DimBankPanel() {
 
       <Card>
         <p className="text-xs font-extrabold uppercase tracking-wider text-[var(--muted)]">Həftəlik ümumi qrup</p>
-        <h2 className="mt-1 text-lg font-extrabold">Asan + orta · {weekly.week || isoWeek()}</h2>
+        <h2 className="mt-1 text-lg font-extrabold">Bir kağız · {weekly.week || isoWeek()}</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Eyni ISO həftə, qrup və sinif üçün hamı eyni arxiv imtahan nömrəsini alır. Keçmiş həftə yenidən yığılmır.
+          Eyni pəncərə, qrup və sinif üçün hamı eyni arxiv imtahan nömrəsini alır. Asan+orta cüt yoxdur.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {WEEKLY_BANDS.map((band) => {
-            const paper = pair[band.code];
-            return (
-              <button
-                key={band.code}
-                type="button"
-                disabled={!paper?.exam_id}
-                onClick={() => paper?.exam_id && navigate(`/teacher/dim/${paper.exam_id}?lang=${language}`)}
-                className="rounded-2xl border border-[var(--line)] bg-[var(--bg)] p-4 text-left disabled:opacity-50"
-              >
-                <p className="text-sm font-extrabold">{band.label}</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  {paper?.exam_id ? `İmtahan #${paper.exam_id}` : 'Hələ yığılmayıb'}
-                </p>
-              </button>
-            );
-          })}
+        <div className="mt-4">
+          <button
+            type="button"
+            disabled={!paper?.exam_id}
+            onClick={() => paper?.exam_id && navigate(`/teacher/dim/${paper.exam_id}?lang=${language}`)}
+            className="w-full rounded-2xl border border-[var(--line)] bg-[var(--bg)] p-4 text-left disabled:opacity-50"
+          >
+            <p className="text-sm font-extrabold">Həftəlik sınaq</p>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {paper?.exam_id ? `İmtahan #${paper.exam_id}` : 'Hələ yığılmayıb'}
+            </p>
+          </button>
         </div>
         <FormError message={weekly.error} />
         <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={() => weekly.generateThisWeek().catch(() => {})} disabled={weekly.busy || !live}>
-            {weekly.busy ? 'Gözləyin…' : 'Bu həftənin cütünü yığ'}
+            {weekly.busy ? 'Gözləyin…' : 'Bu həftənin kağızını yığ'}
           </Button>
           <Button
             variant="secondary"
@@ -132,8 +120,8 @@ export default function DimBankPanel() {
         {(weekly.payload?.action === 'archive' || weekly.payload?.generated === false) && (
           <p className="mt-3 text-xs text-[var(--muted)]">
             {weekly.payload?.complete
-              ? 'Arxiv kağızları hazırdır — yeni sual yığılmayıb.'
-              : `Arxiv natamam (${(weekly.payload?.missing || []).join(', ') || 'boş'}). Keçmiş həftə üçün yeni sual yığılmır.`}
+              ? 'Arxiv kağızı hazırdır — yeni sual yığılmayıb.'
+              : 'Arxiv natamam. Keçmiş həftə üçün yeni sual yığılmır.'}
           </p>
         )}
       </Card>

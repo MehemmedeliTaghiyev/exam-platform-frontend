@@ -7,6 +7,7 @@ import {
 } from './examApi';
 import { durationMinutesForQuestionCount } from './examDuration';
 import { MATH_CALENDAR } from './mathCalendar';
+import { GRADE_10_TOPICS, fromBankGradeFields } from './gradeSyllabus';
 import {
   nextTopicQuizDifficulty,
   topicQuizBankQuota,
@@ -134,7 +135,7 @@ function foldTopic(s) {
     .trim();
 }
 
-export function calendarTopicSuggestions() {
+export function calendarTopicSuggestions(grade) {
   const seen = new Set();
   const rows = [];
   MATH_CALENDAR.intervals.forEach((interval) => {
@@ -144,6 +145,13 @@ export function calendarTopicSuggestions() {
       rows.push(title);
     });
   });
+  if (String(grade) === '10' || grade == null) {
+    GRADE_10_TOPICS.forEach((title) => {
+      if (seen.has(title)) return;
+      seen.add(title);
+      rows.push(title);
+    });
+  }
   return rows;
 }
 
@@ -301,6 +309,7 @@ async function copyOnePaperFromBank(examId, baseMeta, kind, sınaqLevel) {
   const topicParts = topicSearchList(topics);
   const language = baseMeta.language || 'az';
   const grade = baseMeta.grade || undefined;
+  const gradeFields = grade ? fromBankGradeFields(grade) : {};
   const excludeQnums = Array.isArray(baseMeta.excludeQnums) ? baseMeta.excludeQnums : [];
   const bandLabel = isStandardKind(kind) ? 'standart' : (sınaqLevel || 'orta');
   // Şəkilli S* bankdan çıxarılıb — from-bank yalnız şəkilsiz götürsün.
@@ -328,6 +337,7 @@ async function copyOnePaperFromBank(examId, baseMeta, kind, sınaqLevel) {
           topics: topicSet,
           language,
           grade: gradeOpt,
+          ...(gradeOpt ? fromBankGradeFields(gradeOpt) : gradeFields),
           excludeFigures,
           gradeStrict: false,
           count: needed,
@@ -488,6 +498,7 @@ async function createFilledTeacherExam(user, input = {}) {
     : recentPackQnums(user?.id, topics);
   const baseMeta = {
     grade: String(input.grade || '11'),
+    ...fromBankGradeFields(input.grade || '11'),
     topics: topics.length ? topics : undefined,
     language: 'az',
     excludeFigures: true,
@@ -517,6 +528,7 @@ async function createFilledTeacherExam(user, input = {}) {
         ...(bankAudience ? { audience: bankAudience } : {}),
         ...(bankKind ? { kind: bankKind } : {}),
         grade: baseMeta.grade,
+        ...fromBankGradeFields(baseMeta.grade),
         topics: baseMeta.topics,
         language: 'az',
         excludeFigures: !hardMix,

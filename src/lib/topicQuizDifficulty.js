@@ -17,8 +17,8 @@ export function bankDifficultyForBand(band) {
 }
 
 /** Quiz count for a topic = calendar days it lasts in its interval. */
-export function quizCountForTopic(topicTitle, interval) {
-  const days = topicDurationForTitle(topicTitle, interval);
+export function quizCountForTopic(topicTitle, interval, grade) {
+  const days = topicDurationForTitle(topicTitle, interval, grade);
   return Math.max(1, days || TOPIC_QUIZ_SERIES_FALLBACK);
 }
 

@@ -28,21 +28,23 @@ import {
   tbilisiYmd,
   topicHasEnded,
 } from '../lib/mathCalendar';
+import { MATH_GRADES, persistStudentGrade, resolveStudentGrade } from '../lib/gradeSyllabus';
 import { DAILY_TOPIC_SENDS, topicTitleForDay } from '../lib/dailyTopicQuiz';
-import { annotateTopicPapers, quizCountForTopic, topicAveragePercent } from '../lib/topicQuizDifficulty';
+import { annotateTopicPapers, topicAveragePercent } from '../lib/topicQuizDifficulty';
 import {
   archiveWeeklyWindows,
   examIdOf,
   isStudentWeeklyExam,
-  LIVE_WEEKLY_EASY_EXAM_ID,
-  LIVE_WEEKLY_MEDIUM_EXAM_ID,
+  LIVE_WEEKLY_EXAM_ID,
   republicMixedExams,
   WEEKLY_SMOKE_EXAM_ID,
-  weeklyPairForInterval,
+  weeklyPaperForInterval,
 } from '../lib/weeklyMath';
 import { canEnterExam } from '../lib/teacherAccess';
+import { gradeLabel } from '../lib/storageCatalog';
 import { enteredExamIds } from '../lib/publicExams';
 import { examRetakeReady, isExamEnded, isExamScheduled, resolveExamStatus, studentResultsReady } from '../lib/utils';
+
 function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate, annotate = false, series }) {
   const list = papers.filter(Boolean);
   if (!list.length) {
@@ -104,6 +106,7 @@ export default function StudentSyllabus() {
   const ownTeacherId = user?.teacherId ?? user?.TeacherId;
   const defaultSubject = OPEN_SYLLABUS_SUBJECT;
   const [subject, setSubject] = useState(defaultSubject);
+  const [grade, setGrade] = useState(() => resolveStudentGrade(user));
   const placement = useMemo(() => studentTopicPlace(user), [user]);
   const dayQuizTopic = useMemo(() => topicTitleForDay(tbilisiYmd()), []);
   const windowStart = searchParams.get('pencere') || placement.place?.start;
@@ -119,16 +122,15 @@ export default function StudentSyllabus() {
           ...subs.map((row) => row.teacherId),
         ].filter((id) => id != null && id !== ''))];
         const dailyIds = [...new Set(DAILY_TOPIC_SENDS.map((row) => row.examId).filter(Boolean))];
-        const [mine, pubs, hist, listed, easy, medium, ...dailyExams] = await Promise.all([
+        const [mine, pubs, hist, listed, weekly, ...dailyExams] = await Promise.all([
           fetchExams().catch(() => []),
           fetchAllPublicExams().catch(() => []),
           fetchStudentHistory(user?.id).catch(() => []),
           Promise.all(teacherIds.map((id) => fetchListedExamsForTeacher(id).catch(() => []))),
-          fetchExam(LIVE_WEEKLY_EASY_EXAM_ID).catch(() => null),
-          fetchExam(LIVE_WEEKLY_MEDIUM_EXAM_ID).catch(() => null),
+          fetchExam(LIVE_WEEKLY_EXAM_ID).catch(() => null),
           ...dailyIds.map((id) => fetchExam(id).catch(() => null)),
         ]);
-        const merged = [...mine, ...pubs, ...listed.flat(), easy, medium, ...dailyExams].filter((exam, index, all) => (
+        const merged = [...mine, ...pubs, ...listed.flat(), weekly, ...dailyExams].filter((exam, index, all) => (
           exam?.id != null && all.findIndex((row) => String(row.id) === String(exam.id)) === index
         ));
         if (!cancelled) {
@@ -158,23 +160,28 @@ export default function StudentSyllabus() {
   }, [history]);
   const entered = useMemo(() => enteredExamIds(history), [history]);
 
-  const pair = useMemo(() => weeklyPairForInterval(viewed, exams), [viewed, exams]);
+  const pair = useMemo(() => weeklyPaperForInterval(viewed, exams), [viewed, exams]);
   const currentPair = useMemo(
-    () => weeklyPairForInterval(placement.current, exams),
+    () => weeklyPaperForInterval(placement.current, exams),
     [placement.current, exams],
   );
   const mixed = useMemo(() => republicMixedExams(exams), [exams]);
   const archives = useMemo(() => archiveWeeklyWindows(placement.today), [placement.today]);
-  const mathTopics = useMemo(() => allCalendarTopics(), []);
-  const calendarHit = findCalendarTopic(topicId);
+  const mathTopics = useMemo(() => allCalendarTopics(grade), [grade]);
+  const calendarHit = findCalendarTopic(topicId, grade);
+
+  const pickGrade = (next) => {
+    const key = persistStudentGrade(user, next);
+    setGrade(key);
+  };
 
   const papersForTopic = (topic) => {
     // Only papers tagged for this topic — not the whole weekly pair.
     const matched = (exams || []).filter((exam) => {
       if (!studentCanSeeExam(user, exam)) return false;
       if (examIdOf(exam) === WEEKLY_SMOKE_EXAM_ID) return false;
-      if (examIdOf(exam) === LIVE_WEEKLY_EASY_EXAM_ID || examIdOf(exam) === LIVE_WEEKLY_MEDIUM_EXAM_ID) {
-        return false; // asan/orta kağız yalnız «Həftəlik sınaq» blokunda
+      if (examIdOf(exam) === LIVE_WEEKLY_EXAM_ID) {
+        return false; // həftəlik kağız yalnız «Həftəlik sınaq» blokunda
       }
       return examSyllabusTopics(exam).some((row) => row.title === topic.title);
     });
@@ -209,7 +216,7 @@ export default function StudentSyllabus() {
   };
 
   if (topicId && calendarHit.topic) {
-    const windowPair = weeklyPairForInterval(calendarHit.interval, exams);
+    const windowPaper = weeklyPaperForInterval(calendarHit.interval, exams);
     const topicPapers = papersForTopic(calendarHit.topic);
     return (
       <AppShell title={calendarHit.topic.title}>
@@ -219,9 +226,9 @@ export default function StudentSyllabus() {
         <p className="mt-2 text-sm text-[var(--muted)]">
           {formatIntervalRange(calendarHit.interval)}
           {calendarHit.interval?.send?.weekly
-            ? ' · bu bölməyə aid mövzu sınaqları; həftəlik asan/orta yuxarıdakı «Həftəlik sınaq»dadır.'
+            ? ' · bu bölməyə aid mövzu sınaqları; həftəlik kağız yuxarıdakı «Həftəlik sınaq»dadır.'
             : ' · blok / situasiya pəncərəsi.'}
-          {windowPair.archived ? ' Bu pəncərə arxivdir.' : ''}
+          {windowPaper.archived ? ' Bu pəncərə arxivdir.' : ''}
         </p>
         {loading ? <Skeleton className="mt-6 h-40" /> : (
           <PaperGrid
@@ -231,8 +238,6 @@ export default function StudentSyllabus() {
             user={user}
             openExam={openExam}
             navigate={navigate}
-            annotate
-            series={quizCountForTopic(calendarHit.topic.title, calendarHit.interval)}
           />
         )}
       </AppShell>
@@ -272,7 +277,7 @@ export default function StudentSyllabus() {
               <EmptyState title="Bu mövzuda sınaq yoxdur" text="Müəllim bu başlıqda imtahan paylaşanda burada görünəcək." />
             </div>
           ) : (
-            <PaperGrid papers={list} attemptByExam={attemptByExam} entered={entered} user={user} openExam={openExam} navigate={navigate} annotate />
+            <PaperGrid papers={list} attemptByExam={attemptByExam} entered={entered} user={user} openExam={openExam} navigate={navigate} />
           )}
         </AppShell>
       );
@@ -286,7 +291,7 @@ export default function StudentSyllabus() {
   return (
     <AppShell title="Sillabus">
       <p className="mb-5 text-sm text-[var(--muted)]">
-        Bütün mövzular buradadır. Hər gün paneldə son keçilən mövzunun sınağı + bir əvvəlki mövzunun təkrarı açılır. Həftəlik asan/orta ayrıca «Həftəlik sınaq»dadır; qarışıq sınaq Respublikadadır.
+        Bütün mövzular buradadır. Hər gün paneldə son keçilən mövzunun sınağı + bir əvvəlki mövzunun təkrarı açılır. Həftəlik bir kağız ayrıca «Həftəlik sınaq»dadır; qarışıq sınaq Respublikadadır. 10-cu sinif bankda ayrıca test yoxdur — 9 və 11-ci sinifdən eyni mövzular göstərilir.
       </p>
       <div className="mb-5 flex flex-wrap gap-2">
         {syllabusSubjects().map((name) => {
@@ -326,11 +331,11 @@ export default function StudentSyllabus() {
               </p>
               {!viewed?.send?.weekly ? (
                 <p className="mt-3 text-sm font-semibold text-[var(--muted)]">
-                  Bu pəncərədə həftəlik sınaq göndərilmir. Əvvəlki həftənin asan və orta kağızı arxivdə qalır.
+                  Bu pəncərədə həftəlik sınaq göndərilmir. Əvvəlki həftənin kağızı arxivdə qalır.
                 </p>
               ) : null}
               <PaperGrid
-                papers={[pair.easy, pair.medium]}
+                papers={[pair.exam]}
                 attemptByExam={attemptByExam}
                 entered={entered}
                 user={user}
@@ -339,11 +344,11 @@ export default function StudentSyllabus() {
               />
               {placement.current?.send?.weekly
                 && placement.place?.start !== placement.current.start
-                && (currentPair.easy || currentPair.medium) ? (
+                && currentPair.exam ? (
                   <div className="mt-6">
                     <h3 className="text-sm font-extrabold">Bu həftə (hamı üçün eyni)</h3>
                     <PaperGrid
-                      papers={[currentPair.easy, currentPair.medium]}
+                      papers={[currentPair.exam]}
                       attemptByExam={attemptByExam}
                       entered={entered}
                       user={user}
@@ -357,11 +362,30 @@ export default function StudentSyllabus() {
             <section>
               <h2 className="text-lg font-black">Mövzular</h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
-                Tariximizə görə mövzu neçə gün davam edirsə, o qədər sınaq olur (son 2 çətin, ortada 1 asan, qalan orta).
+                {grade === '10'
+                  ? '10-cu sinif mövzuları rəsmi DİM proqramındandır. Fevral 11-ci sinif təqvimindən yeni mövzu uydurulmur — pəncərədə üst-üstə düşənlər göstərilir.'
+                  : 'Tariximizə görə mövzu neçə gün davam edirsə, o qədər sınaq olur. Çətinlik sualdadır, kağızda yox.'}
               </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {MATH_GRADES.map((row) => (
+                  <button
+                    key={row}
+                    type="button"
+                    onClick={() => pickGrade(row)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
+                      grade === row
+                        ? 'bg-[linear-gradient(135deg,#5b4cf5,#7c5cff)] text-white'
+                        : 'border border-[var(--line)] text-[var(--muted)]'
+                    }`}
+                  >
+                    {gradeLabel(row)} sinif
+                  </button>
+                ))}
+              </div>
               <div className="mt-3 space-y-8">
                 {MATH_CALENDAR.intervals.map((interval) => {
                   const rows = mathTopics.filter((row) => row.intervalStart === interval.start);
+                  if (!rows.length) return null;
                   const current = placement.current?.start === interval.start;
                   return (
                     <div key={interval.start}>

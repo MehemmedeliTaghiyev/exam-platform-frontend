@@ -5,6 +5,7 @@ import { Button, Card } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { formatHms } from '../lib/utils';
 import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
+import LatexText from '../components/LatexText';
 import {
   DAY6_DURATION_MIN,
   day6CycleInfo,
@@ -99,7 +100,7 @@ export default function Day6Take() {
         <p className={`text-sm font-black tabular-nums ${urgent ? 'text-[#fb7185]' : ''}`}>{formatHms(left)}</p>
       </div>
       <Card>
-        <p className="text-base font-extrabold leading-snug">{question.text}</p>
+        <p className="text-base font-extrabold leading-snug"><LatexText text={question.text} /></p>
         <div className="mt-4 grid gap-2">
           {(question.options || []).map((text, oi) => {
             const selected = answers[question.id] === oi;
@@ -108,13 +109,14 @@ export default function Day6Take() {
                 key={`${question.id}-${oi}`}
                 type="button"
                 onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: oi }))}
-                className={`rounded-2xl px-4 py-3 text-left text-sm font-bold ring-1 ${
+                className={`flex items-start gap-2 rounded-2xl px-4 py-3 text-left text-sm font-bold ring-1 ${
                   selected
                     ? 'bg-[var(--accent)] text-[#3a2200] ring-[var(--accent)]'
                     : 'bg-[var(--bg)] text-[var(--text)] ring-[var(--line)]'
                 }`}
               >
-                {String.fromCharCode(65 + oi)}) {text}
+                <span>{String.fromCharCode(65 + oi)})</span>
+                <LatexText className="min-w-0 flex-1" text={text} />
               </button>
             );
           })}

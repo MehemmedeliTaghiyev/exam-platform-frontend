@@ -27,6 +27,7 @@ import {
   shuffleExamPaper,
 } from '../lib/examShuffle';
 import { logAttemptReview } from '../lib/attemptReviewLog';
+import { parseQuestionImage, stripQuestionImage } from '../lib/questionImage';
 
 const OPEN_SENTINEL = 'open';
 const LETTER_KEYS = ['A', 'B', 'C', 'D', 'E'];
@@ -153,6 +154,7 @@ const QuestionCanvas = memo(function QuestionCanvas({
   const openId = openOpt?.id ?? OPEN_SENTINEL;
   const showSaved = flash?.id != null && String(flash.id) === String(question.id);
   const dark = theme === 'dark';
+  const figureSrc = parseQuestionImage(question) || question.imageUrl || question.figureUrl || question.FigureUrl;
 
   return (
     <div className="flex min-h-[12rem] flex-col">
@@ -179,11 +181,11 @@ const QuestionCanvas = memo(function QuestionCanvas({
           <div className={`rounded-2xl border p-5 ${dark ? 'border-white/10 bg-[var(--card)]' : 'border-[#E5E7EB] bg-white'}`}>
             <p className={`text-sm font-semibold ${dark ? 'text-white/55' : 'text-[#6B7280]'}`}>Sual {index + 1}</p>
             <div className={`mt-2 select-none text-[18px] font-medium leading-[1.5] ${dark ? 'text-[#f3f0ea]' : 'text-[#1F2937]'}`}>
-              <LatexText text={question.text} />
+              <LatexText text={stripQuestionImage(question.text)} />
             </div>
-            {(question.imageUrl || question.figureUrl || question.FigureUrl) ? (
+            {figureSrc ? (
               <img
-                src={question.imageUrl || question.figureUrl || question.FigureUrl}
+                src={figureSrc}
                 alt=""
                 className="mt-3 max-h-64 w-full rounded-xl bg-white object-contain p-2"
               />

@@ -28,6 +28,7 @@ import { countStreak, DAILY_EVENT, dailyDoneDays, dailyKey, dailyMine, dailyTopB
 import { examSortNewest, todaysTopicQuiz } from '../lib/dailyTopicQuiz';
 import { tbilisiYmd } from '../lib/mathCalendar';
 import StreakFlame from '../components/StreakFlame';
+import LatexText from '../components/LatexText';
 import { Check } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -292,7 +293,9 @@ export default function StudentDashboard() {
             <StreakFlame streak={daily.peak || daily.streak} dying={daily.dying} size={18} /> {daily.streak}
           </span>
         </div>
-        <p className="mt-3 line-clamp-2 text-sm font-extrabold leading-snug">{daily.q.text.replace(/\$/g, '')}</p>
+        <div className="mt-3 line-clamp-2 text-sm font-extrabold leading-snug">
+          <LatexText text={daily.q.text} />
+        </div>
         <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
           {daily.done ? t('daily.answered') : t('daily.open')}
         </span>

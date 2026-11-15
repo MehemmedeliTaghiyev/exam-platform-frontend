@@ -593,9 +593,9 @@ export function universalMathParser(rawText) {
     .replace(/ω/g, '\\omega ')
     .replace(/·/g, '\\cdot ');
 
+  const AZL = 'A-Za-zəöüğışçƏÖÜĞİŞÇıİ';
   const simpleReplacements = [
-    { regex: /\bbucaq\s+/gi, replace: '\\angle ' },
-    { regex: /\baci\s+/gi, replace: '\\angle ' },
+    { regex: new RegExp(`(^|[^${AZL}])(?:bucaq|Bucaq|aci|Aci)\\s+(?=[A-Z])`, 'g'), replace: '$1\\angle ' },
     { regex: /\^\s*deg\b/gi, replace: '^\\circ' },
     { regex: /\bpi\b/gi, replace: '\\pi' },
     { regex: /\binf\b|\bsonsuzluq\b|\bsonsuz\b/gi, replace: '\\infty' },
@@ -605,7 +605,7 @@ export function universalMathParser(rawText) {
     { regex: /\+-/g, replace: '\\pm ' },
     { regex: /\bparallel\b/gi, replace: '\\parallel ' },
     { regex: /\bperp\b|\bperpendikulyar\b/gi, replace: '\\perp ' },
-    { regex: /\büçbucaq\s+|\bucbucaq\s+/gi, replace: '\\triangle ' },
+    { regex: new RegExp(`(^|[^${AZL}])(?:üçbucaq|ucbucaq|Üçbucaq)\\s+(?=[A-Z])`, 'g'), replace: '$1\\triangle ' },
     { regex: /\bvektor\[([^[\]]+)\]/gi, replace: '\\vec{$1}' },
   ];
   simpleReplacements.forEach((item) => {

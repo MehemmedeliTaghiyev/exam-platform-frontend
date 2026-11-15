@@ -6,6 +6,7 @@ import { Button, Card } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { formatHms } from '../lib/utils';
 import { day6ResultFor } from '../lib/day6ReviewQuiz';
+import LatexText from '../components/LatexText';
 
 function statusOf(q) {
   if (q.unanswered) return 'blank';
@@ -103,11 +104,11 @@ export default function Day6Result() {
           {visible.map((q) => (
             <Card key={q.questionId || q.index}>
               <div className="flex items-start justify-between gap-3">
-                <p className="font-extrabold">{q.index}. {q.text}</p>
+                <p className="font-extrabold">{q.index}. <LatexText text={q.text} /></p>
                 <StatusBadge status={statusOf(q)} />
               </div>
-              <p className="mt-2 text-sm font-semibold text-[var(--muted)]">Sənin: {q.selectedText}</p>
-              <p className="mt-1 text-sm font-semibold text-[#22c55e]">Düzgün: {q.correctText}</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--muted)]">Sənin: <LatexText text={q.selectedText} /></p>
+              <p className="mt-1 text-sm font-semibold text-[#22c55e]">Düzgün: <LatexText text={q.correctText} /></p>
             </Card>
           ))}
         </div>

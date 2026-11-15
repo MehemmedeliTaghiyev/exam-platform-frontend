@@ -132,10 +132,18 @@ export function defaultStudentExams() {
 export function defaultStudentQuestions(examId) {
   if (examId === 'demo-math') {
     return [
-      choice('dm1', '12 + 8 = ?', 'A', { A: '20', B: '18', C: '22', D: '16', E: '24' }),
-      choice('dm2', 'Kvadratın sahəsi a²-dirsə, a=5 olanda sahə?', 'C', { A: '10', B: '20', C: '25', D: '30', E: '15' }),
-      choice('dm3', '3x = 15 tənliyində x?', 'B', { A: '3', B: '5', C: '6', D: '15', E: '12' }),
-      choice('dm4', 'Hansı ədəd sadədir?', 'D', { A: '9', B: '15', C: '21', D: '17', E: '25' }),
+      choice('dm1', 'Əgər $\\dfrac{1}{2}+\\dfrac{1}{3}$ olarsa, cəmi hansıdır?', 'C', {
+        A: '$\\dfrac{1}{5}$', B: '$\\dfrac{2}{5}$', C: '$\\dfrac{5}{6}$', D: '$\\dfrac{2}{6}$', E: '$1$',
+      }),
+      choice('dm2', '$\\sqrt{49}+3^{2}$ ifadəsinin qiyməti?', 'B', {
+        A: '$10$', B: '$16$', C: '$13$', D: '$7$', E: '$18$',
+      }),
+      choice('dm3', 'x=\\frac{5}{2} olarsa, $2x-1$ neçədir?', 'A', {
+        A: '$4$', B: '$5$', C: '$3$', D: '$\\dfrac{5}{2}$', E: '$6$',
+      }),
+      choice('dm4', '$\\angle ABC = 90^{\\circ}$ olarsa, üçbucaq hansıdır?', 'A', {
+        A: 'düzbucaqlı', B: 'itibucaqlı', C: 'genişbucaq', D: 'bərabərtərəfli', E: 'çevirə',
+      }),
     ];
   }
   if (examId === 'demo-locked') {

@@ -4,10 +4,19 @@ import { completeStoragePayment, storageSubscription } from './storageAccess';
 
 export const WEEKLY_TOKENS = 30;
 export const STARTER_TOKENS = 30;
+/** Müəllimlər limitsiz jeton — yalnız sahibi deyəndə false et. */
+export const TOKENS_UNLIMITED_TEMP = true;
+/** Köhnə səviyyə qiymətləri (uyğunluq); Anbar artıq növə görə. */
 export const TOKEN_COSTS = {
   asan: 5,
   orta: 7,
   çətin: 8,
+};
+/** Anbar: 3 tip — çətinlik seçimi yoxdur, sabit daxili bölgü. */
+export const KIND_TOKEN_COSTS = {
+  sınaq: 7,
+  buraxılış: 7,
+  blok: 8,
 };
 export const TOKEN_EVENT = 'exampulse-tokens';
 
@@ -55,6 +64,15 @@ export function tokenCostForMix(mix = {}) {
   const orta = Math.max(0, Number(mix.orta) || 0);
   const hard = Math.max(0, Number(mix.çətin ?? mix.cetin) || 0);
   return asan * TOKEN_COSTS.asan + orta * TOKEN_COSTS.orta + hard * TOKEN_COSTS.çətin;
+}
+
+/** Anbar sifarişi: Sınaq / Buraxılış / Blok — yalnız quiz sayı × növ qiyməti. */
+export function tokenCostForStorageOrder(kind, _mix = {}, standardCount = 1) {
+  const n = Math.max(1, Number(standardCount) || 1);
+  const raw = String(kind || '').toLocaleLowerCase('az');
+  if (/blok|block|specialty/.test(raw)) return n * KIND_TOKEN_COSTS.blok;
+  if (/burax/.test(raw)) return n * KIND_TOKEN_COSTS.buraxılış;
+  return n * KIND_TOKEN_COSTS.sınaq;
 }
 
 export function tokenCostForQuestions(questions = []) {
@@ -112,6 +130,7 @@ export function ensureWeeklyTokens(user) {
 
 export function isTokenUnlimited(user) {
   if (!user) return false;
+  if (TOKENS_UNLIMITED_TEMP) return true;
   if (user.practice || user.role === 'Admin') return true;
   return Boolean(storageSubscription(user));
 }
@@ -200,17 +219,11 @@ export function markStorageRequestSeen(user, id) {
   return next;
 }
 
-export async function requestStorageExam(user, mix, extras = {}) {
-  const asan = Math.max(0, Math.round(Number(mix?.asan) || 0));
-  const orta = Math.max(0, Math.round(Number(mix?.orta) || 0));
-  const hard = Math.max(0, Math.round(Number(mix?.çətin) || 0));
-  const quizCount = asan + orta + hard;
-  if (!quizCount) {
-    const err = new Error('SUAL_YOX');
-    err.code = 'SUAL_YOX';
-    throw err;
-  }
-  const cost = tokenCostForMix({ asan, orta, çətin: hard });
+export async function requestStorageExam(user, _mix, extras = {}) {
+  const kind = String(extras.kind || 'Sınaq');
+  const standardCount = Math.max(1, Math.round(Number(extras.standardCount) || 1));
+  const quizCount = standardCount;
+  const cost = tokenCostForStorageOrder(kind, {}, standardCount);
   // Balansı əvvəlcədən yoxla; jetoni yalnız uğurlu sifarişdən sonra sil.
   if (!isTokenUnlimited(user)) {
     const account = teacherTokenAccount(user);
@@ -224,14 +237,14 @@ export async function requestStorageExam(user, mix, extras = {}) {
   const language = 'az';
   const subject = String(extras.subject || '');
   const grade = String(extras.grade || '11');
-  const kind = String(extras.kind || 'Sınaq');
   const week = isoWeekKey();
 
   const { fulfillTeacherBankOrder, questionsPerPaper } = await import('./teacherBankOrder');
   const perPaper = questionsPerPaper(kind);
-  // Anbar steppers = quiz kağızı sayı (hər biri 25 və ya Blokda 30).
+  // Anbar: Sınaq / Buraxılış / Blok — yalnız quiz sayı; daxili bölgü sabit.
   const result = await fulfillTeacherBankOrder(user, {
-    mix: { asan, orta, çətin: hard },
+    mix: { asan: 0, orta: 0, çətin: 0 },
+    standardCount,
     language,
     subject,
     grade,
@@ -243,9 +256,10 @@ export async function requestStorageExam(user, mix, extras = {}) {
 
   const examIds = (result.results || [result]).map((r) => r.exam?.id).filter(Boolean);
   spendTokens(user, cost, `${quizCount} quiz Anbara düşdü`, {
-    asan,
-    orta,
-    çətin: hard,
+    asan: 0,
+    orta: 0,
+    çətin: 0,
+    standardCount,
     examId: result.exam?.id,
     examIds,
     questionsPerPaper: perPaper,
@@ -255,9 +269,10 @@ export async function requestStorageExam(user, mix, extras = {}) {
     id: one.pack?.id || `${week}-${Date.now()}-${index}`,
     week,
     at: new Date().toISOString(),
-    asan: index === 0 ? asan : 0,
-    orta: index === 0 ? orta : 0,
-    çətin: index === 0 ? hard : 0,
+    asan: 0,
+    orta: 0,
+    çətin: 0,
+    standardCount: index === 0 ? standardCount : 0,
     cost: index === 0 ? cost : 0,
     language,
     subject,
@@ -267,7 +282,7 @@ export async function requestStorageExam(user, mix, extras = {}) {
     seen: false,
     status: 'ready',
     examId: one.exam?.id,
-    title: one.pack?.title || `Quiz · ${asan}/${orta}/${hard}`,
+    title: one.pack?.title || `${kind} · ${standardCount}`,
     paper: {
       exam_id: one.exam?.id,
       title: one.pack?.title,

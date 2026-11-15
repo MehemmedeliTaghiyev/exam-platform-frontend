@@ -1,5 +1,22 @@
 # ExamPulse — edilməli olanlar
 
+## Növbəti sessiya (şəkilli suallar → Android → iOS)
+
+Plan (istifadəçi 2026-11-12): imtahandan sonra davam.
+
+1. [x] **Yarımçıq fiqurlar təmizlə** (2026-11-13 local) — 782 PNG silindi; 33 bank sətiri silindi; 425-dən fiqur bayrağı təmizləndi; **230** usable qaldı. Backup: `_collector/backup_figure_cleanup_20261113_010048`. Live SQL: `deploy/cleanup_incomplete_figures.sql` (əvvəl ROLLBACK).
+2. [x] **Tam sual şəkilləri** — lokal classify + enhance (Sonnet 5.5); `out/import_rows.csv` + `out/figures/` (~1081). Live import + CDN hələ açıq.
+3. [x] **AI analiz (lokal)** — Sonnet 5.5 classify 414/414; LaTeX→text; dedup (−35); GPT quality (−1082, qaldı 2740). Live reimport + CDN qalır.
+4. [~] **Müəllim quiz / PDF** — `preferFigures` + cavablar səhifəsi + səhifə № + meta. Live təmizlik/reimport + full-image CDN-dən sonra son yoxlanış.
+5. [ ] **Android** — build / Internal testing / yerləşdirmə
+6. [ ] **Sabah iOS** — Mac-ə son mərhələ (dostun Mac + sahibin Apple Developer); TestFlight
+
+Qeyd: iPhone-da PDF.js extract yox; şagird kartlarla imtahan verir. Şəkil kartda/PDF-də URL ilə göstərilir — köhnə iOS qadağasına zidd deyil.
+
+**Live hələ:** `cleanup_incomplete_figures.sql` + yenilənmiş CSV reimport + Exam.dll (UseCount və s.) SmarterASP-ə.
+
+**LaTeX → plain (2026-11-13):** lokal `questions_dim.csv` plain text-ə çevrildi (`npm run bank:latex-to-plain`). UI fallback: `latexText.js` → `latexToPlain`. Live banka yenidən import lazımdır.
+
 Ödəniş hələ bağlanmayıb. Aşağıdakılar növbə ilə.
 
 ## Web Push (VAPID)

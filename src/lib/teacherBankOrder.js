@@ -398,11 +398,6 @@ async function createFilledTeacherExam(user, input = {}) {
   const orta = Math.max(0, Math.round(Number(input.mix?.orta) || 0));
   const hard = Math.max(0, Math.round(Number(input.mix?.çətin ?? input.mix?.cetin) || 0));
   const paperMode = input.unit === 'papers' || input.asQuizCount === true;
-  const singleLevel = input.difficultyLevel
-    || (asan && !orta && !hard ? LEVEL_MAP.asan
-      : orta && !asan && !hard ? LEVEL_MAP.orta
-        : hard && !asan && !orta ? LEVEL_MAP.çətin
-          : null);
 
   const kind = String(input.kind || 'Sınaq');
   const standardPaper = isStandardKind(kind);
@@ -422,13 +417,8 @@ async function createFilledTeacherExam(user, input = {}) {
     throw err;
   }
 
-  const sınaqLevel = standardPaper
-    ? 'standart'
-    : (singleLevel === LEVEL_MAP.asan
-      ? 'asan'
-      : singleLevel === LEVEL_MAP.çətin
-        ? 'çətin'
-        : 'orta');
+  // Anbar: çətinlik seçimi yox; Sınaq → sabit orta daxili bölgü.
+  const sınaqLevel = 'standart';
   const qMix = paperMode ? questionMixForPaper(kind, sınaqLevel) : null;
 
   const { subject, subjectName } = await resolveSubject(input);
@@ -436,13 +426,10 @@ async function createFilledTeacherExam(user, input = {}) {
   const start = new Date();
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
   const topicLabel = topics.length ? topics.join(', ') : kind;
-  const bandLabel = standardPaper
-    ? 'standart'
-    : (sınaqLevel === 'asan' ? 'Asan' : sınaqLevel === 'çətin' ? 'Çətin' : paperMode ? 'Orta' : (singleLevel || ''));
   const paperTag = input.paperIndex && input.paperTotal
     ? ` · ${input.paperIndex}/${input.paperTotal}`
     : '';
-  const title = `${subjectName} · ${kind}${bandLabel ? ` · ${bandLabel}` : ''} · ${topicLabel}${paperTag}`.slice(0, 180);
+  const title = `${subjectName} · ${kind} · ${topicLabel}${paperTag}`.slice(0, 180);
 
   const exam = await createExam({
     title,
@@ -665,17 +652,13 @@ export async function fulfillTeacherBankOrder(user, input = {}) {
   const kind = String(input.kind || 'Sınaq');
   const slots = [];
 
-  if (isStandardKind(kind)) {
-    const n = Math.max(
-      1,
-      Math.round(Number(input.standardCount) || (asan + orta + hard) || 1),
-    );
-    for (let i = 0; i < n; i += 1) slots.push(null);
-  } else {
-    for (let i = 0; i < asan; i += 1) slots.push(LEVEL_MAP.asan);
-    for (let i = 0; i < orta; i += 1) slots.push(LEVEL_MAP.orta);
-    for (let i = 0; i < hard; i += 1) slots.push(LEVEL_MAP.çətin);
-  }
+  // Sınaq / Buraxılış / Blok — çətinlik seçimi yox; yalnız quiz sayı.
+  // Sınaq kağızı daxildə orta (standart) bölgü ilə doldurulur.
+  const n = Math.max(
+    1,
+    Math.round(Number(input.standardCount) || (asan + orta + hard) || 1),
+  );
+  for (let i = 0; i < n; i += 1) slots.push(null);
 
   if (!slots.length) {
     const err = new Error('SUAL_YOX');

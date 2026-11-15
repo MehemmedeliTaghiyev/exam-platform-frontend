@@ -16,7 +16,15 @@
     "mobile:sync": "vite build && npx cap sync android",
     "mobile:open": "npx cap open android",
     "mobile:run": "vite build && npx cap sync android && npx cap run android",
-    "mobile:ios": "vite build && npx cap sync ios"
+    "mobile:ios": "vite build && npx cap sync ios",
+    "classify:figures": "node scripts/classify-full-questions.mjs --resume",
+    "classify:figures:dry": "node scripts/classify-full-questions.mjs --dry --limit 3",
+    "enhance:figures": "node scripts/enhance-question-images.mjs",
+    "bank:latex-to-plain": "node scripts/bank-latex-to-plain.mjs",
+    "bank:latex-ai": "node scripts/bank-latex-ai.mjs --from-bak --resume",
+    "bank:dedup": "node scripts/bank-dedup.mjs",
+    "bank:quality": "node scripts/bank-quality-gpt.mjs",
+    "bank:figure-quality": "node scripts/bank-figure-quality.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -39,6 +47,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.3",
+    "sharp": "^0.35.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

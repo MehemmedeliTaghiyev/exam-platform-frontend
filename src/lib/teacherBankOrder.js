@@ -583,7 +583,7 @@ async function createFilledTeacherExam(user, input = {}) {
     const { buildExamPaperPdf } = await import('./examPaperPdf');
     // Şəkilli suallar: bank FigureUrl / CDN → PDF-ə yapışdır (müəllim kağızı).
     pdfBlob = await buildExamPaperPdf(questions, title, {
-      preferFigures: false,
+      preferFigures: true,
       includeAnswerKey: true,
       meta: [kind, String(input.grade || ''), topicLabel].filter(Boolean).join(' · ').slice(0, 60),
     });

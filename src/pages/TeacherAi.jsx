@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import TeacherAiPanel from '../components/TeacherAiPanel';
 import { AuthContext } from '../context/AuthContext';
+import { AI_FEATURE_OPEN } from '../lib/driveLinks';
 import { normalizeRole } from '../lib/utils';
 
 export default function TeacherAi() {
@@ -11,9 +12,20 @@ export default function TeacherAi() {
   const unlocked = role === 'Admin' || role === 'Teacher';
 
   return (
-    <AppShell title="AI özəlliyi" mainClassName="!mx-0 !max-w-none !px-0 !py-0">
+    <AppShell title="AI özəlliyi · tezliklə" mainClassName="!mx-0 !max-w-none !px-0 !py-0">
       <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-indigo-900 via-violet-900 to-slate-950 text-white">
-        {unlocked ? (
+        {!AI_FEATURE_OPEN ? (
+          <div className="mx-auto flex max-w-lg flex-col items-center px-6 py-24 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400/90 text-indigo-950">
+              <Sparkles size={26} />
+            </div>
+            <p className="mt-6 text-xs font-semibold uppercase tracking-wider text-amber-200">Tezliklə</p>
+            <h2 className="mt-2 text-2xl font-black">AI özəlliyi tezliklə açılacaq</h2>
+            <p className="mt-3 text-sm leading-6 text-indigo-100">
+              Mövzudan avtomatik imtahan hazırlığı hazırlanır. İndi Anbardan sınaq sifariş edə bilərsiniz.
+            </p>
+          </div>
+        ) : unlocked ? (
           <div className="mx-auto max-w-5xl p-6 sm:p-10">
             <div className="mb-6 flex items-start gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 text-indigo-950 shadow-md">

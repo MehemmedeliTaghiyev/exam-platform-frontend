@@ -12,6 +12,8 @@ export const A4_WIDTH_PX = 794;
 export const A4_HEIGHT_PX = 1123;
 /** Teacher / DİM-style: 10 questions on a paper page, then the next sheet. */
 export const QUESTIONS_PER_PAGE = 10;
+/** Hard cap: at most 10 şəkil (figure images) on one A4 page. */
+export const FIGURES_PER_PAGE = 10;
 
 function escapeHtml(value) {
   return String(value || '')
@@ -91,32 +93,42 @@ export function isFullImageQuestion(stem, opts) {
 
 /**
  * Pack question blocks onto pages: 10 per A4, then the next sheet.
- * Still page-breaks earlier if a block cannot fit the remaining height.
+ * Also cap şəkil at 10 per page. Page-break earlier if a block cannot
+ * fit the remaining height.
  */
 export function packBlocksOntoPages(heights, {
   pageHeight = Number.POSITIVE_INFINITY,
   reservedTop = 0,
   reservedBottom = 0,
   maxPerPage = QUESTIONS_PER_PAGE,
+  figureFlags = [],
+  maxFiguresPerPage = FIGURES_PER_PAGE,
 } = {}) {
   const usable = Math.max(1, Number(pageHeight) - reservedTop - reservedBottom);
   const cap = Math.max(1, Math.round(Number(maxPerPage) || QUESTIONS_PER_PAGE));
+  const figCap = Math.max(1, Math.round(Number(maxFiguresPerPage) || FIGURES_PER_PAGE));
   const pages = [];
   let current = [];
   let used = 0;
+  let figures = 0;
   (heights || []).forEach((raw, index) => {
     const h = Math.max(1, Number(raw) || 1);
-    const full = current.length >= cap || (current.length > 0 && used + h > usable);
+    const isFig = Boolean(figureFlags[index]);
+    const full = current.length >= cap
+      || (current.length > 0 && used + h > usable)
+      || (current.length > 0 && isFig && figures >= figCap);
     if (full) {
-      pages.push({ indices: current, used });
+      pages.push({ indices: current, used, figures });
       current = [];
       used = 0;
+      figures = 0;
     }
     current.push(index);
     used += h;
+    if (isFig) figures += 1;
   });
-  if (current.length) pages.push({ indices: current, used });
-  return pages.length ? pages : [{ indices: [], used: 0 }];
+  if (current.length) pages.push({ indices: current, used, figures });
+  return pages.length ? pages : [{ indices: [], used: 0, figures: 0 }];
 }
 
 export const PAPER_CSS = `
@@ -199,6 +211,8 @@ html, body {
   max-height: 170px;
   margin: 3px 0 2px 1.55em;
   object-fit: contain;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 .ep-fig.full {
   max-width: 92%;
@@ -264,7 +278,7 @@ export function paperHeaderHtml({
   const pageBit = page && total ? `${page} / ${total}` : '';
   return `<header class="ep-head">
     <div class="ep-head-row">
-      <span>ExamPulse · müəllim vərəqi</span>
+      <span>ExamPulse · imtahan vərəqi</span>
       <span>${escapeHtml(pageBit)}${continued ? ' · davam' : ''}</span>
     </div>
     <div class="ep-head-title">${heading}</div>
@@ -318,7 +332,7 @@ export function answerKeyHtml(questions = []) {
 export function examPaperBodyHtml(questions = [], options = {}) {
   const preferFigures = options.preferFigures !== false;
   const blocks = (questions || []).map((q, i) => questionBlockHtml(q, i, { preferFigures }));
-  const key = options.includeAnswerKey === false ? '' : answerKeyHtml(questions);
+  const key = options.includeAnswerKey === true ? answerKeyHtml(questions) : '';
   return `${blocks.join('\n')}${key}`;
 }
 
@@ -326,15 +340,22 @@ function footerHtml(page, total) {
   return `<footer class="ep-foot"><span>ExamPulse</span><span>Səhifə ${page} / ${total}</span></footer>`;
 }
 
-/** Split questions into paper pages of 10 (last page may be shorter). */
+/** Split questions into paper pages of 10, and at most 10 şəkil per page. */
 export function questionPageChunks(questions = [], size = QUESTIONS_PER_PAGE) {
   const qs = questions || [];
   const cap = Math.max(1, Math.round(Number(size) || QUESTIONS_PER_PAGE));
-  const chunks = [];
-  for (let i = 0; i < qs.length; i += cap) {
-    chunks.push({ start: i, items: qs.slice(i, i + cap) });
-  }
-  return chunks.length ? chunks : [{ start: 0, items: [] }];
+  if (!qs.length) return [{ start: 0, items: [] }];
+  const heights = qs.map(() => 1);
+  const figureFlags = qs.map((q) => Boolean(questionFigureUrl(q, true)));
+  return packBlocksOntoPages(heights, {
+    pageHeight: 1e9,
+    maxPerPage: cap,
+    figureFlags,
+    maxFiguresPerPage: FIGURES_PER_PAGE,
+  }).map((pack) => ({
+    start: pack.indices[0] || 0,
+    items: pack.indices.map((i) => qs[i]),
+  }));
 }
 
 export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options = {}) {
@@ -342,7 +363,7 @@ export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options 
   const count = qs.length;
   const date = formatPaperDate(options.date);
   const preferFigures = options.preferFigures !== false;
-  const includeKey = options.includeAnswerKey !== false;
+  const includeKey = options.includeAnswerKey === true;
   const katexHref = options.katexCssHref
     || 'https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.css';
   const chunks = questionPageChunks(qs, QUESTIONS_PER_PAGE);

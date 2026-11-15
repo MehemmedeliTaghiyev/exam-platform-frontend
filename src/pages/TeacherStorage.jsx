@@ -15,7 +15,7 @@ import { Bell, Club, Download, Droplet, Eye, Gift, Minus, Package, Plus } from '
 import { PREFERENCE_OPTIONS, defaultPreferences, driveDownloadUrl, driveViewUrl, gradeLabel, kindsForGrade, packLatexSource, teacherSubjectOf } from '../lib/storageCatalog';
 import { loadQuizCatalog } from '../lib/quizPipeline';
 import { compileLatexPdf, saveAndOpenPdf } from '../lib/latexPdf';
-import { buildExamPaperPdf } from '../lib/examPaperPdf';
+import { buildExamPaperPdf, openExamPaperPrint } from '../lib/examPaperPdf';
 import LatexText from '../components/LatexText';
 import { errorMessage } from '../lib/utils';
 import { isMixedExamKind, withMixedMark } from '../lib/syllabus';
@@ -300,15 +300,23 @@ export default function TeacherStorage() {
     });
   };
 
+  const paperOpts = (pack) => ({
+    preferFigures: true,
+    includeAnswerKey: false,
+    meta: [pack.subject, pack.grade, pack.kind].filter(Boolean).join(' · ').slice(0, 60),
+  });
+
+  const deliverQuestionsPdf = async (questions, title, opts, filename) => {
+    if (questions?.length && openExamPaperPrint(questions, title, opts)) return;
+    const blob = await buildExamPaperPdf(questions || [], title, opts);
+    await saveAndOpenPdf(blob, filename);
+  };
+
   const pdfForPack = async (pack) => {
     if (pack.examId) {
       const qs = await fetchQuestions(pack.examId).catch(() => []);
       if (qs?.length) {
-        return buildExamPaperPdf(qs, pack.title || 'Sınaq', {
-          preferFigures: true,
-          includeAnswerKey: true,
-          meta: [pack.subject, pack.grade, pack.kind].filter(Boolean).join(' · ').slice(0, 60),
-        });
+        return buildExamPaperPdf(qs, pack.title || 'Sınaq', paperOpts(pack));
       }
     }
     if (pack.latexSource) {
@@ -323,6 +331,18 @@ export default function TeacherStorage() {
     if (!unlocked) return;
     // Həmişə lokal rebuild — Drive köhnə PDF saxlayır, parser düzəlişləri görünmür.
     try {
+      if (pack.examId) {
+        const qs = await fetchQuestions(pack.examId).catch(() => []);
+        if (qs?.length) {
+          await deliverQuestionsPdf(
+            qs,
+            pack.title || 'Sınaq',
+            paperOpts(pack),
+            `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`,
+          );
+          return;
+        }
+      }
       const blob = await pdfForPack(pack);
       await saveAndOpenPdf(blob, `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`);
     } catch (err) {
@@ -341,8 +361,15 @@ export default function TeacherStorage() {
     setError('');
     try {
       const filename = `${String(pack.title || 'material').replace(/[^\w.\-əöüğçşıİƏÖÜĞÇŞ ]+/gi, '') || 'material'}.pdf`;
-      // Əvvəl lokal rebuild (təzə latexToPlain); Drive yalnız rebuild alınmasa.
+      // Əvvəl lokal rebuild (təzə DİM vərəqi); Drive yalnız rebuild alınmasa.
       try {
+        if (pack.examId) {
+          const qs = await fetchQuestions(pack.examId).catch(() => []);
+          if (qs?.length) {
+            await deliverQuestionsPdf(qs, pack.title || 'Sınaq', paperOpts(pack), filename);
+            return;
+          }
+        }
         const blob = await pdfForPack(pack);
         await saveAndOpenPdf(blob, filename);
         return;
@@ -387,16 +414,26 @@ export default function TeacherStorage() {
         for (let i = 0; i < papers.length; i += 1) {
           const paper = papers[i];
           const questions = paper?.paper?.questions || [];
+          const opts = {
+            preferFigures: true,
+            includeAnswerKey: false,
+            meta: [paper.subject, paper.grade, paper.kind].filter(Boolean).join(' · ').slice(0, 60),
+          };
+          if (i === 0 && questions.length) {
+            await deliverQuestionsPdf(
+              questions,
+              paper.title || 'Quiz',
+              opts,
+              `${String(paper.title || 'quiz').slice(0, 40)}.pdf`,
+            );
+            continue;
+          }
           const blob = paper?.pdfBlob
             || (questions.length
-              ? await buildExamPaperPdf(questions, paper.title || 'Quiz', {
-                preferFigures: true,
-                includeAnswerKey: true,
-                meta: [paper.subject, paper.grade, paper.kind].filter(Boolean).join(' · ').slice(0, 60),
-              })
+              ? await buildExamPaperPdf(questions, paper.title || 'Quiz', opts)
               : null)
             || (await compileLatexPdf(paper?.paper?.latexSource || '', { title: paper.title || 'Quiz' })).blob;
-          if (i === 0) {
+          if (i === 0 && blob) {
             await saveAndOpenPdf(blob, `${String(paper.title || 'quiz').slice(0, 40)}.pdf`);
           }
         }

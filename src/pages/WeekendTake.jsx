@@ -13,6 +13,7 @@ import {
   weekendWeekKey,
 } from '../lib/weekendWeakExam';
 import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
+import LatexText from '../components/LatexText';
 
 function clockKey(userId, week) {
   return `exampulse_weekend_clock:${userId}:${week}`;
@@ -97,7 +98,7 @@ export default function WeekendTake() {
       <Card>
         <p className="text-xs font-bold text-[var(--muted)]">Sual {index + 1} / {questions.length}</p>
         {question.subject ? <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{question.subject}</p> : null}
-        <h2 className="mt-3 text-xl font-extrabold">{question.text}</h2>
+        <h2 className="mt-3 text-xl font-extrabold"><LatexText text={question.text} /></h2>
         <div className="mt-5 grid gap-2">
           {question.options.map((option, optionIndex) => {
             const on = Number(answers[question.id]) === optionIndex;
@@ -109,7 +110,7 @@ export default function WeekendTake() {
                 className={`quiz-opt font-semibold ${on ? 'quiz-opt-on' : ''}`}
               >
                 <span className="quiz-letter">{String.fromCharCode(65 + optionIndex)}</span>
-                <span className="min-w-0 flex-1">{option}</span>
+                <LatexText className="min-w-0 flex-1 text-left" text={option} />
               </button>
             );
           })}

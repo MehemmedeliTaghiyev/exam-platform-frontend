@@ -6,6 +6,7 @@ import { Button, Card } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
 import { formatHms } from '../lib/utils';
 import { weekendResultFor } from '../lib/weekendWeakExam';
+import LatexText from '../components/LatexText';
 
 function statusOf(q) {
   if (q.unanswered) return 'blank';
@@ -110,7 +111,7 @@ export default function WeekendResult() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-white/50">Sual {q.index}{q.subject ? ` · ${q.subject}` : ''}</p>
-                      <h3 className="mt-2 text-base font-extrabold leading-6">{q.text}</h3>
+                      <h3 className="mt-2 text-base font-extrabold leading-6"><LatexText text={q.text} /></h3>
                     </div>
                     <StatusBadge status={status} />
                   </div>
@@ -125,7 +126,9 @@ export default function WeekendResult() {
                       return (
                         <div key={opt.id || oi} className={`flex items-start gap-2 rounded-2xl border px-3 py-3 text-sm font-semibold ${tone}`}>
                           {opt.isCorrect ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : chosenWrong ? <XCircle size={16} className="mt-0.5 shrink-0" /> : <Circle size={16} className="mt-0.5 shrink-0 opacity-40" />}
-                          <span>{String.fromCharCode(65 + oi)}) {opt.text}</span>
+                          <span className="min-w-0 flex-1">
+                            {String.fromCharCode(65 + oi)}) <LatexText text={opt.text} />
+                          </span>
                         </div>
                       );
                     })}

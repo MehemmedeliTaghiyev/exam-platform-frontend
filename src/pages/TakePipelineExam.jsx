@@ -6,6 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { mapPipelineQuestion, parseLang, scoreAnswer } from '../lib/pipeline/contract';
 import { usePipelineExam, useSubmitPipelineAttempts } from '../lib/pipeline/hooks';
 import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
+import LatexText from '../components/LatexText';
 
 export default function TakePipelineExam({ preview = false }) {
   const { examId } = useParams();
@@ -114,10 +115,10 @@ export default function TakePipelineExam({ preview = false }) {
             {questions.map((question, index) => (
               <div key={question.id}>
                 {question.situationTitle && (
-                  <p className="mb-2 text-sm font-semibold text-[#4F46E5]">{question.situationTitle}</p>
+                  <p className="mb-2 text-sm font-semibold text-[#4F46E5]"><LatexText text={question.situationTitle} /></p>
                 )}
                 {question.stem && question.stem !== question.text && (
-                  <p className="mb-2 text-sm text-[#6B7280]">{question.stem}</p>
+                  <p className="mb-2 text-sm text-[#6B7280]"><LatexText text={question.stem} /></p>
                 )}
                 <QuestionCard
                   question={question}

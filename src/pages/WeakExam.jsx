@@ -4,6 +4,7 @@ import { Calendar, Info, Minus, Plus } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import { EmptyState, Skeleton } from '../components/ui';
+import LatexText from '../components/LatexText';
 import {
   addQuestion,
   createExam,
@@ -471,7 +472,7 @@ export default function WeakExam() {
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#7c6aff] text-sm font-black">
                     {index + 1}
                   </span>
-                  <p className="min-w-0 flex-1 text-[15px] font-extrabold leading-snug">{row.text}</p>
+                  <p className="min-w-0 flex-1 text-[15px] font-extrabold leading-snug"><LatexText text={row.text} /></p>
                   <p className="shrink-0 text-right">
                     <span className="block text-lg font-black tabular-nums">{wrongPct(row)}%</span>
                     <span className="text-[11px] font-bold text-white/35">səhv</span>
@@ -490,7 +491,7 @@ export default function WeakExam() {
                       <span className="grid h-8 w-8 shrink-0 place-items-center text-sm font-black text-white/30">
                         {included.length + index + 1}
                       </span>
-                      <p className="min-w-0 flex-1 text-[15px] font-extrabold leading-snug text-white/55">{row.text}</p>
+                      <p className="min-w-0 flex-1 text-[15px] font-extrabold leading-snug text-white/55"><LatexText text={row.text} /></p>
                       <p className="shrink-0 text-right text-white/45">
                         <span className="block text-lg font-black tabular-nums">{wrongPct(row)}%</span>
                         <span className="text-[11px] font-bold text-white/30">səhv</span>

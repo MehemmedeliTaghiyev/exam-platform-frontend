@@ -13,6 +13,7 @@ import {
   wrapMathExpressions,
 } from './universalMath.js';
 import { renderLatexHtml } from './latexText.js';
+import { latexToPlain } from './examPaperText.js';
 
 function mathCore(out) {
   return String(out).replace(/\$/g, '');
@@ -196,6 +197,12 @@ describe('regression: prior bank paths', () => {
     assert.doesNotMatch(out, /\$b-nin\$/);
     assert.doesNotMatch(out, /doğrudur\?\$$/);
   });
+
+  it('does not eat üçbucaq as \\angle', () => {
+    const out = universalMathParser('$\\angle ABC=90^{\\circ}$ olarsa, üçbucaq hansıdır?');
+    assert.match(out, /üçbucaq hansıdır/);
+    assert.doesNotMatch(out, /üç\\angle/);
+  });
 });
 
 describe('renderLatexHtml', () => {
@@ -213,5 +220,48 @@ describe('renderLatexHtml', () => {
   it('keeps plain az words without katex crash', () => {
     const html = renderLatexHtml('Şəkildə verilənlərə əsasən, x-in qiymətini tapın.');
     assert.ok(html.length > 10);
+  });
+
+  it('renders delimited fractions instead of source latex', () => {
+    const html = renderLatexHtml('Əgər $\\dfrac{1}{2}+\\dfrac{1}{3}$ olarsa, cəmi hansıdır?');
+    assert.match(html, /katex/);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ''), /\\dfrac|\$/);
+  });
+
+  it('renders $...$ option text with no image fields', () => {
+    const html = renderLatexHtml('$\\dfrac{5}{6}$');
+    assert.match(html, /katex/);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ''), /\\dfrac|\$/);
+  });
+
+  it('renders unwrapped frac next to az stem', () => {
+    const html = renderLatexHtml('x=\\frac{5}{2} olarsa, 2x-1 neçədir?');
+    assert.match(html, /katex/);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ''), /\\frac/);
+  });
+
+  it('renders sqrt and exponent', () => {
+    const html = renderLatexHtml('$\\sqrt{49}+3^{2}$ ifadəsinin qiyməti?');
+    assert.match(html, /katex/);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ''), /\\sqrt|\$/);
+  });
+
+  it('keeps mixed az + already-wrapped triangle from dumping leftover latex', () => {
+    const html = renderLatexHtml('Şəkildə $\\triangle ABC$ üçün \\frac{AB}{AC}=2 tapın.');
+    assert.match(html, /katex/);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ''), /\\frac|\\triangle|\$/);
+  });
+
+  it('does not render tikz in the browser', () => {
+    const html = renderLatexHtml('\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture} AB=2 tapın');
+    assert.doesNotMatch(html, /tikzpicture|\\draw/);
+  });
+
+  it('keeps \\angle \\sqrt ^{} as KaTeX, not unicode plain', () => {
+    const html = renderLatexHtml('$\\angle ABC$, $\\sqrt{49}$, $x^{2}$ olarsa tapın');
+    assert.match(html, /katex/);
+    const plain = latexToPlain('$\\angle ABC$, $\\sqrt{49}$, $x^{2}$ olarsa tapın');
+    assert.notEqual(html.replace(/<[^>]+>/g, ''), plain);
+    assert.doesNotMatch(html.replace(/<[^>]+>/g, ''), /\\angle|\\sqrt|\$/);
   });
 });

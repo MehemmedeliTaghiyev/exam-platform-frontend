@@ -15,6 +15,7 @@ import {
 import { getMonthlyQuizPaper } from '../lib/monthlyQuizRam';
 import { formatHms } from '../lib/utils';
 import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
+import LatexText from '../components/LatexText';
 
 function clockKey(userId) {
   return `exampulse_republic_clock:${userId}:${republicMonthKey()}`;
@@ -123,7 +124,7 @@ export default function RepublicTake() {
       </div>
       <Card>
         <p className="text-xs font-bold text-[var(--muted)]">Sual {index + 1} / {questions.length}</p>
-        <h2 className="mt-3 text-xl font-extrabold">{question.text}</h2>
+        <h2 className="mt-3 text-xl font-extrabold"><LatexText text={question.text} /></h2>
         <div className="mt-5 grid gap-2">
           {question.options.map((option, optionIndex) => {
             const on = Number(answers[question.id]) === optionIndex;
@@ -135,7 +136,7 @@ export default function RepublicTake() {
                 className={`quiz-opt font-semibold ${on ? 'quiz-opt-on' : ''}`}
               >
                 <span className="quiz-letter">{String.fromCharCode(65 + optionIndex)}</span>
-                <span className="min-w-0 flex-1">{option}</span>
+                <LatexText className="min-w-0 flex-1 text-left" text={option} />
               </button>
             );
           })}

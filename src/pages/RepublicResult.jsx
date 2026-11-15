@@ -15,12 +15,13 @@ import {
 } from '../lib/republicExam';
 import { formatDateTime, formatHms } from '../lib/utils';
 import { rememberExamOutcome } from '../lib/examOutcomes';
+import LatexText from '../components/LatexText';
 
-function optionLabel(opt, index) {
+function OptionLabel({ opt, index }) {
   const letter = String.fromCharCode(65 + index);
   const text = String(opt.text ?? '').trim();
   if (!text || text.toUpperCase() === letter) return letter;
-  return `${letter}) ${text}`;
+  return <>{letter}) <LatexText text={text} /></>;
 }
 
 function statusOf(q) {
@@ -122,7 +123,7 @@ function RepublicPaper({ questions }) {
                   {q.subject ? ` · ${q.subject}` : ''}
                   {q.topic ? ` · ${q.topic}` : ''}
                 </p>
-                <h3 className="mt-2 text-base font-extrabold leading-6">{q.text}</h3>
+                <h3 className="mt-2 text-base font-extrabold leading-6"><LatexText text={q.text} /></h3>
               </div>
               <StatusBadge status={status} />
             </div>
@@ -138,7 +139,7 @@ function RepublicPaper({ questions }) {
                   <div key={opt.id || oi} className={`flex items-start gap-2 rounded-2xl border px-3 py-3 text-sm font-semibold ${tone}`}>
                     {opt.isCorrect ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : chosenWrong ? <XCircle size={16} className="mt-0.5 shrink-0" /> : <Circle size={16} className="mt-0.5 shrink-0 opacity-40" />}
                     <span className="min-w-0 flex-1">
-                      {optionLabel(opt, oi)}
+                      <OptionLabel opt={opt} index={oi} />
                       {opt.isCorrect ? <span className="ml-2 text-[11px] font-black uppercase tracking-wide">düzgün cavab</span> : null}
                       {opt.isSelected ? <span className="ml-2 text-[11px] font-black uppercase tracking-wide">sizin cavab</span> : null}
                     </span>
@@ -148,10 +149,10 @@ function RepublicPaper({ questions }) {
             </div>
             <div className="mt-4 grid gap-2 text-sm">
               <p className={status === 'wrong' ? 'font-bold text-rose-200' : 'font-semibold text-white/70'}>
-                Sizin cavab: {q.selectedText || 'Cavab verilməyib'}
+                Sizin cavab: {q.selectedText ? <LatexText text={q.selectedText} /> : 'Cavab verilməyib'}
               </p>
               <p className="font-extrabold text-emerald-300">
-                Düzgün cavab: {q.correctText}
+                Düzgün cavab: <LatexText text={q.correctText} />
               </p>
             </div>
           </article>

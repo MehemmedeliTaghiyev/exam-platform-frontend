@@ -1,12 +1,24 @@
 import {
-  parseQuestionImage,
-  questionIsPipelineFullImage,
-  stripImageMetaMarker,
-  stripQuestionImage,
-} from './questionImage';
-import { latexToPlain, stripStemImage } from './examPaperText';
+  answerLetter,
+  examPaperBodyHtml,
+  formatPaperDate,
+  isFullImageQuestion,
+  optionBody,
+  packBlocksOntoPages,
+  QUESTIONS_PER_PAGE,
+  paperHeaderHtml,
+  PAPER_CSS,
+  questionFigureUrl,
+  realOptions,
+  stemText,
+  A4_HEIGHT_PX,
+  A4_WIDTH_PX,
+} from './examPaperLayout.js';
+import { questionIsPipelineFullImage } from './questionImage.js';
+import { latexToPlain } from './examPaperText.js';
 
-export { latexToPlain } from './examPaperText';
+export { latexToPlain } from './examPaperText.js';
+export { packBlocksOntoPages, QUESTIONS_PER_PAGE } from './examPaperLayout.js';
 
 /** Marker kept through Helvetica sanitize → drawn with Symbol font as √ */
 const SQRT_MARK = '\x01';
@@ -49,13 +61,11 @@ function pdfLatin(text) {
     .replace(/≡/g, '=')
     .replace(/\bbucaq\b/g, 'bucaq')
     .replace(/\baci\b/g, 'bucaq')
-    // mojibake qüvvət (əgər latexToPlain-dən keçməyibsə)
     .replace(/´†/g, '²')
     .replace(/´‡/g, '³')
     .replace(/Â²/g, '²')
     .replace(/Â³/g, '³')
     .replace(/Â°/g, '°')
-    // supers outside WinAnsi → digit
     .replace(/¹/g, '^1').replace(/⁰/g, '^0').replace(/⁴/g, '^4')
     .replace(/⁵/g, '^5').replace(/⁶/g, '^6').replace(/⁷/g, '^7')
     .replace(/⁸/g, '^8').replace(/⁹/g, '^9').replace(/ⁿ/g, '^n')
@@ -63,13 +73,11 @@ function pdfLatin(text) {
     .replace(/₃/g, '_3').replace(/₄/g, '_4').replace(/₅/g, '_5')
     .replace(/₆/g, '_6').replace(/₇/g, '_7').replace(/₈/g, '_8')
     .replace(/₉/g, '_9')
-    // keep: ASCII + SQRT_MARK + ° ± ² ³ · × ÷
     .replace(/[^\x01\x20-\x7E\xB0\xB1\xB2\xB3\xB7\xD7\xF7]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/** PDF literal string: WinAnsi bytes as \\ooo for >127 */
 function pdfEscape(text) {
   let out = '';
   for (let i = 0; i < String(text || '').length; i += 1) {
@@ -80,7 +88,7 @@ function pdfEscape(text) {
     else if (ch === ')') out += '\\)';
     else if (ch === '\r') out += '\\r';
     else if (ch === '\n') out += '\\n';
-    else if (c === 0x01) out += ch; // SQRT_MARK — split before escape
+    else if (c === 0x01) out += ch;
     else if (c > 127) out += `\\${c.toString(8).padStart(3, '0')}`;
     else out += ch;
   }
@@ -91,7 +99,7 @@ function pdfSafe(text) {
   return pdfLatin(text);
 }
 
-function wrapLines(text, width = 78) {
+function wrapLines(text, width = 92) {
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let line = '';
@@ -99,81 +107,26 @@ function wrapLines(text, width = 78) {
     const next = line ? `${line} ${word}` : word;
     if (next.length > width) {
       if (line) lines.push(line);
-      line = word.length > width ? word.slice(0, width) : word;
+      if (word.length > width) {
+        for (let i = 0; i < word.length; i += width) lines.push(word.slice(i, i + width));
+        line = '';
+      } else line = word;
     } else line = next;
   });
   if (line) lines.push(line);
   return lines;
 }
 
-function optionBody(opt) {
-  return String(opt?.optionText || opt?.OptionText || opt?.text || opt?.Text || '')
-    .replace(/^[A-F][\)\.\-:]\s*/i, '')
-    .trim();
-}
-
-function isStubOption(opt, index) {
-  const body = optionBody(opt);
-  const letter = String.fromCharCode(65 + index);
-  if (!body) return true;
-  if (/^aç[iı]q$/i.test(body) || /^open$/i.test(body)) return true;
-  if (body.toUpperCase() === letter) return true;
-  if (/^[A-F]$/i.test(body)) return true;
-  return false;
-}
-
-function optionLines(q) {
-  const opts = q?.options || q?.Options || [];
-  const real = opts
-    .map((o, oi) => ({ o, oi }))
-    .filter(({ o, oi }) => !isStubOption(o, oi));
+function optionTextLines(q) {
+  const real = realOptions(q);
   if (!real.length) return [];
-  return real.map(({ o, oi }) => {
+  const parts = real.map(({ o, oi }) => {
     const letter = String.fromCharCode(65 + oi);
-    return `   ${letter}) ${pdfSafe(latexToPlain(optionBody(o)))}`;
+    return `${letter}) ${pdfSafe(latexToPlain(optionBody(o)))}`;
   });
-}
-
-function cleanStem(q) {
-  const raw = stripImageMetaMarker(
-    stripQuestionImage(stripStemImage(q?.text || q?.Text || '')),
-  );
-  return pdfSafe(latexToPlain(raw));
-}
-
-function answerLetter(q, index) {
-  const raw = String(
-    q?.correctAnswer
-    ?? q?.CorrectAnswer
-    ?? q?.correct_answer
-    ?? q?.Correct_Answer
-    ?? q?.answer
-    ?? q?.Answer
-    ?? '',
-  ).trim();
-  if (!raw) return '—';
-  const letter = raw.match(/^[A-Ea-e]/)?.[0];
-  if (letter) return letter.toUpperCase();
-  const plain = pdfSafe(latexToPlain(raw)).slice(0, 24);
-  return plain || '—';
-}
-
-function formatPdfDate(d = new Date()) {
-  try {
-    return d.toLocaleDateString('az-AZ', { year: 'numeric', month: '2-digit', day: '2-digit' });
-  } catch {
-    return d.toISOString().slice(0, 10);
-  }
-}
-
-/** Tam sual şəkli: mətn boş/placeholder, variantlar stub — PDF-də yalnız şəkil. */
-function isFullImageQuestion(stem, opts) {
-  if (opts.length > 0) return false;
-  const s = String(stem || '').trim();
-  if (!s) return true;
-  if (/^(\[sekil\]|\[şəkil\]|\[figure\]|sekil|şəkil)$/i.test(s)) return true;
-  if (s.length <= 12 && /sekil|şəkil|figure|img/i.test(s)) return true;
-  return false;
+  const joined = parts.join('    ');
+  if (joined.length <= 88) return [`   ${joined}`];
+  return parts.map((p) => `   ${p}`);
 }
 
 function canvasToJpegBytes(canvas, quality = 0.9) {
@@ -199,7 +152,6 @@ function drawToJpeg(img, maxW, maxH, quality = 0.9) {
 }
 
 async function loadImageElement(url) {
-  // 1) fetch → blob (CORS/CDN üçün daha sabit)
   try {
     const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
     if (res.ok) {
@@ -230,10 +182,6 @@ async function loadImageElement(url) {
   return img;
 }
 
-/**
- * Bank FigureUrl / CDN → JPEG bytes for PDF.
- * fullQuestion: tam sual şəkli — daha böyük yer.
- */
 async function loadJpeg(url, { fullQuestion = false } = {}) {
   if (!url || typeof document === 'undefined') return null;
   try {
@@ -262,151 +210,63 @@ function join(parts) {
   return out;
 }
 
-const PAGE_TOP = 800;
-const LINE_H = 15;
-const MARGIN_X = 48;
-const PAGE_LINES = 48;
+const PAGE_TOP = 812;
+const LINE_H = 12;
+const MARGIN_X = 40;
+const FOOTER_Y = 28;
+const PAGE_CONTENT_LINES = Math.floor((PAGE_TOP - FOOTER_Y - 8) / LINE_H);
 
-/** Emit PDF text ops for a line that may contain √ markers (Symbol /F2). */
 function pdfLineOps(safeLine, { moveFirst = false } = {}) {
   const parts = String(safeLine || '').split(SQRT_MARK);
   const ops = [];
   if (moveFirst) ops.push(`0 -${LINE_H} Td`);
   if (parts.length === 1) {
-    ops.push(`(${pdfEscape(parts[0]).slice(0, 95)}) Tj`);
+    ops.push(`(${pdfEscape(parts[0])}) Tj`);
     return ops;
   }
   parts.forEach((chunk, i) => {
-    if (i > 0) {
-      // Adobe Symbol: radical = octal 326
-      ops.push('/F2 11 Tf (\\326) Tj /F1 11 Tf');
-    }
-    if (chunk) ops.push(`(${pdfEscape(chunk).slice(0, 95)}) Tj`);
+    if (i > 0) ops.push('/F2 10 Tf (\\326) Tj /F1 10 Tf');
+    if (chunk) ops.push(`(${pdfEscape(chunk)}) Tj`);
   });
   return ops;
 }
 
-/**
- * Exam PDF: mətn + bank URL-dən fiqur/tam-sual şəkli.
- * options.preferFigures — şəkilli sualları mümkün qədər saxla (default true).
- * options.includeAnswerKey — müəllim üçün son səhifədə cavablar (default true).
- * options.meta — əlavə sətir (sinif, mövzu və s.).
- */
-export async function buildExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
-  const preferFigures = options.preferFigures !== false;
-  const includeAnswerKey = options.includeAnswerKey !== false;
-  const heading = pdfSafe(latexToPlain(title)).slice(0, 80) || 'ExamPulse';
-  const count = (questions || []).length;
-  const metaBits = [
-    formatPdfDate(),
-    count ? `${count} sual` : '',
-    options.meta ? pdfSafe(String(options.meta)).slice(0, 60) : '',
-  ].filter(Boolean);
-  const metaLine = metaBits.join('  |  ');
-  const blocks = [];
-  const answers = [];
-
-  for (let i = 0; i < (questions || []).length; i += 1) {
-    const q = questions[i];
-    const stem = cleanStem(q);
-    const opts = optionLines(q);
-    const pipelineMeta = questionIsPipelineFullImage(q);
-    // Pipeline S* / __IM: həmişə şəkli yüklə — allowFigures=false olsa belə mətn+şəkilsiz qalmasın.
-    const url = (preferFigures || pipelineMeta)
-      ? (q?.imageUrl || q?.ImageUrl || parseQuestionImage(q) || '')
-      : '';
-    // image_meta 1|2: mətn bazada dedup üçündür; PDF-də şəkil kifayətdir (fiqur artıq şəkildədir).
-    const pipelineFull = Boolean(url) && pipelineMeta;
-    const fullImage = pipelineFull || (Boolean(url) && isFullImageQuestion(stem, opts));
-    const image = url ? await loadJpeg(url, { fullQuestion: fullImage }) : null;
-    answers.push({ n: i + 1, a: answerLetter(q, i) });
-
-    const lines = [];
-    if (fullImage && image) {
-      lines.push(`${i + 1}.`);
-      const imgLines = Math.max(8, Math.ceil((image.height + 16) / LINE_H));
-      for (let s = 0; s < imgLines; s += 1) lines.push('');
-    } else {
-      lines.push(`${i + 1}. ${stem || (image ? '' : '...')}`);
-      if (image) {
-        const imgLines = Math.max(5, Math.ceil((image.height + 14) / LINE_H));
-        for (let s = 0; s < imgLines; s += 1) lines.push('');
-      }
-      lines.push(...opts);
-    }
-    lines.push('');
-    blocks.push({
-      lines,
-      image,
-      imageAfter: 1,
-      fullImage,
-    });
-  }
-  if (!blocks.length) blocks.push({ lines: ['Suallar yoxdur.'], image: null, imageAfter: 0 });
-
-  const pages = [];
-  const headerLines = metaLine
-    ? ['ExamPulse — muellim vereqi', heading, metaLine, '']
-    : ['ExamPulse — muellim vereqi', heading, ''];
-  let cur = { lines: [...headerLines], images: [] };
-  let used = cur.lines.length;
-  blocks.forEach((block) => {
-    const cost = block.lines.reduce((n, row) => n + Math.max(1, wrapLines(row, 78).length), 0);
-    if (used + cost > PAGE_LINES && used > cur.lines.length) {
-      pages.push(cur);
-      cur = { lines: [], images: [] };
-      used = 0;
-    }
-    const startLine = cur.lines.length;
-    block.lines.forEach((row) => {
-      const wrapped = wrapLines(row, 78);
-      if (!wrapped.length) cur.lines.push('');
-      else wrapped.forEach((ln) => cur.lines.push(ln));
-    });
-    if (block.image) {
-      cur.images.push({
-        ...block.image,
-        anchor: startLine + (block.imageAfter || 1),
-        fullImage: Boolean(block.fullImage),
-      });
-    }
-    used += cost;
-  });
-  if (cur.lines.length) pages.push(cur);
-
-  if (includeAnswerKey && answers.length) {
-    const keyLines = ['Cavablar (muellim)', ''];
-    let row = '';
-    answers.forEach((item, idx) => {
-      const cell = `${String(item.n).padStart(2, ' ')}.${item.a}`;
-      row = row ? `${row}   ${cell}` : cell;
-      if ((idx + 1) % 5 === 0) {
-        keyLines.push(row);
-        row = '';
-      }
-    });
-    if (row) keyLines.push(row);
-    keyLines.push('', 'Sekilli suallarda cavab sekilde / bankda saxlanilir.');
-    pages.push({ lines: keyLines, images: [] });
-  }
-
+function assemblePdf(pages) {
   const objs = [];
   const push = (raw) => {
     objs.push(raw);
     return objs.length;
   };
-
-  // WinAnsi: ² ³ ° və s. Helvetica-də görünür (StandardEncoding-də yoxdur)
   const fontId = push({
     type: 'text',
     body: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
   });
   const symbolFontId = push({ type: 'text', body: '<< /Type /Font /Subtype /Type1 /BaseFont /Symbol >>' });
   const pageRefs = [];
-
   const totalPages = pages.length;
+
   pages.forEach((page, pageIndex) => {
-    const imgIds = page.images.map((img) => {
+    if (page.jpeg) {
+      const imgId = push({
+        type: 'image',
+        width: page.jpeg.width,
+        height: page.jpeg.height,
+        bytes: page.jpeg.bytes,
+      });
+      const stream = `q 595 0 0 842 0 0 cm /Im0 Do Q`;
+      const contentId = push({ type: 'stream', body: stream });
+      const pageId = push({
+        type: 'page',
+        contentId,
+        fontId,
+        symbolFontId,
+        xobj: `/Im0 ${imgId} 0 R`,
+      });
+      pageRefs.push(pageId);
+      return;
+    }
+
+    const imgIds = (page.images || []).map((img) => {
       const id = push({
         type: 'image',
         width: img.width,
@@ -415,27 +275,24 @@ export async function buildExamPaperPdf(questions = [], title = 'Sinag', options
       });
       return { id, img };
     });
-
-    const ops = [`BT /F1 11 Tf ${MARGIN_X} ${PAGE_TOP} Td`];
-    page.lines.forEach((line, idx) => {
-      const safe = pdfLatin(line).slice(0, 95);
+    const ops = [`BT /F1 10 Tf ${MARGIN_X} ${PAGE_TOP} Td`];
+    (page.lines || []).forEach((line, idx) => {
+      const safe = pdfLatin(line);
       ops.push(...pdfLineOps(safe, { moveFirst: idx > 0 }));
     });
     ops.push('ET');
-    // Footer: page number (seliqeli muellim vereqi)
     const footer = pdfEscape(`Sehife ${pageIndex + 1} / ${totalPages}`);
-    ops.push(`BT /F1 9 Tf ${MARGIN_X} 28 Td (${footer}) Tj ET`);
+    ops.push(`BT /F1 8 Tf ${MARGIN_X} ${FOOTER_Y} Td (${footer}) Tj ET`);
     imgIds.forEach(({ img }, n) => {
       const maxW = img.fullImage ? 500 : 320;
-      const maxH = img.fullImage ? 620 : 200;
+      const maxH = img.fullImage ? 620 : 180;
       const scale = Math.min(maxW / img.width, maxH / img.height, 1);
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
       const top = Math.max(50, PAGE_TOP - (img.anchor || 1) * LINE_H - 2);
       ops.push(`q ${w} 0 0 ${h} ${MARGIN_X} ${top - h} cm /Im${n} Do Q`);
     });
-    const stream = ops.join('\n');
-    const contentId = push({ type: 'stream', body: stream });
+    const contentId = push({ type: 'stream', body: ops.join('\n') });
     const xobj = imgIds.map(({ id }, n) => `/Im${n} ${id} 0 R`).join(' ');
     const pageId = push({
       type: 'page',
@@ -449,11 +306,9 @@ export async function buildExamPaperPdf(questions = [], title = 'Sinag', options
 
   const pagesId = push({ type: 'pages', kids: pageRefs });
   const catalogId = push({ type: 'catalog', pagesId });
-
   const parts = [enc('%PDF-1.4\n')];
   const offsets = [0];
   let size = parts[0].length;
-
   const writeObj = (num, bytes) => {
     offsets[num] = size;
     parts.push(bytes);
@@ -496,4 +351,248 @@ export async function buildExamPaperPdf(questions = [], title = 'Sinag', options
   }
   parts.push(enc(`${xref}trailer << /Size ${objs.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`));
   return new Blob([join(parts)], { type: 'application/pdf' });
+}
+
+async function textQuestionBlock(q, index, preferFigures) {
+  const stem = pdfSafe(latexToPlain(stemText(q)));
+  const opts = optionTextLines(q);
+  const url = questionFigureUrl(q, preferFigures);
+  const pipelineFull = Boolean(url) && questionIsPipelineFullImage(q);
+  const fullImage = pipelineFull || (Boolean(url) && isFullImageQuestion(stem, opts));
+  const image = url ? await loadJpeg(url, { fullQuestion: fullImage }) : null;
+  const lines = [];
+  if (fullImage && image) {
+    lines.push(`${index + 1}.`);
+    const imgLines = Math.max(8, Math.ceil((image.height + 12) / LINE_H));
+    for (let s = 0; s < imgLines; s += 1) lines.push('');
+  } else {
+    wrapLines(`${index + 1}. ${stem || (image ? '' : '...')}`, 92).forEach((ln) => lines.push(ln));
+    if (image) {
+      const imgLines = Math.max(4, Math.ceil((image.height + 10) / LINE_H));
+      for (let s = 0; s < imgLines; s += 1) lines.push('');
+    }
+    opts.forEach((row) => wrapLines(row, 92).forEach((ln) => lines.push(ln)));
+  }
+  return { lines, image, imageAfter: 1, fullImage };
+}
+
+function headerLines(title, metaLine, continued = false) {
+  const heading = pdfSafe(latexToPlain(title)).slice(0, 90) || 'ExamPulse';
+  return [
+    `ExamPulse — muellim vereqi${continued ? '  (davam)' : ''}`,
+    heading,
+    metaLine,
+  ];
+}
+
+async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
+  const preferFigures = options.preferFigures !== false;
+  const includeAnswerKey = options.includeAnswerKey !== false;
+  const count = (questions || []).length;
+  const metaBits = [
+    formatPaperDate(),
+    count ? `${count} sual` : '',
+    options.meta ? pdfSafe(String(options.meta)).slice(0, 70) : '',
+  ].filter(Boolean);
+  const metaLine = metaBits.join('  |  ');
+  const blocks = [];
+
+  for (let i = 0; i < (questions || []).length; i += 1) {
+    blocks.push(await textQuestionBlock(questions[i], i, preferFigures));
+  }
+  if (!blocks.length) blocks.push({ lines: ['Suallar yoxdur.'], image: null, imageAfter: 0 });
+
+  let keyBlock = null;
+  if (includeAnswerKey && count) {
+    const keyLines = ['Cavablar (muellim)'];
+    let row = '';
+    questions.forEach((q, idx) => {
+      const cell = `${String(idx + 1).padStart(2, ' ')}.${pdfSafe(answerLetter(q))}`;
+      row = row ? `${row}   ${cell}` : cell;
+      if ((idx + 1) % 5 === 0) {
+        keyLines.push(row);
+        row = '';
+      }
+    });
+    if (row) keyLines.push(row);
+    keyLines.push('Sekilli suallarda cavab sekilde / bankda saxlanilir.');
+    keyBlock = { lines: keyLines, image: null, imageAfter: 0, isKey: true };
+  }
+
+  const headerH = headerLines(title, metaLine).length;
+  const heights = blocks.map((b) => b.lines.length);
+  const packed = packBlocksOntoPages(heights, {
+    pageHeight: PAGE_CONTENT_LINES,
+    reservedTop: headerH,
+    maxPerPage: QUESTIONS_PER_PAGE,
+  });
+
+  const pages = packed.map((pack, pageIndex) => {
+    const continued = pageIndex > 0;
+    const lines = [...headerLines(title, metaLine, continued), ''];
+    const images = [];
+    pack.indices.forEach((bi) => {
+      const block = blocks[bi];
+      const startLine = lines.length;
+      block.lines.forEach((ln) => lines.push(ln));
+      if (block.image) {
+        images.push({
+          ...block.image,
+          anchor: startLine + (block.imageAfter || 1),
+          fullImage: Boolean(block.fullImage),
+        });
+      }
+    });
+    return { lines, images, used: pack.used };
+  });
+
+  if (keyBlock) {
+    const last = pages[pages.length - 1];
+    const room = PAGE_CONTENT_LINES - headerH - (last?.used || 0);
+    if (last && keyBlock.lines.length <= room) {
+      last.lines.push('');
+      keyBlock.lines.forEach((ln) => last.lines.push(ln));
+    } else {
+      pages.push({
+        lines: [...headerLines(title, metaLine, true), '', ...keyBlock.lines],
+        images: [],
+      });
+    }
+  }
+
+  return assemblePdf(pages);
+}
+
+function footerHtml(page, total) {
+  return `<footer class="ep-foot"><span>ExamPulse</span><span>Səhifə ${page} / ${total}</span></footer>`;
+}
+
+async function waitForImages(root) {
+  const imgs = [...(root.querySelectorAll?.('img') || [])];
+  await Promise.all(imgs.map((img) => {
+    if (img.complete && img.naturalWidth) return Promise.resolve();
+    return new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }));
+}
+
+async function buildDomExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
+  await import('katex/dist/katex.min.css').catch(() => {});
+  const html2canvas = (await import('html2canvas')).default;
+  const preferFigures = options.preferFigures !== false;
+  const includeAnswerKey = options.includeAnswerKey !== false;
+  const count = (questions || []).length;
+  const date = formatPaperDate();
+  const meta = options.meta || '';
+
+  const host = document.createElement('div');
+  host.className = 'ep-print-host';
+  host.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;background:#fff;z-index:-1;';
+  const style = document.createElement('style');
+  style.textContent = PAPER_CSS;
+  host.appendChild(style);
+
+  const measure = document.createElement('div');
+  measure.className = 'ep-paper-flow';
+  measure.style.cssText = `width:${A4_WIDTH_PX - 68}px;padding:0;`;
+  measure.innerHTML = examPaperBodyHtml(questions, { preferFigures, includeAnswerKey });
+  host.appendChild(measure);
+  document.body.appendChild(host);
+
+  try {
+    await waitForImages(host);
+    if (document.fonts?.ready) await document.fonts.ready.catch(() => {});
+
+    const qEls = [...measure.querySelectorAll('.ep-q')];
+    const keyEl = measure.querySelector('.ep-key');
+    const qHeights = qEls.map((el) => Math.ceil(el.getBoundingClientRect().height));
+    const keyH = keyEl ? Math.ceil(keyEl.getBoundingClientRect().height) : 0;
+
+    const probe = document.createElement('div');
+    probe.className = 'ep-paper-page';
+    probe.innerHTML = `${paperHeaderHtml({
+      title, meta, date, count, page: 1, total: 1,
+    })}<div class="ep-body"></div>${footerHtml(1, 1)}`;
+    host.appendChild(probe);
+    const headerH = Math.ceil((probe.querySelector('.ep-head')?.getBoundingClientRect().height || 54) + 8);
+    const innerH = A4_HEIGHT_PX - 26 - 40;
+    const usable = innerH - headerH;
+    host.removeChild(probe);
+
+    const packed = packBlocksOntoPages(qHeights, {
+      pageHeight: usable,
+      maxPerPage: QUESTIONS_PER_PAGE,
+    });
+    let keyOnLast = false;
+    const last = packed[packed.length - 1];
+    if (includeAnswerKey && keyEl && last && last.used + keyH <= usable) {
+      keyOnLast = true;
+    } else if (includeAnswerKey && keyEl) {
+      packed.push({ indices: [], used: keyH, keyOnly: true });
+    }
+
+    const total = packed.length;
+    const pageEls = packed.map((pack, pageIndex) => {
+      const page = document.createElement('div');
+      page.className = 'ep-paper-page';
+      const qHtml = pack.indices.map((i) => qEls[i].outerHTML).join('');
+      const showKey = keyEl && ((keyOnLast && pageIndex === packed.length - 1) || pack.keyOnly);
+      page.innerHTML = `${paperHeaderHtml({
+        title,
+        meta,
+        date,
+        count,
+        page: pageIndex + 1,
+        total,
+        continued: pageIndex > 0,
+      })}<div class="ep-body">${qHtml}${showKey ? keyEl.outerHTML : ''}</div>${footerHtml(pageIndex + 1, total)}`;
+      return page;
+    });
+
+    measure.remove();
+    pageEls.forEach((el) => host.appendChild(el));
+    await waitForImages(host);
+
+    const pages = [];
+    for (const el of pageEls) {
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        width: A4_WIDTH_PX,
+        height: A4_HEIGHT_PX,
+        windowWidth: A4_WIDTH_PX,
+        windowHeight: A4_HEIGHT_PX,
+      });
+      pages.push({
+        jpeg: {
+          bytes: canvasToJpegBytes(canvas, 0.92),
+          width: canvas.width,
+          height: canvas.height,
+        },
+      });
+    }
+    return assemblePdf(pages);
+  } finally {
+    host.remove();
+  }
+}
+
+/**
+ * Exam PDF: KaTeX HTML on A4 (browser) or Helvetica fallback (Node).
+ * Ten questions per A4 page, then the next sheet.
+ * Figures are embedded images, not extracted figure text.
+ */
+export async function buildExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
+  if (typeof document !== 'undefined') {
+    try {
+      return await buildDomExamPaperPdf(questions, title, options);
+    } catch {
+      /* Helvetica path still prints every question */
+    }
+  }
+  return buildTextExamPaperPdf(questions, title, options);
 }

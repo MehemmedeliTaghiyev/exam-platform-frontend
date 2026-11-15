@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { latexToPlain } from './examPaperText.js';
+import {
+  examPaperBodyHtml,
+  examPaperDocumentHtml,
+  packBlocksOntoPages,
+  QUESTIONS_PER_PAGE,
+} from './examPaperLayout.js';
+import { buildExamPaperPdf } from './examPaperPdf.js';
 import { paperCopyQuota, questionsPerPaper } from './paperQuota.js';
 
 describe('latexToPlain', () => {
@@ -103,5 +110,96 @@ describe('questionsPerPaper', () => {
     assert.equal(paperCopyQuota('Sınaq', 'Orta').count, 25);
     const b = paperCopyQuota('Buraxılış', 'Sadə', '11');
     assert.equal(b.mcqCount + b.openCodedCount + b.writtenCount, 25);
+  });
+});
+
+function samplePaper(n = 25) {
+  return Array.from({ length: n }, (_, i) => ({
+    text: `${i + 1 === 2 ? 'İfadəni sadələşdirin: $\\sqrt{(1-\\sqrt{5})^2}$' : `Sual ${i + 1}. $x^{${(i % 5) + 1}}$ və $\\dfrac{1}{${i + 2}}$`}`,
+    options: [
+      { optionText: 'A) $2$' },
+      { optionText: 'B) $-3$' },
+      { optionText: 'C) $1$' },
+      { optionText: 'D) $-1$' },
+      { optionText: 'E) $3$' },
+    ],
+    correctAnswer: 'C',
+  }));
+}
+
+describe('packBlocksOntoPages', () => {
+  it('puts 10 questions per page, then the next sheet', () => {
+    assert.equal(QUESTIONS_PER_PAGE, 10);
+    const heights = Array(25).fill(36);
+    const pages = packBlocksOntoPages(heights, { pageHeight: 720, reservedTop: 80 });
+    const total = pages.reduce((n, p) => n + p.indices.length, 0);
+    assert.equal(total, 25);
+    assert.equal(pages[0].indices.length, 10);
+    assert.equal(pages[1].indices.length, 10);
+    assert.equal(pages[2].indices.length, 5);
+    assert.deepEqual(pages.flatMap((p) => p.indices), [...Array(25).keys()]);
+  });
+
+  it('never drops overflow questions', () => {
+    const heights = Array(25).fill(200);
+    const pages = packBlocksOntoPages(heights, { pageHeight: 500, reservedTop: 60 });
+    assert.equal(pages.reduce((n, p) => n + p.indices.length, 0), 25);
+    assert.ok(pages[0].indices.length <= 10);
+    assert.ok(pages.length >= 3);
+  });
+});
+
+describe('exam paper html', () => {
+  it('emits every question with KaTeX, not a 9-item slice', () => {
+    const html = examPaperBodyHtml(samplePaper(25), { includeAnswerKey: true });
+    assert.equal((html.match(/class="ep-q"/g) || []).length, 25);
+    assert.match(html, /data-q="25"/);
+    assert.match(html, /katex/);
+    assert.doesNotMatch(html, /\$\\sqrt|\$x\^/);
+  });
+
+  it('first paper page has questions 1–10 only', () => {
+    const html = examPaperDocumentHtml(samplePaper(25), 'Test');
+    const pages = html.split('class="ep-paper-page"');
+    assert.ok(pages.length >= 4);
+    assert.match(pages[1], /data-q="1"/);
+    assert.match(pages[1], /data-q="10"/);
+    assert.doesNotMatch(pages[1], /data-q="11"/);
+    assert.match(pages[2], /data-q="11"/);
+  });
+});
+
+describe('buildExamPaperPdf', () => {
+  it('writes all 25 questions across 10-per-page sheets', async () => {
+    const blob = await buildExamPaperPdf(samplePaper(25), 'Riyaziyyat · Sınaq · n-ci dərəcədən kök', {
+      preferFigures: true,
+      includeAnswerKey: true,
+      meta: 'Sınaq · 11 · n-ci dərəcədən kök',
+    });
+    const raw = Buffer.from(await blob.arrayBuffer()).toString('latin1');
+    assert.match(raw, /%PDF-1\./);
+    assert.match(raw, /25\. Sual 25/);
+    assert.match(raw, /1\. Sual 1/);
+    const pageCount = (raw.match(/\/Type \/Page /g) || []).length;
+    assert.ok(pageCount >= 3);
+  });
+
+  it('overflows long questions onto the next A4 instead of clipping', async () => {
+    const long = Array.from({ length: 25 }, (_, i) => ({
+      text: `Sual ${i + 1}. ${'uzun ifadə '.repeat(28)}$\\sqrt{${i + 1}}$`,
+      options: [
+        { optionText: 'A) $2$' },
+        { optionText: 'B) $-3$' },
+        { optionText: 'C) $1$' },
+        { optionText: 'D) $-1$' },
+        { optionText: 'E) $3$' },
+      ],
+      correctAnswer: 'C',
+    }));
+    const blob = await buildExamPaperPdf(long, 'Uzun sınaq', { includeAnswerKey: true });
+    const raw = Buffer.from(await blob.arrayBuffer()).toString('latin1');
+    const pageCount = (raw.match(/\/Type \/Page /g) || []).length;
+    assert.ok(pageCount >= 2);
+    assert.match(raw, /25\. Sual 25/);
   });
 });

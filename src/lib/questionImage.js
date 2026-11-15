@@ -1,4 +1,4 @@
-import { FIGURE_QNUMS } from './figureFiles';
+import { FIGURE_QNUMS } from './figureFiles.js';
 
 const IMG_PREFIX = '__IMG__';
 const IMG_SUFFIX = '__';

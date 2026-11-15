@@ -5,6 +5,7 @@ import {
   isFullImageQuestion,
   optionBody,
   packBlocksOntoPages,
+  QUESTIONS_PER_PAGE,
   paperHeaderHtml,
   PAPER_CSS,
   questionFigureUrl,
@@ -17,7 +18,7 @@ import { questionIsPipelineFullImage } from './questionImage.js';
 import { latexToPlain } from './examPaperText.js';
 
 export { latexToPlain } from './examPaperText.js';
-export { packBlocksOntoPages } from './examPaperLayout.js';
+export { packBlocksOntoPages, QUESTIONS_PER_PAGE } from './examPaperLayout.js';
 
 /** Marker kept through Helvetica sanitize → drawn with Symbol font as √ */
 const SQRT_MARK = '\x01';
@@ -423,6 +424,7 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
   const packed = packBlocksOntoPages(heights, {
     pageHeight: PAGE_CONTENT_LINES,
     reservedTop: headerH,
+    maxPerPage: QUESTIONS_PER_PAGE,
   });
 
   const pages = packed.map((pack, pageIndex) => {
@@ -519,7 +521,10 @@ async function buildDomExamPaperPdf(questions = [], title = 'Sinag', options = {
     const usable = innerH - headerH;
     host.removeChild(probe);
 
-    const packed = packBlocksOntoPages(qHeights, { pageHeight: usable });
+    const packed = packBlocksOntoPages(qHeights, {
+      pageHeight: usable,
+      maxPerPage: QUESTIONS_PER_PAGE,
+    });
     let keyOnLast = false;
     const last = packed[packed.length - 1];
     if (includeAnswerKey && keyEl && last && last.used + keyH <= usable) {
@@ -578,8 +583,8 @@ async function buildDomExamPaperPdf(questions = [], title = 'Sinag', options = {
 
 /**
  * Exam PDF: KaTeX HTML on A4 (browser) or Helvetica fallback (Node).
- * Packs as many questions as fit; overflow starts the next page.
- * No 9-question cap. Figures are embedded images, not extracted figure text.
+ * Ten questions per A4 page, then the next sheet.
+ * Figures are embedded images, not extracted figure text.
  */
 export async function buildExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
   if (typeof document !== 'undefined') {

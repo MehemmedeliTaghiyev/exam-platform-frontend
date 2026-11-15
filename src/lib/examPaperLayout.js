@@ -10,6 +10,8 @@ import { renderLatexHtml } from './latexText.js';
 /** A4 at 96dpi — matches @page size: A4 */
 export const A4_WIDTH_PX = 794;
 export const A4_HEIGHT_PX = 1123;
+/** Teacher / DİM-style: 10 questions on a paper page, then the next sheet. */
+export const QUESTIONS_PER_PAGE = 10;
 
 function escapeHtml(value) {
   return String(value || '')
@@ -88,21 +90,24 @@ export function isFullImageQuestion(stem, opts) {
 }
 
 /**
- * Pack block heights onto pages. No per-page / per-doc question cap —
- * a block moves to the next page only when the current page is full.
+ * Pack question blocks onto pages: 10 per A4, then the next sheet.
+ * Still page-breaks earlier if a block cannot fit the remaining height.
  */
 export function packBlocksOntoPages(heights, {
-  pageHeight,
+  pageHeight = Number.POSITIVE_INFINITY,
   reservedTop = 0,
   reservedBottom = 0,
+  maxPerPage = QUESTIONS_PER_PAGE,
 } = {}) {
   const usable = Math.max(1, Number(pageHeight) - reservedTop - reservedBottom);
+  const cap = Math.max(1, Math.round(Number(maxPerPage) || QUESTIONS_PER_PAGE));
   const pages = [];
   let current = [];
   let used = 0;
   (heights || []).forEach((raw, index) => {
     const h = Math.max(1, Number(raw) || 1);
-    if (current.length > 0 && used + h > usable) {
+    const full = current.length >= cap || (current.length > 0 && used + h > usable);
+    if (full) {
       pages.push({ indices: current, used });
       current = [];
       used = 0;
@@ -125,8 +130,8 @@ html, body {
 }
 .ep-paper-flow, .ep-paper-page {
   font-family: "Times New Roman", Times, "Noto Serif", "Liberation Serif", serif;
-  font-size: 12.5px;
-  line-height: 1.28;
+  font-size: 13px;
+  line-height: 1.32;
   color: #111;
   background: #fff;
 }
@@ -158,10 +163,11 @@ html, body {
   line-height: 1.22;
 }
 .ep-head-meta { font-size: 11px; color: #222; }
+.ep-body { min-height: 0; }
 .ep-q {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 0 0 6px;
+  margin: 0 0 11px;
 }
 .ep-q-row {
   display: flex;
@@ -227,8 +233,19 @@ html, body {
 .ep-key-note { font-size: 9px; color: #555; margin-top: 5px; }
 @media print {
   .ep-print-host { width: auto; }
+  .ep-paper-page {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    page-break-after: always;
+    break-after: page;
+  }
+  .ep-paper-page:last-child { page-break-after: auto; break-after: auto; }
   .ep-q { break-inside: avoid; page-break-inside: avoid; }
   .ep-head { break-after: avoid; }
+  .ep-foot { position: static; margin-top: 12px; }
   .ep-screen-only { display: none !important; }
 }
 `;
@@ -305,18 +322,62 @@ export function examPaperBodyHtml(questions = [], options = {}) {
   return `${blocks.join('\n')}${key}`;
 }
 
+function footerHtml(page, total) {
+  return `<footer class="ep-foot"><span>ExamPulse</span><span>Səhifə ${page} / ${total}</span></footer>`;
+}
+
+/** Split questions into paper pages of 10 (last page may be shorter). */
+export function questionPageChunks(questions = [], size = QUESTIONS_PER_PAGE) {
+  const qs = questions || [];
+  const cap = Math.max(1, Math.round(Number(size) || QUESTIONS_PER_PAGE));
+  const chunks = [];
+  for (let i = 0; i < qs.length; i += cap) {
+    chunks.push({ start: i, items: qs.slice(i, i + cap) });
+  }
+  return chunks.length ? chunks : [{ start: 0, items: [] }];
+}
+
 export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options = {}) {
-  const count = (questions || []).length;
+  const qs = questions || [];
+  const count = qs.length;
   const date = formatPaperDate(options.date);
+  const preferFigures = options.preferFigures !== false;
+  const includeKey = options.includeAnswerKey !== false;
   const katexHref = options.katexCssHref
     || 'https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.css';
-  const header = paperHeaderHtml({
-    title,
-    meta: options.meta || '',
-    date,
-    count,
+  const chunks = questionPageChunks(qs, QUESTIONS_PER_PAGE);
+  const lastShort = chunks[chunks.length - 1].items.length < QUESTIONS_PER_PAGE;
+  const extraKeyPage = includeKey && !lastShort;
+  const total = chunks.length + (extraKeyPage ? 1 : 0);
+  const meta = options.meta || '';
+  const pages = chunks.map((chunk, pageIndex) => {
+    const qHtml = chunk.items.map((q, j) => (
+      questionBlockHtml(q, chunk.start + j, { preferFigures })
+    )).join('\n');
+    const showKey = includeKey && lastShort && pageIndex === chunks.length - 1;
+    return `<div class="ep-paper-page">
+      ${paperHeaderHtml({
+        title,
+        meta,
+        date,
+        count,
+        page: pageIndex + 1,
+        total,
+        continued: pageIndex > 0,
+      })}
+      <div class="ep-body">${qHtml}${showKey ? answerKeyHtml(qs) : ''}</div>
+      ${footerHtml(pageIndex + 1, total)}
+    </div>`;
   });
-  const body = examPaperBodyHtml(questions, options);
+  if (extraKeyPage) {
+    pages.push(`<div class="ep-paper-page">
+      ${paperHeaderHtml({
+        title, meta, date, count, page: total, total, continued: true,
+      })}
+      <div class="ep-body">${answerKeyHtml(qs)}</div>
+      ${footerHtml(total, total)}
+    </div>`);
+  }
   return `<!DOCTYPE html>
 <html lang="az">
 <head>
@@ -326,10 +387,7 @@ export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options 
   <style>${PAPER_CSS}</style>
 </head>
 <body>
-  <div class="ep-paper-flow">
-    ${header}
-    ${body}
-  </div>
+  ${pages.join('\n')}
 </body>
 </html>`;
 }

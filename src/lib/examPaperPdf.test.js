@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { latexToPlain } from './examPaperText.js';
-import { examPaperBodyHtml, packBlocksOntoPages } from './examPaperLayout.js';
+import {
+  examPaperBodyHtml,
+  examPaperDocumentHtml,
+  packBlocksOntoPages,
+  QUESTIONS_PER_PAGE,
+} from './examPaperLayout.js';
 import { buildExamPaperPdf } from './examPaperPdf.js';
 import { paperCopyQuota, questionsPerPaper } from './paperQuota.js';
 
@@ -123,13 +128,15 @@ function samplePaper(n = 25) {
 }
 
 describe('packBlocksOntoPages', () => {
-  it('fills the page then continues; no 9-question cap', () => {
+  it('puts 10 questions per page, then the next sheet', () => {
+    assert.equal(QUESTIONS_PER_PAGE, 10);
     const heights = Array(25).fill(36);
     const pages = packBlocksOntoPages(heights, { pageHeight: 720, reservedTop: 80 });
     const total = pages.reduce((n, p) => n + p.indices.length, 0);
     assert.equal(total, 25);
-    assert.ok(pages[0].indices.length > 9);
-    assert.ok(pages.length >= 2);
+    assert.equal(pages[0].indices.length, 10);
+    assert.equal(pages[1].indices.length, 10);
+    assert.equal(pages[2].indices.length, 5);
     assert.deepEqual(pages.flatMap((p) => p.indices), [...Array(25).keys()]);
   });
 
@@ -137,7 +144,8 @@ describe('packBlocksOntoPages', () => {
     const heights = Array(25).fill(200);
     const pages = packBlocksOntoPages(heights, { pageHeight: 500, reservedTop: 60 });
     assert.equal(pages.reduce((n, p) => n + p.indices.length, 0), 25);
-    assert.ok(pages.length > 9);
+    assert.ok(pages[0].indices.length <= 10);
+    assert.ok(pages.length >= 3);
   });
 });
 
@@ -149,10 +157,20 @@ describe('exam paper html', () => {
     assert.match(html, /katex/);
     assert.doesNotMatch(html, /\$\\sqrt|\$x\^/);
   });
+
+  it('first paper page has questions 1–10 only', () => {
+    const html = examPaperDocumentHtml(samplePaper(25), 'Test');
+    const pages = html.split('class="ep-paper-page"');
+    assert.ok(pages.length >= 4);
+    assert.match(pages[1], /data-q="1"/);
+    assert.match(pages[1], /data-q="10"/);
+    assert.doesNotMatch(pages[1], /data-q="11"/);
+    assert.match(pages[2], /data-q="11"/);
+  });
 });
 
 describe('buildExamPaperPdf', () => {
-  it('writes all 25 compact questions (no 9-item drop)', async () => {
+  it('writes all 25 questions across 10-per-page sheets', async () => {
     const blob = await buildExamPaperPdf(samplePaper(25), 'Riyaziyyat · Sınaq · n-ci dərəcədən kök', {
       preferFigures: true,
       includeAnswerKey: true,
@@ -162,6 +180,8 @@ describe('buildExamPaperPdf', () => {
     assert.match(raw, /%PDF-1\./);
     assert.match(raw, /25\. Sual 25/);
     assert.match(raw, /1\. Sual 1/);
+    const pageCount = (raw.match(/\/Type \/Page /g) || []).length;
+    assert.ok(pageCount >= 3);
   });
 
   it('overflows long questions onto the next A4 instead of clipping', async () => {

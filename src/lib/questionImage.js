@@ -25,11 +25,52 @@ function isImageSrc(value) {
 }
 
 function figureUrlForQnum(q) {
-  const qnum = String(q?.sourceQnum || q?.SourceQnum || q?.qnum || q?.Qnum || '')
-    .trim()
-    .toUpperCase();
-  if (!FIGURE_QNUMS.has(qnum)) return '';
-  return `${FIGURE_ORIGIN}/figures/${qnum}.png`;
+  const raw = String(q?.sourceQnum || q?.SourceQnum || q?.qnum || q?.Qnum || '').trim();
+  if (!raw) return '';
+  const upper = raw.toUpperCase();
+  // Exact CDN filename from local set (preserves casing like S00001)
+  for (const id of FIGURE_QNUMS) {
+    if (String(id).toUpperCase() === upper) {
+      return `${FIGURE_ORIGIN}/figures/${id}.png`;
+    }
+  }
+  // Pipeline full-image S*: CDN-dədir — FIGURE_QNUMS deploy olunmasa belə URL qur
+  if (/^S\d+$/i.test(raw)) {
+    return `${FIGURE_ORIGIN}/figures/${raw}.png`;
+  }
+  return '';
+}
+
+const IM_MARKER_RE = /__IM:([12])__/i;
+
+/**
+ * Pipeline image_meta: 1 = yalnız şəkil; 2 = şəkil + daxilində fiqur.
+ * Reads imageMeta, text marker `__IM:1|2__`, or topicWeights `im=1|2`.
+ */
+export function readImageMeta(q) {
+  const direct = q?.imageMeta ?? q?.ImageMeta ?? q?.image_meta ?? q?.Image_Meta;
+  const n = Number(direct);
+  if (n === 1 || n === 2) return n;
+  const text = String(q?.text || q?.Text || q?.questionText || '');
+  const fromText = text.match(IM_MARKER_RE);
+  if (fromText) return Number(fromText[1]);
+  const weights = String(
+    q?.topicWeights || q?.TopicWeights || q?.topic_weights || '',
+  );
+  const m = weights.match(/(?:^|[;\s,])im\s*=\s*([12])(?:[;\s,]|$)/i);
+  if (m) return Number(m[1]);
+  return 0;
+}
+
+/** Strip pipeline marker from stem (dedup text stays; marker is transport only). */
+export function stripImageMetaMarker(text) {
+  return String(text || '').replace(/^\s*__IM:[12]__\s*/i, '').trim();
+}
+
+/** Full-question image from pipeline: PDF/kart üçün gövdə mətni təkrarlanmasın. */
+export function questionIsPipelineFullImage(q) {
+  const meta = readImageMeta(q);
+  return meta === 1 || meta === 2;
 }
 
 export function parseQuestionImage(q) {
@@ -84,7 +125,7 @@ export function questionHasFigure(q) {
 }
 
 export function stripQuestionImage(text) {
-  let raw = String(text || '');
+  let raw = stripImageMetaMarker(String(text || ''));
   if (raw.startsWith(IMG_PREFIX)) {
     const end = raw.indexOf(IMG_SUFFIX, IMG_PREFIX.length);
     if (end >= 0) raw = raw.slice(end + IMG_SUFFIX.length).replace(/^\n/, '');

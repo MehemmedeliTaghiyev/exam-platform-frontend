@@ -1208,6 +1208,13 @@ export async function copyFromBank(examId, quota = {}) {
     writtenCount: quota.writtenCount,
     situationCount: quota.situationCount,
     excludeFigures: quota.excludeFigures === true ? true : undefined,
+    asanCount: quota.asanCount != null ? Number(quota.asanCount) : undefined,
+    ortaCount: quota.ortaCount != null ? Number(quota.ortaCount) : undefined,
+    cetinCount: quota.cetinCount != null ? Number(quota.cetinCount) : undefined,
+    excludeQnums: Array.isArray(quota.excludeQnums)
+      ? quota.excludeQnums.map((q) => String(q || '').trim()).filter(Boolean).slice(0, 400)
+      : undefined,
+    includeNeedsReview: quota.includeNeedsReview === true ? true : undefined,
   };
   Object.keys(body).forEach((key) => {
     if (body[key] === undefined || body[key] === null || body[key] === '') delete body[key];

@@ -6,3 +6,7 @@ alwaysApply: true
 Pending work lives in `EDILMELI.md` at the repo root. Do not treat it as done until the user checks it off.
 
 Current reminder: there is **no VAPID private key** on Vercel. The site works without it. Web Push urgent messages need a generated key pair; put the private key only in Vercel env `VAPID_PRIVATE_KEY`, never in git. Teacher weekly quiz alerts use Capacitor local notifications and do not need VAPID.
+
+SmarterASP .NET publish claimed 2026-11-08; `QuestionBank` SQL is on `db_ace530_exam`. Do not push CSV until live `POST /api/question-bank/import` is not 404.
+
+Store: Play public is not same-day. iOS via **friend's Mac** is OK; Apple Developer account stays the owner's, not the friend's. App Store is possible; expect 4.2/demo-account review, no card/VOEN in the native app.

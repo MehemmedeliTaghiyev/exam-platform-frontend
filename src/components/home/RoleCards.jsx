@@ -27,7 +27,7 @@ export default function RoleCards({ onStudent, onTeacher }) {
               </span>
               <div>
                 <h3>Müəllim</h3>
-                <p>İmtahan yarat, sual kartı əlavə et, qruplarını idarə et.</p>
+                <p>Anbardan sınaq sifariş et, qruplarını idarə et. İmtahan yaratma tezliklə.</p>
               </div>
             </div>
             <button type="button" onClick={onTeacher} className="hp-btn hp-btn-ghost hp-lift">

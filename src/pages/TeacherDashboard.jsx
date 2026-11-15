@@ -11,7 +11,7 @@ import { errorMessage, examCanEdit, isExamDraft, isExamLive, normalizeRole, reso
 import { republicAdminExams, republicMonthLabel } from '../lib/republicExam';
 import TokenBanner from '../components/TokenBanner';
 import { filterPublicExams, uniqueSubjects } from '../lib/publicExams';
-import { driveFileViewUrl, parseDriveFileId } from '../lib/driveLinks';
+import { driveFileViewUrl, EXAM_CREATE_OPEN, parseDriveFileId } from '../lib/driveLinks';
 import { withMixedMark } from '../lib/syllabus';
 import { durationHint, durationMinutesForQuestionCount } from '../lib/examDuration';
 
@@ -470,8 +470,16 @@ export default function TeacherDashboard() {
     <AppShell
       title="İmtahanlar"
       action={isAdmin ? null : (
-        <Button onClick={() => setShowModal(true)}>
-          <Plus size={16} /> <span className="max-[767px]:sr-only">Yeni imtahan</span>
+        <Button
+          disabled={!EXAM_CREATE_OPEN}
+          title={EXAM_CREATE_OPEN ? undefined : 'Tezliklə'}
+          onClick={() => { if (EXAM_CREATE_OPEN) setShowModal(true); }}
+        >
+          <Plus size={16} />{' '}
+          <span className="max-[767px]:sr-only">
+            {EXAM_CREATE_OPEN ? 'Yeni imtahan' : 'İmtahan yarat · tezliklə'}
+          </span>
+          {!EXAM_CREATE_OPEN ? <span className="min-[768px]:hidden text-[10px] font-extrabold">tezliklə</span> : null}
         </Button>
       )}
     >
@@ -652,8 +660,13 @@ export default function TeacherDashboard() {
                 {isAdmin ? 'Respublika sınaqları burada görünəcək.' : 'Fənn seçərək ilk imtahanı əlavə edin.'}
               </p>
               {isAdmin ? null : (
-                <Button className="mt-5" onClick={() => setShowModal(true)}>
-                  <Plus size={16} /> İmtahan yarat
+                <Button
+                  className="mt-5"
+                  disabled={!EXAM_CREATE_OPEN}
+                  title={EXAM_CREATE_OPEN ? undefined : 'Tezliklə'}
+                  onClick={() => { if (EXAM_CREATE_OPEN) setShowModal(true); }}
+                >
+                  <Plus size={16} /> {EXAM_CREATE_OPEN ? 'İmtahan yarat' : 'İmtahan yarat · tezliklə'}
                 </Button>
               )}
             </div>

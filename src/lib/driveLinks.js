@@ -1,4 +1,7 @@
-export const AI_FEATURE_OPEN = true;
+/** false = nav-da «tezliklə», səhifə/əməliyyat bağlı. */
+export const AI_FEATURE_OPEN = false;
+/** false = «İmtahan yarat» düymələri tezliklə (Anbar sifarişi açıq qalır). */
+export const EXAM_CREATE_OPEN = false;
 
 export function parseDriveFileId(input) {
   const s = String(input || '').trim();

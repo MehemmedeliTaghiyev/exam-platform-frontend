@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { AI_FEATURE_OPEN } from '../lib/driveLinks';
+
+const SOON_PATHS = new Set(['/teacher/ai']);
 import { isNativeApp } from '../lib/runtime';
 import { normalizeRole, classNames } from '../lib/utils';
 import { useLocale } from '../context/LocaleContext';
@@ -46,7 +48,7 @@ const navByRole = {
     { to: '/teacher/new-students', labelKey: 'nav.newStudents', icon: UserPlus },
     { to: '/teacher/users', labelKey: 'nav.access', icon: KeyRound },
     { to: '/teacher/cabinet', labelKey: 'nav.cabinet', icon: Users },
-    { to: '/teacher/ai', labelKey: 'nav.ai', icon: Sparkles },
+    { to: '/teacher/ai', labelKey: 'nav.ai', icon: Sparkles, soon: !AI_FEATURE_OPEN },
   ],
   Student: [
     { to: '/student', labelKey: 'nav.home', icon: Home, end: true },
@@ -64,7 +66,7 @@ const navByRole = {
     { to: '/teacher/storage', labelKey: 'nav.storage', icon: Archive },
     { to: '/teacher/weak', labelKey: 'nav.weak', icon: TrendingDown },
     { to: '/teacher/cabinet', labelKey: 'nav.cabinet', icon: Users },
-    { to: '/teacher/ai', labelKey: 'nav.ai', icon: Sparkles },
+    { to: '/teacher/ai', labelKey: 'nav.ai', icon: Sparkles, soon: !AI_FEATURE_OPEN },
   ],
 };
 
@@ -139,9 +141,8 @@ export default function AppShell({ title, children, mainClassName = '', action =
     }).catch(() => {});
   }, [user, role, onLeaveExam]);
   const links = (navByRole[role] || navByRole.Student).filter((item) => {
-    if (!AI_FEATURE_OPEN && item.to === '/teacher/ai') return false;
     if (user?.practice) {
-      return item.to === '/teacher' || item.to === '/teacher/storage' || item.to === '/teacher/weak' || item.to === '/teacher/cabinet' || item.to === '/teacher/new-students' || item.to === '/admin' || item.to === '/admin/teachers' || item.to === '/admin/users' || item.to === '/admin/exams' || item.to === '/student' || item.to === '/student/syllabus' || item.to === '/student/public' || item.to === '/student/teachers' || item.to === '/student/republic' || item.to === '/student/account' || item.to === '/student/wallet' || item.to === '/student/weekend';
+      return item.to === '/teacher' || item.to === '/teacher/storage' || item.to === '/teacher/weak' || item.to === '/teacher/cabinet' || item.to === '/teacher/new-students' || item.to === '/admin' || item.to === '/admin/teachers' || item.to === '/admin/users' || item.to === '/admin/exams' || item.to === '/student' || item.to === '/student/syllabus' || item.to === '/student/public' || item.to === '/student/teachers' || item.to === '/student/republic' || item.to === '/student/account' || item.to === '/student/wallet' || item.to === '/student/weekend' || item.to === '/teacher/ai';
     }
     return true;
   });
@@ -188,6 +189,20 @@ export default function AppShell({ title, children, mainClassName = '', action =
           <nav className="shell-nav" aria-label="Kabinet menyusu">
             {links.map((item) => {
               const Icon = item.icon;
+              const soon = item.soon || SOON_PATHS.has(item.to);
+              if (soon) {
+                return (
+                  <span
+                    key={item.to}
+                    className={classNames('shell-link opacity-55 cursor-not-allowed')}
+                    title="Tezliklə"
+                    aria-disabled="true"
+                  >
+                    <Icon size={18} />
+                    {t(item.labelKey)}
+                  </span>
+                );
+              }
               return (
                 <NavLink key={item.to} to={item.to} end={item.end} onClick={guardNav} className={(state) => itemClass(item, state)}>
                   <Icon size={18} />

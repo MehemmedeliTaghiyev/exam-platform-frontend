@@ -4,10 +4,12 @@ import { latexToPlain } from './examPaperText.js';
 import {
   examPaperBodyHtml,
   examPaperDocumentHtml,
+  FIGURES_PER_PAGE,
   packBlocksOntoPages,
+  questionPageChunks,
   QUESTIONS_PER_PAGE,
 } from './examPaperLayout.js';
-import { buildExamPaperPdf } from './examPaperPdf.js';
+import { buildExamPaperPdf, openExamPaperPrint } from './examPaperPdf.js';
 import { paperCopyQuota, questionsPerPaper } from './paperQuota.js';
 
 describe('latexToPlain', () => {
@@ -147,15 +149,52 @@ describe('packBlocksOntoPages', () => {
     assert.ok(pages[0].indices.length <= 10);
     assert.ok(pages.length >= 3);
   });
+
+  it('caps şəkil at 10 per page even when questions fit', () => {
+    assert.equal(FIGURES_PER_PAGE, 10);
+    const heights = Array(12).fill(8);
+    const figureFlags = Array(12).fill(true);
+    const pages = packBlocksOntoPages(heights, {
+      pageHeight: 720,
+      reservedTop: 40,
+      figureFlags,
+    });
+    assert.equal(pages.reduce((n, p) => n + p.indices.length, 0), 12);
+    assert.equal(pages[0].indices.length, 10);
+    assert.equal(pages[0].figures, 10);
+    assert.equal(pages[1].indices.length, 2);
+    assert.equal(pages[1].figures, 2);
+  });
+});
+
+describe('questionPageChunks', () => {
+  it('splits figured questions so a page never has more than 10 şəkil', () => {
+    const qs = Array.from({ length: 12 }, (_, i) => ({
+      text: `Şəkil sual ${i + 1}`,
+      imageUrl: `https://example.test/fig-${i + 1}.png`,
+      options: [{ optionText: 'A) 1' }],
+    }));
+    const chunks = questionPageChunks(qs);
+    assert.equal(chunks.length, 2);
+    assert.equal(chunks[0].items.length, 10);
+    assert.equal(chunks[1].items.length, 2);
+  });
 });
 
 describe('exam paper html', () => {
   it('emits every question with KaTeX, not a 9-item slice', () => {
-    const html = examPaperBodyHtml(samplePaper(25), { includeAnswerKey: true });
+    const html = examPaperBodyHtml(samplePaper(25));
     assert.equal((html.match(/class="ep-q"/g) || []).length, 25);
     assert.match(html, /data-q="25"/);
     assert.match(html, /katex/);
     assert.doesNotMatch(html, /\$\\sqrt|\$x\^/);
+  });
+
+  it('student sheet omits Cavablar by default', () => {
+    const html = examPaperDocumentHtml(samplePaper(25), 'Test');
+    assert.doesNotMatch(html, /Cavablar \(müəllim\)|<section class="ep-key">/);
+    const withKey = examPaperDocumentHtml(samplePaper(25), 'Test', { includeAnswerKey: true });
+    assert.match(withKey, /Cavablar \(müəllim\)/);
   });
 
   it('first paper page has questions 1–10 only', () => {
@@ -167,21 +206,43 @@ describe('exam paper html', () => {
     assert.doesNotMatch(pages[1], /data-q="11"/);
     assert.match(pages[2], /data-q="11"/);
   });
+
+  it('student header is imtahan vərəqi, not müəllim vərəqi', () => {
+    const html = examPaperDocumentHtml(samplePaper(25), 'Riyaziyyat · Sınaq · Həqiqi ədədlər');
+    assert.match(html, /imtahan vərəqi/);
+    assert.doesNotMatch(html, /müəllim vərəqi/);
+  });
+
+  it('embeds figure images, not extracted figure text', () => {
+    const html = examPaperDocumentHtml([{
+      text: '3,7 ədədinə uyğun nöqtə',
+      imageUrl: 'https://cdn.example/number-line.png',
+      options: [
+        { optionText: 'A) D və E' },
+        { optionText: 'B) E və F' },
+      ],
+    }], 'Həqiqi ədədlər');
+    assert.match(html, /<img class="ep-fig" src="https:\/\/cdn.example\/number-line.png"/);
+    assert.doesNotMatch(html, /extracted|figure text|\[sekil\]/i);
+  });
 });
 
 describe('buildExamPaperPdf', () => {
   it('writes all 25 questions across 10-per-page sheets', async () => {
     const blob = await buildExamPaperPdf(samplePaper(25), 'Riyaziyyat · Sınaq · n-ci dərəcədən kök', {
       preferFigures: true,
-      includeAnswerKey: true,
       meta: 'Sınaq · 11 · n-ci dərəcədən kök',
     });
     const raw = Buffer.from(await blob.arrayBuffer()).toString('latin1');
     assert.match(raw, /%PDF-1\./);
     assert.match(raw, /25\. Sual 25/);
     assert.match(raw, /1\. Sual 1/);
+    assert.doesNotMatch(raw, /Cavablar/);
+    assert.match(raw, /imtahan vereqi/);
+    assert.doesNotMatch(raw, /muellim vereqi/);
     const pageCount = (raw.match(/\/Type \/Page /g) || []).length;
     assert.ok(pageCount >= 3);
+    assert.equal(pageCount, 3);
   });
 
   it('overflows long questions onto the next A4 instead of clipping', async () => {
@@ -196,10 +257,14 @@ describe('buildExamPaperPdf', () => {
       ],
       correctAnswer: 'C',
     }));
-    const blob = await buildExamPaperPdf(long, 'Uzun sınaq', { includeAnswerKey: true });
+    const blob = await buildExamPaperPdf(long, 'Uzun sınaq');
     const raw = Buffer.from(await blob.arrayBuffer()).toString('latin1');
     const pageCount = (raw.match(/\/Type \/Page /g) || []).length;
     assert.ok(pageCount >= 2);
     assert.match(raw, /25\. Sual 25/);
+  });
+
+  it('does not open a print window in Node', () => {
+    assert.equal(openExamPaperPrint(samplePaper(25), 'Həqiqi ədədlər'), false);
   });
 });

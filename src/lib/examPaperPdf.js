@@ -1,24 +1,22 @@
 import {
   answerLetter,
-  examPaperBodyHtml,
+  examPaperDocumentHtml,
+  FIGURES_PER_PAGE,
   formatPaperDate,
   isFullImageQuestion,
   optionBody,
   packBlocksOntoPages,
   QUESTIONS_PER_PAGE,
-  paperHeaderHtml,
-  PAPER_CSS,
   questionFigureUrl,
   realOptions,
   stemText,
-  A4_HEIGHT_PX,
-  A4_WIDTH_PX,
 } from './examPaperLayout.js';
 import { questionIsPipelineFullImage } from './questionImage.js';
 import { latexToPlain } from './examPaperText.js';
+import { isNativeApp } from './runtime.js';
 
 export { latexToPlain } from './examPaperText.js';
-export { packBlocksOntoPages, QUESTIONS_PER_PAGE } from './examPaperLayout.js';
+export { packBlocksOntoPages, QUESTIONS_PER_PAGE, FIGURES_PER_PAGE } from './examPaperLayout.js';
 
 /** Marker kept through Helvetica sanitize → drawn with Symbol font as √ */
 const SQRT_MARK = '\x01';
@@ -239,7 +237,7 @@ function assemblePdf(pages) {
   };
   const fontId = push({
     type: 'text',
-    body: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    body: '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
   });
   const symbolFontId = push({ type: 'text', body: '<< /Type /Font /Subtype /Type1 /BaseFont /Symbol >>' });
   const pageRefs = [];
@@ -379,7 +377,7 @@ async function textQuestionBlock(q, index, preferFigures) {
 function headerLines(title, metaLine, continued = false) {
   const heading = pdfSafe(latexToPlain(title)).slice(0, 90) || 'ExamPulse';
   return [
-    `ExamPulse — muellim vereqi${continued ? '  (davam)' : ''}`,
+    `ExamPulse — imtahan vereqi${continued ? '  (davam)' : ''}`,
     heading,
     metaLine,
   ];
@@ -387,7 +385,7 @@ function headerLines(title, metaLine, continued = false) {
 
 async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
   const preferFigures = options.preferFigures !== false;
-  const includeAnswerKey = options.includeAnswerKey !== false;
+  const includeAnswerKey = options.includeAnswerKey === true;
   const count = (questions || []).length;
   const metaBits = [
     formatPaperDate(),
@@ -421,10 +419,13 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
 
   const headerH = headerLines(title, metaLine).length;
   const heights = blocks.map((b) => b.lines.length);
+  const figureFlags = blocks.map((b) => Boolean(b.image));
   const packed = packBlocksOntoPages(heights, {
     pageHeight: PAGE_CONTENT_LINES,
     reservedTop: headerH,
     maxPerPage: QUESTIONS_PER_PAGE,
+    figureFlags,
+    maxFiguresPerPage: FIGURES_PER_PAGE,
   });
 
   const pages = packed.map((pack, pageIndex) => {
@@ -463,136 +464,41 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
   return assemblePdf(pages);
 }
 
-function footerHtml(page, total) {
-  return `<footer class="ep-foot"><span>ExamPulse</span><span>Səhifə ${page} / ${total}</span></footer>`;
-}
-
-async function waitForImages(root) {
-  const imgs = [...(root.querySelectorAll?.('img') || [])];
-  await Promise.all(imgs.map((img) => {
-    if (img.complete && img.naturalWidth) return Promise.resolve();
-    return new Promise((resolve) => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
-  }));
-}
-
-async function buildDomExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
-  await import('katex/dist/katex.min.css').catch(() => {});
-  const html2canvas = (await import('html2canvas')).default;
-  const preferFigures = options.preferFigures !== false;
-  const includeAnswerKey = options.includeAnswerKey !== false;
-  const count = (questions || []).length;
-  const date = formatPaperDate();
-  const meta = options.meta || '';
-
-  const host = document.createElement('div');
-  host.className = 'ep-print-host';
-  host.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;background:#fff;z-index:-1;';
-  const style = document.createElement('style');
-  style.textContent = PAPER_CSS;
-  host.appendChild(style);
-
-  const measure = document.createElement('div');
-  measure.className = 'ep-paper-flow';
-  measure.style.cssText = `width:${A4_WIDTH_PX - 68}px;padding:0;`;
-  measure.innerHTML = examPaperBodyHtml(questions, { preferFigures, includeAnswerKey });
-  host.appendChild(measure);
-  document.body.appendChild(host);
-
-  try {
-    await waitForImages(host);
-    if (document.fonts?.ready) await document.fonts.ready.catch(() => {});
-
-    const qEls = [...measure.querySelectorAll('.ep-q')];
-    const keyEl = measure.querySelector('.ep-key');
-    const qHeights = qEls.map((el) => Math.ceil(el.getBoundingClientRect().height));
-    const keyH = keyEl ? Math.ceil(keyEl.getBoundingClientRect().height) : 0;
-
-    const probe = document.createElement('div');
-    probe.className = 'ep-paper-page';
-    probe.innerHTML = `${paperHeaderHtml({
-      title, meta, date, count, page: 1, total: 1,
-    })}<div class="ep-body"></div>${footerHtml(1, 1)}`;
-    host.appendChild(probe);
-    const headerH = Math.ceil((probe.querySelector('.ep-head')?.getBoundingClientRect().height || 54) + 8);
-    const innerH = A4_HEIGHT_PX - 26 - 40;
-    const usable = innerH - headerH;
-    host.removeChild(probe);
-
-    const packed = packBlocksOntoPages(qHeights, {
-      pageHeight: usable,
-      maxPerPage: QUESTIONS_PER_PAGE,
-    });
-    let keyOnLast = false;
-    const last = packed[packed.length - 1];
-    if (includeAnswerKey && keyEl && last && last.used + keyH <= usable) {
-      keyOnLast = true;
-    } else if (includeAnswerKey && keyEl) {
-      packed.push({ indices: [], used: keyH, keyOnly: true });
-    }
-
-    const total = packed.length;
-    const pageEls = packed.map((pack, pageIndex) => {
-      const page = document.createElement('div');
-      page.className = 'ep-paper-page';
-      const qHtml = pack.indices.map((i) => qEls[i].outerHTML).join('');
-      const showKey = keyEl && ((keyOnLast && pageIndex === packed.length - 1) || pack.keyOnly);
-      page.innerHTML = `${paperHeaderHtml({
-        title,
-        meta,
-        date,
-        count,
-        page: pageIndex + 1,
-        total,
-        continued: pageIndex > 0,
-      })}<div class="ep-body">${qHtml}${showKey ? keyEl.outerHTML : ''}</div>${footerHtml(pageIndex + 1, total)}`;
-      return page;
-    });
-
-    measure.remove();
-    pageEls.forEach((el) => host.appendChild(el));
-    await waitForImages(host);
-
-    const pages = [];
-    for (const el of pageEls) {
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        width: A4_WIDTH_PX,
-        height: A4_HEIGHT_PX,
-        windowWidth: A4_WIDTH_PX,
-        windowHeight: A4_HEIGHT_PX,
-      });
-      pages.push({
-        jpeg: {
-          bytes: canvasToJpegBytes(canvas, 0.92),
-          width: canvas.width,
-          height: canvas.height,
-        },
-      });
-    }
-    return assemblePdf(pages);
-  } finally {
-    host.remove();
+/**
+ * Open the DİM student sheet (KaTeX HTML, figure images) in a print window.
+ * Chrome “Save as PDF” is vector — no html2canvas. Native apps return false
+ * so the caller can fall back to buildExamPaperPdf.
+ */
+export function openExamPaperPrint(questions = [], title = 'Sinag', options = {}) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+  if (isNativeApp()) return false;
+  const html = examPaperDocumentHtml(questions, title, {
+    preferFigures: options.preferFigures !== false,
+    includeAnswerKey: options.includeAnswerKey === true,
+    meta: options.meta || '',
+  });
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const popup = window.open(url, '_blank');
+  if (!popup) {
+    URL.revokeObjectURL(url);
+    return false;
   }
+  const printWhenReady = () => {
+    try { popup.print(); } catch { /* print may be blocked */ }
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+  popup.addEventListener('load', printWhenReady);
+  window.setTimeout(printWhenReady, 1500);
+  return true;
 }
 
 /**
- * Exam PDF: KaTeX HTML on A4 (browser) or Helvetica fallback (Node).
- * Ten questions per A4 page, then the next sheet.
- * Figures are embedded images, not extracted figure text.
+ * Student exam PDF: Times text + embedded figure images (never extracted
+ * figure text). Ten questions per A4, at most 10 şəkil per page, overflow
+ * to the next sheet. No Cavablar unless options.includeAnswerKey is true.
+ * Browser: prefer openExamPaperPrint (DİM HTML). This Blob is the native
+ * / fallback file — not an html2canvas page snapshot.
  */
 export async function buildExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
-  if (typeof document !== 'undefined') {
-    try {
-      return await buildDomExamPaperPdf(questions, title, options);
-    } catch {
-      /* Helvetica path still prints every question */
-    }
-  }
   return buildTextExamPaperPdf(questions, title, options);
 }

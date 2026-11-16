@@ -131,6 +131,23 @@ export function packBlocksOntoPages(heights, {
   return pages.length ? pages : [{ indices: [], used: 0, figures: 0 }];
 }
 
+/**
+ * Spread leftover A4 height as blank lines between packed questions
+ * so they use the page instead of sitting in a tight pack at the top.
+ */
+export function extraGapLines(leftover, questionCount) {
+  const gaps = Math.max(0, Math.round(Number(questionCount) || 0) - 1);
+  const spare = Math.max(0, Math.round(Number(leftover) || 0));
+  if (!gaps || !spare) return [];
+  const base = Math.floor(spare / gaps);
+  let rem = spare % gaps;
+  return Array.from({ length: gaps }, () => {
+    const n = base + (rem > 0 ? 1 : 0);
+    if (rem > 0) rem -= 1;
+    return n;
+  });
+}
+
 export const PAPER_CSS = `
 @page { size: A4; margin: 10mm 12mm 12mm; }
 * { box-sizing: border-box; }
@@ -150,14 +167,17 @@ html, body {
 .ep-paper-page {
   width: ${A4_WIDTH_PX}px;
   height: ${A4_HEIGHT_PX}px;
-  padding: 26px 34px 40px;
+  padding: 22px 34px 16px;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .ep-head {
   border-bottom: 1.5px solid #111;
-  padding-bottom: 5px;
-  margin-bottom: 8px;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  flex: 0 0 auto;
 }
 .ep-head-row {
   display: flex;
@@ -175,11 +195,20 @@ html, body {
   line-height: 1.22;
 }
 .ep-head-meta { font-size: 11px; color: #222; }
-.ep-body { min-height: 0; }
+.ep-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  overflow: hidden;
+}
 .ep-q {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin: 0 0 11px;
+  margin: 0;
+  flex: 0 0 auto;
 }
 .ep-q-row {
   display: flex;
@@ -194,7 +223,7 @@ html, body {
   display: flex;
   flex-wrap: wrap;
   gap: 0 16px;
-  padding: 1px 0 0 1.55em;
+  padding: 4px 0 0 1.55em;
   align-items: baseline;
 }
 .ep-opts.stack { flex-direction: column; gap: 0; }
@@ -209,7 +238,7 @@ html, body {
   display: block;
   max-width: 78%;
   max-height: 170px;
-  margin: 3px 0 2px 1.55em;
+  margin: 6px 0 4px 1.55em;
   object-fit: contain;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
@@ -220,14 +249,13 @@ html, body {
   margin-left: 0;
 }
 .ep-foot {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  bottom: 14px;
+  flex: 0 0 auto;
+  margin-top: 8px;
   font-size: 9px;
   color: #444;
+  background: #fff;
   border-top: 0.6px solid #bbb;
-  padding-top: 3px;
+  padding-top: 4px;
   display: flex;
   justify-content: space-between;
 }
@@ -250,16 +278,26 @@ html, body {
   .ep-paper-page {
     width: auto;
     height: auto;
-    min-height: 0;
+    min-height: 272mm;
     padding: 0;
     overflow: visible;
+    display: flex;
+    flex-direction: column;
     page-break-after: always;
     break-after: page;
   }
   .ep-paper-page:last-child { page-break-after: auto; break-after: auto; }
+  .ep-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 2.5mm;
+    overflow: hidden;
+  }
   .ep-q { break-inside: avoid; page-break-inside: avoid; }
   .ep-head { break-after: avoid; }
-  .ep-foot { position: static; margin-top: 12px; }
+  .ep-foot { position: static; margin-top: auto; }
   .ep-screen-only { display: none !important; }
 }
 `;

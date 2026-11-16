@@ -2,7 +2,6 @@ import { examVisibility } from './examVisibility';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { examAudience, isMixedSyllabusExam } from './syllabus';
 import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
-import { weeklyPassActive } from './weeklyDownloadPass';
 
 export function formatManat(amount) {
   const n = Number(amount) || 0;
@@ -30,8 +29,9 @@ export function canEnterExam(user, exam) {
   }
   if (user.role !== 'Student' && !user.practice) return false;
   if (examPulseAudience(exam) === 'hidden') return false;
+  // Həftəlik asan/orta — abituriyentdən pul yox; kartlarla TakeExam açılır.
   if (isStudentWeeklyExam(exam) || isStudentWeeklyExam({ id: exam?.id ?? exam?.Id })) {
-    return weeklyPassActive(user);
+    return true;
   }
   if (isMixedSyllabusExam(exam)) return isOwnTeacherStudent(user, owner);
   if (examAudience(exam) === 'everyone') return true;

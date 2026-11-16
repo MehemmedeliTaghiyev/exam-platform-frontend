@@ -1,4 +1,10 @@
-import { intervalContaining, latestCoveredTopicForDay, tbilisiYmd } from './mathCalendar.js';
+import {
+  daysBetweenYmd,
+  intervalContaining,
+  latestCoveredTopicForDay,
+  MATH_CALENDAR,
+  tbilisiYmd,
+} from './mathCalendar.js';
 import {
   annotateTopicPapers,
   quizCountForTopic,
@@ -65,20 +71,81 @@ export function examsMatchingTopic(exams, topicTitle) {
 }
 
 /**
- * Every day: calendar → topic + day slot → difficulty band → matching sınaq.
- * Quiz count for a topic = how many days that topic lasts on our calendar.
+ * All syllabus topics covered from calendar start through `ymd`
+ * (completed intervals + current topic and earlier ones in the active window).
  */
-export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
+export function coveredTopicsThrough(ymd = tbilisiYmd()) {
   const key = String(ymd || tbilisiYmd());
-  const covered = latestCoveredTopicForDay(key);
-  const send = sendForDay(key);
-  const topic = covered.topic || '';
-  const series = topic ? quizCountForTopic(topic, covered.interval) : 1;
-  const slot = covered.dayInTopic ?? 0;
+  if (key < MATH_CALENDAR.from) return [];
+
+  const out = [];
+  const current = latestCoveredTopicForDay(key);
+  for (const interval of MATH_CALENDAR.intervals) {
+    if (interval.start > key) break;
+    const topics = interval.topics || [];
+    if (!topics.length) continue;
+
+    if (interval.end < key) {
+      topics.forEach((topic, index) => {
+        out.push({
+          topic,
+          interval,
+          index,
+          series: quizCountForTopic(topic, interval),
+          current: false,
+        });
+      });
+      continue;
+    }
+
+    // Active interval: include topics up to and including today's covered index.
+    const maxIndex = current.interval?.start === interval.start
+      ? Math.max(0, current.index)
+      : topics.length - 1;
+    topics.slice(0, maxIndex + 1).forEach((topic, index) => {
+      out.push({
+        topic,
+        interval,
+        index,
+        series: quizCountForTopic(topic, interval),
+        current: index === maxIndex && current.interval?.start === interval.start,
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * One prior topic for today's review quiz (rotates through earlier covered topics).
+ */
+export function reviewTopicForDay(ymd = tbilisiYmd()) {
+  const key = String(ymd || tbilisiYmd());
+  const covered = coveredTopicsThrough(key);
+  const priors = covered.filter((row) => !row.current);
+  if (!priors.length) return null;
+
+  const offset = daysBetweenYmd(MATH_CALENDAR.from, key);
+  const pick = priors[offset % priors.length];
+  const series = pick.series || 1;
+  const slot = offset % series;
+  return {
+    ymd: key,
+    topic: pick.topic,
+    interval: pick.interval,
+    topicIndex: pick.index,
+    series,
+    slot,
+    band: topicQuizDifficultyAt(slot, series),
+    bandLabel: topicQuizDifficultyLabel(topicQuizDifficultyAt(slot, series)),
+  };
+}
+
+function quizForTopic(exams, topic, interval, slot, series, ymd) {
   const band = topicQuizDifficultyAt(slot, series);
   const rows = topic
     ? annotateTopicPapers(examsMatchingTopic(exams, topic), series)
     : [];
+  const send = sendForDay(ymd);
   let exam = null;
 
   if (send?.examId) {
@@ -93,7 +160,7 @@ export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
   }
 
   return {
-    ymd: key,
+    ymd,
     topic,
     exam,
     send,
@@ -101,7 +168,52 @@ export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
     bandLabel: topicQuizDifficultyLabel(band),
     series,
     slot,
-    interval: covered.interval || intervalContaining(key),
+    interval: interval || intervalContaining(ymd),
+  };
+}
+
+/**
+ * Every day: calendar → topic + day slot → difficulty band → matching sınaq.
+ * Quiz count for a topic = how many days that topic lasts on our calendar.
+ */
+export function todaysTopicQuiz(exams = [], ymd = tbilisiYmd()) {
+  const key = String(ymd || tbilisiYmd());
+  const covered = latestCoveredTopicForDay(key);
+  const topic = covered.topic || '';
+  const series = topic ? quizCountForTopic(topic, covered.interval) : 1;
+  const slot = covered.dayInTopic ?? 0;
+  return {
+    ...quizForTopic(exams, topic, covered.interval, slot, series, key),
     topicIndex: covered.index,
+  };
+}
+
+/**
+ * Primary = latest covered topic; review = one earlier covered topic (rotating).
+ * Personal papers fill in when no published exam exists.
+ */
+export function dailyTopicQuizPlan(exams = [], ymd = tbilisiYmd()) {
+  const key = String(ymd || tbilisiYmd());
+  const primary = todaysTopicQuiz(exams, key);
+  const reviewMeta = reviewTopicForDay(key);
+  const review = reviewMeta
+    ? {
+      ...quizForTopic(
+        exams,
+        reviewMeta.topic,
+        reviewMeta.interval,
+        reviewMeta.slot,
+        reviewMeta.series,
+        key,
+      ),
+      topicIndex: reviewMeta.topicIndex,
+      role: 'review',
+    }
+    : null;
+  return {
+    ymd: key,
+    primary: { ...primary, role: 'primary' },
+    review,
+    covered: coveredTopicsThrough(key),
   };
 }

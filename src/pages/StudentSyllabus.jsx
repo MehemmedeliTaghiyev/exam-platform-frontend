@@ -40,17 +40,9 @@ import {
   WEEKLY_SMOKE_EXAM_ID,
   weeklyPairForInterval,
 } from '../lib/weeklyMath';
-import { canEnterExam, formatManat } from '../lib/teacherAccess';
+import { canEnterExam } from '../lib/teacherAccess';
 import { enteredExamIds } from '../lib/publicExams';
 import { examRetakeReady, isExamEnded, isExamScheduled, resolveExamStatus, studentResultsReady } from '../lib/utils';
-import {
-  buyWeeklyPass,
-  WEEKLY_PASS_PRICE,
-  weeklyPassActive,
-  weeklyPassRemainingMs,
-} from '../lib/weeklyDownloadPass';
-import { useStudentWallet } from '../lib/studentWallet';
-
 function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate, annotate = false, series }) {
   const list = papers.filter(Boolean);
   if (!list.length) {
@@ -81,10 +73,18 @@ function PaperGrid({ papers, attemptByExam, entered, user, openExam, navigate, a
             actionLabel={
               done
                 ? (studentResultsReady(exam, user) ? 'Nəticəyə bax' : 'Təhvil verildi')
-                : canEnterExam(user, exam) ? 'İmtahana başla' : 'Giriş yoxdur'
+                : (canEnterExam(user, exam) || isStudentWeeklyExam(exam)) ? 'İmtahana başla' : 'Giriş yoxdur'
             }
-            onOpen={isExamScheduled(exam) || !canEnterExam(user, exam) ? undefined : () => openExam(exam)}
-            onRetake={examRetakeReady(exam, attempt) && canEnterExam(user, exam) ? () => navigate(`/student/exams/${exam.id}?yeniden=1`) : undefined}
+            onOpen={
+              isExamScheduled(exam) || !(canEnterExam(user, exam) || isStudentWeeklyExam(exam))
+                ? undefined
+                : () => openExam(exam)
+            }
+            onRetake={
+              examRetakeReady(exam, attempt) && (canEnterExam(user, exam) || isStudentWeeklyExam(exam))
+                ? () => navigate(`/student/exams/${exam.id}?yeniden=1`)
+                : undefined
+            }
           />
         );
       })}
@@ -189,43 +189,15 @@ export default function StudentSyllabus() {
       .sort((a, b) => Number(examIdOf(b) || 0) - Number(examIdOf(a) || 0));
   };
 
-  const wallet = useStudentWallet(user);
-  const [passBusy, setPassBusy] = useState(false);
-  const [passMsg, setPassMsg] = useState('');
-  const passOn = weeklyPassActive(user);
-  const passLeft = weeklyPassRemainingMs(user);
-
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
-    if (isStudentWeeklyExam(exam) && !weeklyPassActive(user)) {
-      setPassMsg(`Həftəlik sınaqlar üçün ${formatManat(WEEKLY_PASS_PRICE)} ödəniş lazımdır (7 gün).`);
-      return;
-    }
-    if (!canEnterExam(user, exam)) return;
+    if (!canEnterExam(user, exam) && !isStudentWeeklyExam(exam)) return;
     if (isExamEnded(exam) || attemptByExam.has(String(exam.id))) {
       navigate(`/student/exams/${exam.id}/review`);
       return;
     }
+    // Həftəlik və digər sınaqlar — suallar TakeExam kart UI-da açılır (PDF/DIM yox).
     navigate(`/student/exams/${exam.id}`);
-  };
-
-  const unlockWeekly = async () => {
-    if (passBusy || passOn) return;
-    setPassBusy(true);
-    setPassMsg('');
-    try {
-      buyWeeklyPass(user);
-      setPassMsg('Həftəlik sınaqlar 7 gün açıqdır.');
-    } catch (err) {
-      if (err?.code === 'BALANS_YOX') {
-        setPassMsg(`Balans çatmır. ${formatManat(WEEKLY_PASS_PRICE)} lazımdır — cüzdana keç.`);
-        navigate('/student/wallet');
-      } else {
-        setPassMsg('Ödəniş alınmadı. Yenidən cəhd edin.');
-      }
-    } finally {
-      setPassBusy(false);
-    }
   };
 
   const openWindow = (start) => {
@@ -314,7 +286,7 @@ export default function StudentSyllabus() {
   return (
     <AppShell title="Sillabus">
       <p className="mb-5 text-sm text-[var(--muted)]">
-        Bütün mövzular buradadır. Gündəlik mövzu sınağı yalnız öz bölməsinə düşür. Həftəlik asan/orta ayrıca «Həftəlik sınaq»dadır; qarışıq sınaq Respublikadadır.
+        Bütün mövzular buradadır. Hər gün paneldə son keçilən mövzunun sınağı + bir əvvəlki mövzunun təkrarı açılır. Həftəlik asan/orta ayrıca «Həftəlik sınaq»dadır; qarışıq sınaq Respublikadadır.
       </p>
       <div className="mb-5 flex flex-wrap gap-2">
         {syllabusSubjects().map((name) => {
@@ -352,29 +324,6 @@ export default function StudentSyllabus() {
                 {placement.onTime ? ' · vaxtında: cari pəncərə' : ' · mövzu yeri: son bitən interval (arxiv kağız)'}
                 {pair.archived ? ' · arxiv' : ''}
               </p>
-              <div className="mt-3 rounded-[20px] bg-[var(--card)] p-4 ring-1 ring-[var(--line)]">
-                {passOn ? (
-                  <p className="text-sm font-extrabold text-[#22c55e]">
-                    Açılıb · {Math.max(1, Math.ceil(passLeft / 86400000))} gün qalıb
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-sm font-extrabold">Həftəlik sınaqlar üçün {formatManat(WEEKLY_PASS_PRICE)} / 7 gün</p>
-                    <p className="mt-1 text-xs font-semibold text-[var(--muted)]">
-                      Ödəniş olmayanda giriş avtomatik bağlanır. Balans: {formatManat(wallet.balance)}
-                    </p>
-                    <button
-                      type="button"
-                      disabled={passBusy}
-                      onClick={unlockWeekly}
-                      className="mt-3 flex min-h-11 w-full items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200] disabled:opacity-50"
-                    >
-                      {passBusy ? '...' : `Ödə və aç — ${formatManat(WEEKLY_PASS_PRICE)}`}
-                    </button>
-                  </>
-                )}
-                {passMsg ? <p className="mt-2 text-xs font-semibold text-[var(--muted)]">{passMsg}</p> : null}
-              </div>
               {!viewed?.send?.weekly ? (
                 <p className="mt-3 text-sm font-semibold text-[var(--muted)]">
                   Bu pəncərədə həftəlik sınaq göndərilmir. Əvvəlki həftənin asan və orta kağızı arxivdə qalır.

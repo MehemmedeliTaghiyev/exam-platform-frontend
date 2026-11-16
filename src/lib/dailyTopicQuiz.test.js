@@ -2,7 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { latestCoveredTopicForDay } from './mathCalendar.js';
 import {
+  coveredTopicsThrough,
+  dailyTopicQuizPlan,
   examsMatchingTopic,
+  reviewTopicForDay,
   topicTitleForDay,
   todaysTopicQuiz,
 } from './dailyTopicQuiz.js';
@@ -38,5 +41,18 @@ describe('daily topic quiz', () => {
     ];
     assert.equal(examsMatchingTopic(exams, 'Üçbucaqlar').map((e) => String(e.id)).join(','), '99');
     assert.equal(examsMatchingTopic(exams, 'Nisbət. Tənasüb. Faiz').map((e) => String(e.id)).join(','), '100');
+  });
+
+  it('lists covered topics through the latest one and rotates a prior review topic', () => {
+    const covered = coveredTopicsThrough('2026-11-16');
+    assert.ok(covered.length >= 2);
+    assert.equal(covered[covered.length - 1].current, true);
+    const review = reviewTopicForDay('2026-11-16');
+    assert.ok(review?.topic);
+    assert.notEqual(review.topic, covered[covered.length - 1].topic);
+    const plan = dailyTopicQuizPlan([], '2026-11-16');
+    assert.equal(plan.primary.topic, covered[covered.length - 1].topic);
+    assert.equal(plan.review.topic, review.topic);
+    assert.equal(plan.primary.exam, null);
   });
 });

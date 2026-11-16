@@ -13,7 +13,6 @@ import { examRetakeReady, formatDateTime, isExamEnded, isExamScheduled, isOpenCh
 import { displayExamDescription, examDriveFileId } from '../lib/driveLinks';
 import { canEnterExam, examTeacherId } from '../lib/teacherAccess';
 import { isLiveWeeklyExamId, isStudentWeeklyExam } from '../lib/weeklyMath';
-import { weeklyPassActive } from '../lib/weeklyDownloadPass';
 import { teacherWatermarkText } from '../lib/storageAccess';
 import DrivePreview from '../components/DrivePreview';
 import ScreenGuard from '../components/ScreenGuard';
@@ -296,10 +295,6 @@ export default function TakeExam() {
           return;
         }
         const weeklyOk = isLiveWeeklyExamId(examId) || isStudentWeeklyExam(examData);
-        if (weeklyOk && !weeklyPassActive(user)) {
-          navigate('/student/syllabus', { replace: true });
-          return;
-        }
         if (!weeklyOk && !canEnterExam(user, examData)) {
           const owner = examTeacherId(examData);
           navigate(owner ? `/student/teachers/${owner}` : '/student/teachers', { replace: true });

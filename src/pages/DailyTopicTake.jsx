@@ -1,10 +1,8 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import AppShell from '../components/AppShell';
-import { Button, Card } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
-import { formatHms } from '../lib/utils';
 import ExamFinishConfirm, { useExamFinishGuard } from '../components/ExamFinishConfirm';
+import ExamCardStage from '../components/ExamCardStage';
 import {
   DAILY_TOPIC_DURATION_MIN,
   dailyTopicResultFor,
@@ -52,6 +50,7 @@ export default function DailyTopicTake() {
   const allowed = Boolean(user && paper.topic && questions.length && !done);
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState({});
+  const [flagged, setFlagged] = useState(() => new Set());
   const answersRef = useRef(answers);
   answersRef.current = answers;
   const startedAt = useMemo(
@@ -129,56 +128,47 @@ export default function DailyTopicTake() {
     return <Navigate to="/student" replace />;
   }
 
-  const question = questions[index];
-  const urgent = left > 0 && left <= 180;
+  const goNext = () => {
+    if (index >= questions.length - 1) finishGuard.request();
+    else setIndex((n) => Math.min(questions.length - 1, n + 1));
+  };
 
   return (
-    <AppShell title={paper.label || 'Günün sınağı'} onLeaveExam={finishGuard.request}>
-      <div className={`mb-3 flex items-center justify-between rounded-2xl px-4 py-3 ring-1 ${
-        urgent ? 'bg-[#3a1518] ring-[#ef4444]/40' : 'bg-[var(--card)] ring-[var(--line)]'
-      }`}
-      >
-        <p className="text-sm font-extrabold">{index + 1} / {questions.length}</p>
-        <p className={`text-sm font-black tabular-nums ${urgent ? 'text-[#fb7185]' : ''}`}>{formatHms(left)}</p>
-      </div>
-      <Card>
-        {question.topic ? (
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted)]">{question.topic}</p>
-        ) : null}
-        <p className="mt-1 text-base font-extrabold leading-snug">{question.text}</p>
-        <div className="mt-4 grid gap-2">
-          {(question.options || []).map((text, oi) => {
-            const selected = answers[question.id] === oi;
-            return (
-              <button
-                key={`${question.id}-${oi}`}
-                type="button"
-                onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: oi }))}
-                className={`rounded-2xl px-4 py-3 text-left text-sm font-bold ring-1 ${
-                  selected
-                    ? 'bg-[var(--accent)] text-[#3a2200] ring-[var(--accent)]'
-                    : 'bg-[var(--bg)] text-[var(--text)] ring-[var(--line)]'
-                }`}
-              >
-                {String.fromCharCode(65 + oi)}) {text}
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-5 flex gap-2">
-          <Button variant="secondary" disabled={index <= 0} onClick={() => setIndex((n) => Math.max(0, n - 1))}>
-            Əvvəlki
-          </Button>
-          {index < questions.length - 1 ? (
-            <Button className="flex-1" onClick={() => setIndex((n) => Math.min(questions.length - 1, n + 1))}>
-              Növbəti
-            </Button>
-          ) : (
-            <Button className="flex-1" onClick={finishGuard.request}>Bitir</Button>
-          )}
-        </div>
-      </Card>
-      <ExamFinishConfirm guard={finishGuard} />
-    </AppShell>
+    <>
+      <ExamCardStage
+        badge={role === 'review' ? 'ƏVVƏLKİ MÖVZU' : 'GÜNÜN SINAĞI'}
+        title={paper.topic}
+        subject={questions[index]?.subject || 'Riyaziyyat'}
+        questions={questions}
+        index={index}
+        answers={answers}
+        flagged={flagged}
+        leftSeconds={left}
+        scratchKey={`exampulse-ecs-scratch-${user.id}-${ymd}-${role}`}
+        onExit={finishGuard.request}
+        onJump={setIndex}
+        onSelect={(_opt, optionIndex) => {
+          const q = questions[index];
+          if (!q) return;
+          setAnswers((prev) => ({ ...prev, [q.id]: optionIndex }));
+        }}
+        onToggleFlag={(questionId) => {
+          setFlagged((prev) => {
+            const next = new Set(prev);
+            if (next.has(questionId)) next.delete(questionId);
+            else next.add(questionId);
+            return next;
+          });
+        }}
+        onPrev={() => setIndex((n) => Math.max(0, n - 1))}
+        onNext={goNext}
+        nextLabel={index >= questions.length - 1 ? 'Bitir' : 'Növbəti →'}
+      />
+      <ExamFinishConfirm
+        open={finishGuard.open}
+        onStay={finishGuard.stay}
+        onFinish={finishGuard.confirm}
+      />
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Bookmark, ChevronLeft, Flag, Infinity as InfinityIcon } from 'lucide-react';
 import QuestionCard, { visibleStudentOptions } from '../components/QuestionCard';
 import LatexText from '../components/LatexText';
+import ExamCardStage from '../components/ExamCardStage';
 import { Button, Card } from '../components/ui';
 import { fetchExam, fetchQuestions, fetchStudentHistory, paperQuestionsOf, saveExamProgress, startExam, submitExam } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
@@ -261,6 +262,7 @@ export default function TakeExam() {
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [secondsBudget, setSecondsBudget] = useState(0);
+  const [leftSeconds, setLeftSeconds] = useState(0);
   const [studentExamId, setStudentExamId] = useState(null);
   const [flash, setFlash] = useState({ id: null, n: 0 });
   const [saved, setSaved] = useState(false);
@@ -436,11 +438,12 @@ export default function TakeExam() {
       if (source.length && !cached?.length) persistShuffle(examId, user?.id, shuffled);
       setQuestions(shuffled);
       setCurrentIndex(0);
+      setLeftSeconds(secondsBudget);
       setStarted(true);
     } finally {
       setStarting(false);
     }
-  }, [exam, id, navigate, pendingQuestions, started, starting, user?.id, wantsRetry]);
+  }, [exam, id, navigate, pendingQuestions, secondsBudget, started, starting, user?.id, wantsRetry]);
 
   const submitRef = useRef(handleSubmit);
   submitRef.current = handleSubmit;
@@ -450,6 +453,19 @@ export default function TakeExam() {
   const onAbandonExam = useCallback(() => {
     submitRef.current?.();
   }, []);
+
+  useEffect(() => {
+    if (!started || submitting || !secondsBudget) return undefined;
+    setLeftSeconds(secondsBudget);
+    const timer = setInterval(() => {
+      setLeftSeconds((prev) => {
+        const next = Math.max(0, prev - 1);
+        if (next <= 0) submitRef.current?.();
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [started, submitting, secondsBudget]);
   const inExam = Boolean(started && !loading && !submitting && exam && !isExamScheduled(exam) && paperQuestions.length > 0);
   const finishGuard = useExamFinishGuard(inExam, () => {
     submitRef.current?.();
@@ -535,55 +551,92 @@ export default function TakeExam() {
 
   const active = paperQuestions[currentIndex] || null;
   const scheduled = isExamScheduled(exam);
-  const timerRunning = Boolean(started && !loading && !scheduled && !submitting && secondsBudget > 0 && paperQuestions.length > 0);
   const personalQuiz = !isPublicExam(exam);
   const watermarkName = teacherWatermarkText(examTeacherId(exam)) || (personalQuiz ? (user?.fullName || user?.email || 'ExamPulse') : '');
   const showGate = !loading && !scheduled && !started;
   const pendingCount = pendingQuestions.length || Number(exam?.totalQuestions) || 0;
+  const stageTitle = String(displayExamDescription(exam) || exam?.title || exam?.subjectName || 'İmtahan')
+    .replace(/VIS:(public|private)\s*/gi, '')
+    .replace(/DRVFILE:\S+\s*/gi, '')
+    .trim();
+  const stageBadge = isStudentWeeklyExam(exam) || isLiveWeeklyExamId(id)
+    ? 'HƏFTƏLİK SINAQ'
+    : 'İMTAHAN';
+
+  if (started && !loading && !scheduled && paperQuestions.length > 0) {
+    const openOpt = active ? (active.options || []).find(isOpenChoiceOption) : null;
+    const openId = openOpt?.id ?? OPEN_SENTINEL;
+    return (
+      <div className="exam-guard">
+        <ExamCardStage
+          badge={stageBadge}
+          title={stageTitle}
+          subject={exam?.subjectName || active?.subject || 'Riyaziyyat'}
+          questions={paperQuestions}
+          index={currentIndex}
+          answers={answers}
+          flagged={flagged}
+          leftSeconds={secondsBudget > 0 ? leftSeconds : null}
+          scratchKey={`exampulse-ecs-scratch-exam-${user?.id || 'me'}-${id}`}
+          onExit={finishGuard.request}
+          onJump={jumpTo}
+          onSelect={(opt) => {
+            if (!active) return;
+            onSelect(active.id, {
+              id: opt.id,
+              letter: opt.letter,
+              text: opt.text,
+            }, openId);
+          }}
+          onOpenText={(text) => {
+            if (!active) return;
+            onOpenText(active.id, text, openId);
+          }}
+          onToggleFlag={onToggleFlag}
+          onPrev={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+          onNext={() => {
+            if (currentIndex >= paperQuestions.length - 1) finishGuard.request();
+            else setCurrentIndex((i) => Math.min(paperQuestions.length - 1, i + 1));
+          }}
+          nextLabel={currentIndex >= paperQuestions.length - 1 ? t('quiz.finish') : 'Növbəti →'}
+        />
+        <ScreenGuard active={!submitting} name={watermarkName || 'ExamPulse'} onAbandon={onAbandonExam} />
+        <ExamFinishConfirm
+          open={finishGuard.open}
+          busy={submitting}
+          onStay={finishGuard.stay}
+          onFinish={finishGuard.confirm}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className={`fixed inset-0 z-[60] flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)] ${started ? 'exam-guard' : ''}`} style={{ height: '100vh' }}>
+    <div className={`fixed inset-0 z-[60] flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]`} style={{ height: '100vh' }}>
       <header className="shrink-0 border-b border-white/10 bg-[var(--bg)] px-4 py-3 text-[var(--text)] sm:px-6">
         <div className="flex items-center gap-3">
-          <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--card)] ring-1 ring-[var(--line)]" onClick={inExam ? finishGuard.request : () => navigate('/student')} aria-label={t('quiz.close')}>
+          <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--card)] ring-1 ring-[var(--line)]" onClick={() => navigate('/student')} aria-label={t('quiz.close')}>
             <ChevronLeft size={18} />
           </button>
           <div className="quiz-track h-2 min-w-0 flex-1 overflow-hidden rounded-full">
-            <div
-              className="h-full rounded-full bg-[var(--accent)]"
-              style={{ width: `${started && paperQuestions.length ? ((currentIndex + 1) / paperQuestions.length) * 100 : 0}%` }}
-            />
+            <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: '0%' }} />
           </div>
-          <p className="shrink-0 text-sm font-extrabold tabular-nums">
-            {started && paperQuestions.length ? `${currentIndex + 1}/${paperQuestions.length}` : '—'}
-          </p>
-          <button
-            type="button"
-            onClick={toggleSave}
-            className={`grid h-9 w-9 place-items-center rounded-full ${saved ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}`}
-            aria-label={saved ? t('common.saved') : t('common.save')}
-          >
-            <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
-          </button>
+          <p className="shrink-0 text-sm font-extrabold tabular-nums">—</p>
           <Button
-            onClick={finishGuard.request}
-            disabled={!started || submitting || loading || scheduled}
+            onClick={() => navigate('/student')}
+            disabled={loading || scheduled}
             className="shrink-0 px-3 py-1.5 text-xs"
+            variant="secondary"
           >
-            {submitting ? '...' : t('quiz.finish')}
+            {t('common.close') || 'Bağla'}
           </Button>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-sm font-semibold text-[var(--muted)]">
             {exam?.subjectName || exam?.title || t('quiz.exam')}
-            {exam?.title && exam?.subjectName ? ` · ${exam.title}` : ''}
           </p>
           <div className="flex shrink-0 items-center gap-1 font-extrabold tabular-nums text-[var(--accent)]">
-            {started && !loading && !scheduled && secondsBudget > 0 ? (
-              <ExamTimer initialSeconds={secondsBudget} running={timerRunning} onExpire={onExpire} />
-            ) : (
-              <InfinityIcon size={18} />
-            )}
+            <InfinityIcon size={18} />
             <span className="text-xs font-extrabold">{t('quiz.left')}</span>
           </div>
         </div>
@@ -630,86 +683,21 @@ export default function TakeExam() {
                 </div>
               </Card>
             </div>
+          ) : examDriveFileId(exam) ? (
+            <div className="flex flex-1 items-center justify-center p-6">
+              <div className="w-full max-w-3xl">
+                <DrivePreview exam={exam} title="İmtahan PDF" mode="iframe" />
+              </div>
+            </div>
           ) : (
-            <>
-              <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-6">
-                <div className="mx-auto w-full max-w-3xl">
-                  {paperQuestions.length > 0 ? (
-                    <div className="mb-4 sm:hidden">
-                      <QuestionNav
-                        questions={paperQuestions}
-                        currentIndex={currentIndex}
-                        answers={answers}
-                        flagged={flagged}
-                        onJump={jumpTo}
-                      />
-                    </div>
-                  ) : null}
-                  {paperQuestions.length > 0 ? (
-                    <QuestionCanvas
-                      question={active}
-                      index={currentIndex}
-                      answer={active ? (answers[active.id] || answers[String(active.id)]) : null}
-                      flagged={active ? flagged.has(active.id) : false}
-                      disabled={submitting}
-                      flash={flash}
-                      theme={dark ? 'dark' : 'light'}
-                      onSelect={onSelect}
-                      onOpenText={onOpenText}
-                      onToggleFlag={onToggleFlag}
-                    />
-                  ) : examDriveFileId(exam) ? (
-                    <DrivePreview exam={exam} title="İmtahan PDF" mode="iframe" />
-                  ) : (
-                    <Card className="border-[#E5E7EB] bg-white text-[#1F2937] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                      Bu imtahanda PDF və ya sual yoxdur.
-                    </Card>
-                  )}
-                </div>
-              </main>
-              {paperQuestions.length > 0 ? (
-                <aside className="hidden w-64 shrink-0 overflow-y-auto border-l border-[var(--line)] bg-[var(--bg)] p-4 sm:block">
-                  <p className="mb-3 text-sm font-semibold text-[var(--text)]">Suallar</p>
-                  <QuestionNav
-                    questions={paperQuestions}
-                    currentIndex={currentIndex}
-                    answers={answers}
-                    flagged={flagged}
-                    onJump={jumpTo}
-                  />
-                  <p className="mt-4 text-xs leading-[1.5] text-[var(--muted)]">
-                    Ox düymələri sualı dəyişir. A–E və ya 1–{Math.min(5, visibleStudentOptions(active || {}).length || 4)} cavabı seçir.
-                  </p>
-                </aside>
-              ) : null}
-            </>
+            <div className="flex flex-1 items-center justify-center p-6">
+              <Card className="border-[#E5E7EB] bg-white text-[#1F2937] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                Bu imtahanda PDF və ya sual yoxdur.
+              </Card>
+            </div>
           )}
         </div>
       )}
-      {started && !loading && !scheduled && paperQuestions.length > 0 ? (
-        <div className="flex shrink-0 gap-3 border-t border-white/10 bg-[var(--bg)] px-4 py-3 sm:hidden" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <button
-            type="button"
-            disabled={currentIndex <= 0}
-            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--card)] disabled:opacity-40"
-            aria-label="Əvvəlki sual"
-          >
-            <ChevronLeft size={22} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (currentIndex >= paperQuestions.length - 1) finishGuard.request();
-              else setCurrentIndex((i) => Math.min(paperQuestions.length - 1, i + 1));
-            }}
-            className="flex h-14 min-w-0 flex-1 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]"
-          >
-            {currentIndex >= paperQuestions.length - 1 ? t('quiz.finish') : t('quiz.continue')}
-          </button>
-        </div>
-      ) : null}
-      <ScreenGuard active={started && !submitting} name={watermarkName || 'ExamPulse'} onAbandon={onAbandonExam} />
       <ExamFinishConfirm
         open={finishGuard.open}
         busy={submitting}

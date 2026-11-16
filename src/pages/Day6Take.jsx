@@ -134,7 +134,11 @@ export default function Day6Take() {
           )}
         </div>
       </Card>
-      <ExamFinishConfirm guard={finishGuard} />
+      <ExamFinishConfirm
+        open={finishGuard.open}
+        onStay={finishGuard.stay}
+        onFinish={finishGuard.confirm}
+      />
     </AppShell>
   );
 }

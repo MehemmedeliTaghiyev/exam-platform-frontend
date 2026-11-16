@@ -1,6 +1,7 @@
-import { spendWallet, studentWallet } from './studentWallet';
+import { studentWallet } from './studentWallet';
 
-export const WEEKLY_PASS_PRICE = 1;
+/** Kept for older UI strings; weekly exams are free for students. */
+export const WEEKLY_PASS_PRICE = 0;
 export const WEEKLY_PASS_DAYS = 7;
 export const WEEKLY_PASS_EVENT = 'exampulse-weekly-pass';
 
@@ -28,14 +29,14 @@ export function weeklyPassUntil(user) {
   return readUntil(user.id);
 }
 
+/** Weekly asan/orta papers are open for every logged-in student (no 1 ₼ gate). */
 export function weeklyPassActive(user) {
-  if (!user?.id) return false;
-  if (user.practice) return true;
-  return Date.now() < weeklyPassUntil(user);
+  return Boolean(user?.id);
 }
 
 export function weeklyPassRemainingMs(user) {
-  return Math.max(0, weeklyPassUntil(user) - Date.now());
+  if (!user?.id) return 0;
+  return Number.POSITIVE_INFINITY;
 }
 
 export function buyWeeklyPass(user) {
@@ -44,11 +45,8 @@ export function buyWeeklyPass(user) {
     err.code = 'LOGIN';
     throw err;
   }
-  if (weeklyPassActive(user) && !user.practice) {
-    return { until: weeklyPassUntil(user), wallet: studentWallet(user), already: true };
-  }
-  const wallet = spendWallet(user, WEEKLY_PASS_PRICE, 'Həftəlik sınaqlar — 7 gün', 'weekly-pass');
+  // No charge — keep a long-lived local stamp for older screens.
   const until = Date.now() + WEEKLY_PASS_DAYS * 24 * 60 * 60 * 1000;
   writeUntil(user.id, until);
-  return { until, wallet, already: false };
+  return { until, wallet: studentWallet(user), already: true, free: true };
 }

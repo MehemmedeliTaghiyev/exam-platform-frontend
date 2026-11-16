@@ -7,7 +7,13 @@ import DreamUniversityCard from '../components/DreamUniversityCard';
 import StudentAlerts from '../components/StudentAlerts';
 import ExamRow from '../components/ExamRow';
 import { Button, Card, EmptyState, Skeleton } from '../components/ui';
-import { fetchAllPublicExams, fetchExams, fetchStudentHistory } from '../lib/examApi';
+import {
+  fetchAllPublicExams,
+  fetchExam,
+  fetchExams,
+  fetchListedExamsForTeacher,
+  fetchStudentHistory,
+} from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import { examSubject, subjectProgress } from '../lib/publicExams';
 import { formatHms, isExamOpen, isExamScheduled, resolveExamStatus } from '../lib/utils';
@@ -25,8 +31,20 @@ import {
   isDay6ReviewDay,
 } from '../lib/day6ReviewQuiz';
 import { countStreak, DAILY_EVENT, dailyDoneDays, dailyKey, dailyMine, dailyTopBoard, flameDying, flamePeak, syncDailyBoard, todaysQuestion, weekDots } from '../lib/dailyChallenge';
-import { examSortNewest, todaysTopicQuiz } from '../lib/dailyTopicQuiz';
+import { DAILY_TOPIC_SENDS, dailyTopicQuizPlan, examSortNewest } from '../lib/dailyTopicQuiz';
+import {
+  DAILY_TOPIC_EVENT,
+  dailyTopicResultFor,
+  ensureDailyTopicPaper,
+} from '../lib/dailyTopicPaper';
+import { studentSubscriptions } from '../lib/groupSubscriptions';
+import { studentCanSeeExam } from '../lib/syllabus';
 import { tbilisiYmd } from '../lib/mathCalendar';
+import {
+  LIVE_WEEKLY_EASY_EXAM_ID,
+  LIVE_WEEKLY_MEDIUM_EXAM_ID,
+  WEEKLY_SMOKE_EXAM_ID,
+} from '../lib/weeklyMath';
 import StreakFlame from '../components/StreakFlame';
 import { Check } from 'lucide-react';
 
@@ -46,10 +64,12 @@ export default function StudentDashboard() {
     const timer = setInterval(() => setTick((n) => n + 1), 1000);
     const bump = () => setTick((n) => n + 1);
     window.addEventListener(DAILY_EVENT, bump);
+    window.addEventListener(DAILY_TOPIC_EVENT, bump);
     window.addEventListener('storage', bump);
     return () => {
       clearInterval(timer);
       window.removeEventListener(DAILY_EVENT, bump);
+      window.removeEventListener(DAILY_TOPIC_EVENT, bump);
       window.removeEventListener('storage', bump);
     };
   }, []);
@@ -68,12 +88,35 @@ export default function StudentDashboard() {
     const run = async () => {
       setLoading(true);
       try {
-        const [examList, hist, pubs] = await Promise.all([
-          fetchExams(),
+        const teacherIds = [...new Set([
+          user?.teacherId ?? user?.TeacherId,
+          ...studentSubscriptions(user?.id).map((row) => row.teacherId),
+        ].filter((id) => id != null && id !== ''))];
+        const dailyIds = [...new Set(DAILY_TOPIC_SENDS.map((row) => row.examId).filter(Boolean))];
+        const [examList, hist, pubs, listed, easy, medium, ...dailyExams] = await Promise.all([
+          fetchExams().catch(() => []),
           fetchStudentHistory(user?.id),
           fetchAllPublicExams().catch(() => []),
+          Promise.all(teacherIds.map((id) => fetchListedExamsForTeacher(id).catch(() => []))),
+          fetchExam(LIVE_WEEKLY_EASY_EXAM_ID).catch(() => null),
+          fetchExam(LIVE_WEEKLY_MEDIUM_EXAM_ID).catch(() => null),
+          ...dailyIds.map((id) => fetchExam(id).catch(() => null)),
         ]);
-        setExams(examList.filter((e) => resolveExamStatus(e) !== 'Draft'));
+        const merged = [
+          ...examList,
+          ...pubs,
+          ...listed.flat(),
+          easy,
+          medium,
+          ...dailyExams,
+        ].filter((exam, index, all) => (
+          exam?.id != null
+          && String(exam.id) !== WEEKLY_SMOKE_EXAM_ID
+          && resolveExamStatus(exam) !== 'Draft'
+          && studentCanSeeExam(user, exam)
+          && all.findIndex((row) => String(row.id) === String(exam.id)) === index
+        ));
+        setExams(merged);
         setHistory(hist);
         setPublicExams(pubs);
       } finally {
@@ -100,20 +143,65 @@ export default function StudentDashboard() {
 
   const boardExams = useMemo(() => {
     const map = new Map();
-    [...exams, ...publicExams].forEach((exam) => {
+    exams.forEach((exam) => {
       if (!exam || exam.id == null) return;
       if (resolveExamStatus(exam) === 'Draft') return;
       map.set(String(exam.id), exam);
     });
     return Array.from(map.values()).sort(examSortNewest);
-  }, [exams, publicExams]);
+  }, [exams]);
 
   const latestExams = useMemo(() => boardExams.slice(0, 5), [boardExams]);
 
-  const dayQuiz = useMemo(
-    () => todaysTopicQuiz(boardExams, tbilisiYmd()),
-    [boardExams],
+  const todayKey = tbilisiYmd();
+  const quizPlan = useMemo(
+    () => dailyTopicQuizPlan(boardExams, todayKey),
+    [boardExams, todayKey],
   );
+  const dayQuiz = quizPlan.primary;
+  const reviewQuiz = quizPlan.review;
+  const primaryDone = dailyTopicResultFor(user?.id, todayKey, 'primary');
+  const reviewDone = dailyTopicResultFor(user?.id, todayKey, 'review');
+  const primaryPaper = useMemo(
+    () => (dayQuiz?.topic && !dayQuiz.exam ? ensureDailyTopicPaper(user, 'primary', todayKey) : null),
+    [user?.id, dayQuiz?.topic, dayQuiz?.exam, todayKey, tick],
+  );
+  const reviewPaper = useMemo(
+    () => (reviewQuiz?.topic && !reviewQuiz.exam ? ensureDailyTopicPaper(user, 'review', todayKey) : null),
+    [user?.id, reviewQuiz?.topic, reviewQuiz?.exam, todayKey, tick],
+  );
+
+  const openDayQuiz = (slot) => {
+    if (!slot?.topic) return;
+    const role = slot.role || 'primary';
+    if (slot.exam) {
+      openExam(slot.exam);
+      return;
+    }
+    const done = role === 'review' ? reviewDone : primaryDone;
+    if (done) {
+      navigate(`/student/topic-quiz/result/${encodeURIComponent(todayKey)}/${encodeURIComponent(role)}`);
+      return;
+    }
+    navigate(`/student/topic-quiz/${encodeURIComponent(role)}`);
+  };
+
+  const dayQuizDoneLabel = (slot, personalDone) => {
+    if (slot?.exam) {
+      const attempt = history.find((h) => {
+        if (String(h.examId) !== String(slot.exam.id)) return false;
+        const status = String(h.status || h.Status || '').toLowerCase();
+        if (status === 'inprogress' || status === 'in_progress') return false;
+        return Boolean(h.submittedAt || h.SubmittedAt);
+      });
+      if (attempt) {
+        const pct = Number(attempt.percent ?? attempt.Percent ?? attempt.score ?? attempt.Score);
+        return Number.isFinite(pct) ? `Verilib · ${Math.round(pct)}%` : 'Verilib';
+      }
+      return null;
+    }
+    return personalDone ? `Verilib · ${personalDone.percent}%` : null;
+  };
 
   const daily = useMemo(() => {
     const q = todaysQuestion();
@@ -252,27 +340,48 @@ export default function StudentDashboard() {
         </button>
       ) : null}
 
-      {dayQuiz.topic ? (
+      {dayQuiz?.topic ? (
         <button
           type="button"
-          onClick={() => {
-            if (dayQuiz.exam) openExam(dayQuiz.exam);
-            else navigate('/student/syllabus');
-          }}
-          className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
+          onClick={() => openDayQuiz(dayQuiz)}
+          className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-2 ring-[var(--accent)]"
         >
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">Günün sınağı</p>
           <p className="mt-1 text-lg font-black">{dayQuiz.topic}</p>
           <p className="mt-1 line-clamp-2 text-sm font-semibold text-[var(--muted)]">
-            {dayQuiz.exam
-              ? [
-                dayQuiz.bandLabel,
-                String(dayQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim(),
-              ].filter(Boolean).join(' · ')
-              : 'Tariximizə görə bu mövzudasınız · bankdan sınaq düşəndə burada açılacaq'}
+            {dayQuizDoneLabel(dayQuiz, primaryDone)
+              || (dayQuiz.exam
+                ? [
+                  dayQuiz.bandLabel,
+                  String(dayQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim(),
+                ].filter(Boolean).join(' · ')
+                : `${dayQuiz.bandLabel || 'Orta'} · ${primaryPaper?.questions?.length || 10} sual · son keçilən mövzu`)}
           </p>
           <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
-            {dayQuiz.exam ? 'Sınağı aç' : 'Sillabusa bax'}
+            {dayQuizDoneLabel(dayQuiz, primaryDone) ? 'Nəticəyə bax' : 'Sınağı aç'}
+          </span>
+        </button>
+      ) : null}
+
+      {reviewQuiz?.topic ? (
+        <button
+          type="button"
+          onClick={() => openDayQuiz(reviewQuiz)}
+          className="card-vector mb-4 w-full rounded-[24px] bg-[var(--card)] p-4 text-left ring-1 ring-[var(--line)]"
+        >
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">Əvvəlki mövzu · təkrar</p>
+          <p className="mt-1 text-lg font-black">{reviewQuiz.topic}</p>
+          <p className="mt-1 line-clamp-2 text-sm font-semibold text-[var(--muted)]">
+            {dayQuizDoneLabel(reviewQuiz, reviewDone)
+              || (reviewQuiz.exam
+                ? [
+                  reviewQuiz.bandLabel,
+                  String(reviewQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim(),
+                ].filter(Boolean).join(' · ')
+                : `${reviewQuiz.bandLabel || 'Orta'} · ${reviewPaper?.questions?.length || 10} sual · keçilmiş mövzuların təkrarı`)}
+          </p>
+          <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
+            {dayQuizDoneLabel(reviewQuiz, reviewDone) ? 'Nəticəyə bax' : 'Təkrar sınağı aç'}
           </span>
         </button>
       ) : null}

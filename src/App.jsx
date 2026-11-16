@@ -43,6 +43,8 @@ import WeekendResult from './pages/WeekendResult';
 import Day6Review from './pages/Day6Review';
 import Day6Take from './pages/Day6Take';
 import Day6Result from './pages/Day6Result';
+import DailyTopicTake from './pages/DailyTopicTake';
+import DailyTopicResult from './pages/DailyTopicResult';
 import Legal from './pages/Legal';
 import UrgentBroadcastHost from './components/UrgentBroadcastHost';
 
@@ -315,6 +317,22 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['Student']}>
             <Day6Result />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/topic-quiz/result/:ymd/:role"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <DailyTopicResult />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student/topic-quiz/:role"
+        element={
+          <ProtectedRoute allowedRoles={['Student']}>
+            <DailyTopicTake />
           </ProtectedRoute>
         }
       />

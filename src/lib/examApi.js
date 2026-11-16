@@ -1,12 +1,12 @@
 import API from '../api/axios';
 import axios from 'axios';
 import { localDb } from './localDb';
-import { unwrapList, unwrapItem, unwrapOptions, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption, errorMessage } from './utils';
+import { unwrapList, unwrapItem, unwrapOptions, unwrapPageMeta, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption, errorMessage } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
-import { decorateTeacher } from './teacherMarketplace';
+import { decorateTeacher, mergeTeacherDirectory } from './teacherMarketplace';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { examRankingEnabled } from './examKind';
 import { examSortNewest } from './dailyTopicQuiz';
@@ -37,6 +37,7 @@ import {
   practiceExamPeers,
   practiceOwnStudentIds,
   practiceGroupmates,
+  practiceAdminTeachers,
 } from './practice';
 
 const FAST = { timeout: 20000 };
@@ -1949,8 +1950,21 @@ export async function fetchExamReviewByExam(examId) {
 
 export async function fetchUsersByRole(role = 'Student') {
   if (isPractice()) return [];
-  const res = await API.get('/Users', { params: { role, includeDeleted: false }, timeout: 8000 });
-  return unwrapList(res.data);
+  const pageSize = 200;
+  const all = [];
+  let pageNumber = 1;
+  for (let i = 0; i < 50; i += 1) {
+    const res = await API.get('/Users', {
+      params: { role, includeDeleted: false, pageNumber, pageSize },
+      timeout: 8000,
+    });
+    const rows = unwrapList(res.data);
+    all.push(...rows);
+    const meta = unwrapPageMeta(res.data, rows.length);
+    if (!meta.hasNext || rows.length === 0) break;
+    pageNumber += 1;
+  }
+  return all;
 }
 
 function countUsers(data) {
@@ -1972,26 +1986,29 @@ export async function fetchCommunityCounts() {
 
 export async function fetchTeacherDirectory() {
   if (isPractice()) {
-    return [
-      {
-        id: 'demo',
-        fullName: 'ExamPulse',
-        position: 'Bakı',
-        subjects: ['Riyaziyyat', 'Azərbaycan dili'],
-      },
-      {
-        id: 'demo-paid',
-        fullName: 'Nigar Həsənova',
-        position: 'Gəncə',
-        subjects: ['Riyaziyyat'],
-      },
-      {
-        id: PRACTICE_TEACHER_ID,
-        fullName: 'ExamPulse (məşq)',
-        position: 'Bakı',
-        subjects: ['Fizika'],
-      },
-    ];
+    return mergeTeacherDirectory([
+      [
+        {
+          id: 'demo',
+          fullName: 'ExamPulse',
+          position: 'Bakı',
+          subjects: ['Riyaziyyat', 'Azərbaycan dili'],
+        },
+        {
+          id: 'demo-paid',
+          fullName: 'Nigar Həsənova',
+          position: 'Gəncə',
+          subjects: ['Riyaziyyat'],
+        },
+        {
+          id: PRACTICE_TEACHER_ID,
+          fullName: 'ExamPulse (məşq)',
+          position: 'Bakı',
+          subjects: ['Fizika'],
+        },
+      ],
+      practiceAdminTeachers(),
+    ]);
   }
   const fromLocal = localDb.getPublicTeachers();
   let remote = [];
@@ -2000,21 +2017,7 @@ export async function fetchTeacherDirectory() {
   } catch {
     remote = [];
   }
-  const map = new Map();
-  [...fromLocal, ...remote].forEach((t) => {
-    const id = t?.id;
-    if (id == null) return;
-    if ((t.isAccessEnabled ?? t.IsAccessEnabled) === false) return;
-    const prev = map.get(String(id));
-    map.set(String(id), {
-      id,
-      fullName: t.fullName || t.email || prev?.fullName || `Müəllim #${id}`,
-      position: t.position || t.Position || prev?.position || 'Digər',
-      email: t.email || prev?.email,
-      subjects: [...new Set([...(prev?.subjects || []), ...(t.subjects || [])])],
-    });
-  });
-  return Array.from(map.values());
+  return mergeTeacherDirectory([fromLocal, remote]);
 }
 
 export async function fetchStudentHistoryById(studentId) {

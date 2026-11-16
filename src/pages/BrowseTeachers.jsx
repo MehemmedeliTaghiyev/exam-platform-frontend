@@ -20,7 +20,13 @@ import { fetchListedExamsForTeacher, fetchMarketplaceTeachers } from '../lib/exa
 import { examVisibility } from '../lib/examVisibility';
 import { localDb } from '../lib/localDb';
 import { canEnterExam } from '../lib/teacherAccess';
-import { filterSortTeachers, uniqueRegions, uniqueTeacherSubjects } from '../lib/teacherMarketplace';
+import {
+  emptyTeacherSearch,
+  filterSortTeachers,
+  teacherSearchActive,
+  uniqueRegions,
+  uniqueTeacherSubjects,
+} from '../lib/teacherMarketplace';
 import { examRetakeReady, isExamEnded, isExamScheduled } from '../lib/utils';
 
 const SORTS = [
@@ -154,6 +160,7 @@ export default function BrowseTeachers({ embedded = false }) {
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState('all');
   const [subject, setSubject] = useState('all');
+  const [applied, setApplied] = useState(emptyTeacherSearch);
   const [sortBy, setSortBy] = useState('rank');
   const [dir, setDir] = useState('desc');
   const [sheet, setSheet] = useState('');
@@ -187,19 +194,25 @@ export default function BrowseTeachers({ embedded = false }) {
   }, [user?.id]);
 
   const filtered = useMemo(
-    () => filterSortTeachers(teachers, { query, region, subject, sortBy, dir }),
-    [teachers, query, region, subject, sortBy, dir],
+    () => filterSortTeachers(teachers, { ...applied, sortBy, dir }),
+    [teachers, applied, sortBy, dir],
   );
   const regions = useMemo(() => uniqueRegions(teachers), [teachers]);
   const subjects = useMemo(() => uniqueTeacherSubjects(teachers), [teachers]);
   const selected = teachers.find((t) => String(t.id) === String(id));
-  const filteredOn = query.trim() || region !== 'all' || subject !== 'all';
+  const filteredOn = teacherSearchActive(applied);
   const sortMeta = SORTS.find((row) => row.id === sortBy) || SORTS[0];
+
+  const applySearch = () => {
+    setApplied({ query, region, subject });
+    setSheet('');
+  };
 
   const clearFilters = () => {
     setQuery('');
     setRegion('all');
     setSubject('all');
+    setApplied(emptyTeacherSearch());
     setSortBy('rank');
     setDir('desc');
     setSheet('');
@@ -241,55 +254,72 @@ export default function BrowseTeachers({ embedded = false }) {
         </p>
       </div>
 
-      <div className="relative mt-4">
-        <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ad, bölgə, fənn..."
-          className="h-14 w-full rounded-[18px] bg-[var(--card)] pl-12 pr-4 text-[15px] font-semibold text-[var(--text)] outline-none ring-1 ring-[var(--line)] placeholder:text-[var(--muted)] focus:ring-[var(--accent)]/50"
-        />
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <FilterField
-          label="Bölgə"
-          value={region === 'all' ? 'Hamısı' : region}
-          accent={region !== 'all'}
-          onClick={() => setSheet('region')}
-        />
-        <FilterField
-          label="Fənn"
-          value={subject === 'all' ? 'Hamısı' : subject}
-          accent={subject !== 'all'}
-          onClick={() => setSheet('subject')}
-        />
-        <FilterField
-          label="Sıralama"
-          value={sortBy === 'rank' ? 'Həftəlik + orta' : sortMeta.label}
-          onClick={() => setSheet('sort')}
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setDir('desc')}
-            className={`flex min-h-[72px] items-center justify-center gap-1.5 rounded-[18px] text-[13px] font-extrabold ${
-              dir === 'desc' ? 'bg-[var(--accent)] text-[#2a2208]' : 'card-vector bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
-            }`}
-          >
-            <ArrowDown size={15} /> Azalan
-          </button>
-          <button
-            type="button"
-            onClick={() => setDir('asc')}
-            className={`flex min-h-[72px] items-center justify-center gap-1.5 rounded-[18px] text-[13px] font-extrabold ${
-              dir === 'asc' ? 'bg-[var(--accent)] text-[#2a2208]' : 'card-vector bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
-            }`}
-          >
-            <ArrowUp size={15} /> Artan
-          </button>
+      <form
+        className="mt-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          applySearch();
+        }}
+      >
+        <div className="relative">
+          <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Ad, bölgə, fənn..."
+            name="teacher-search"
+            autoComplete="off"
+            className="h-14 w-full rounded-[18px] bg-[var(--card)] pl-12 pr-4 text-[15px] font-semibold text-[var(--text)] outline-none ring-1 ring-[var(--line)] placeholder:text-[var(--muted)] focus:ring-[var(--accent)]/50"
+          />
         </div>
-      </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <FilterField
+            label="Bölgə"
+            value={region === 'all' ? 'Hamısı' : region}
+            accent={region !== 'all'}
+            onClick={() => setSheet('region')}
+          />
+          <FilterField
+            label="Fənn"
+            value={subject === 'all' ? 'Hamısı' : subject}
+            accent={subject !== 'all'}
+            onClick={() => setSheet('subject')}
+          />
+          <FilterField
+            label="Sıralama"
+            value={sortBy === 'rank' ? 'Həftəlik + orta' : sortMeta.label}
+            onClick={() => setSheet('sort')}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDir('desc')}
+              className={`flex min-h-[72px] items-center justify-center gap-1.5 rounded-[18px] text-[13px] font-extrabold ${
+                dir === 'desc' ? 'bg-[var(--accent)] text-[#2a2208]' : 'card-vector bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
+              }`}
+            >
+              <ArrowDown size={15} /> Azalan
+            </button>
+            <button
+              type="button"
+              onClick={() => setDir('asc')}
+              className={`flex min-h-[72px] items-center justify-center gap-1.5 rounded-[18px] text-[13px] font-extrabold ${
+                dir === 'asc' ? 'bg-[var(--accent)] text-[#2a2208]' : 'card-vector bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
+              }`}
+            >
+              <ArrowUp size={15} /> Artan
+            </button>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-6 text-[15px] font-extrabold text-[#2a2208]"
+        >
+          <Search size={18} /> Axtar
+        </button>
+      </form>
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-[14px] font-extrabold text-[var(--muted)]">

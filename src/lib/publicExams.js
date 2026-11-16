@@ -1,4 +1,41 @@
-import { parseExamDate, resolveExamStatus, toDateInput } from './utils';
+import { examVisibility } from './examVisibility.js';
+import { canShareExamPublic } from './syllabus.js';
+import { parseExamDate, resolveExamStatus, toDateInput } from './utils.js';
+import { isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath.js';
+
+/**
+ * Core catalog the student exams page and teacher profile try, in order.
+ * Live SmarterASP (2026-11-16) still has no IsPublic; GET /Exams/public is
+ * treated as GET /Exams/{id} and 400s. Keep calling these so a Core PR that
+ * adds isPublic / teacherId filters lights up without another frontend change.
+ *
+ * Contract (do not publish Core from this repo):
+ * - POST/PUT /Exams send isPublic + visibility (and VIS:public in Description).
+ * - List: GET /Exams/cards (GetStudentExamCardsAsync), then
+ *   GET /Exams?isPublic=true, GET /Exams?visibility=public, GET /Exams/public.
+ * - Teacher: same with ?teacherId=.
+ * - A row is public iff isPublic/IsPublic true, visibility/Visibility === "public",
+ *   or Description contains VIS:public. Client still blocks multi-topic papers.
+ */
+export const PUBLIC_EXAM_CATALOG_PATHS = [
+  '/Exams/cards',
+  '/Exams/cards?isPublic=true',
+  '/Exams?isPublic=true&pageSize=50',
+  '/Exams?visibility=public&pageSize=50',
+  '/Exams/public',
+];
+
+export function publicExamCatalogPathsForTeacher(teacherId) {
+  const id = encodeURIComponent(teacherId ?? '');
+  if (!id) return [...PUBLIC_EXAM_CATALOG_PATHS];
+  return [
+    `/Exams/cards?teacherId=${id}`,
+    `/Exams/cards?teacherId=${id}&isPublic=true`,
+    `/Exams?teacherId=${id}&isPublic=true&pageSize=50`,
+    `/Exams?teacherId=${id}&visibility=public&pageSize=50`,
+    `/Exams/public?teacherId=${id}`,
+  ];
+}
 
 export function examOwnerKey(exam) {
   const tid = exam?.teacherId ?? exam?.TeacherId;
@@ -18,9 +55,17 @@ export function publicExamsOfTeacher(exams, teacherId) {
   if (!owner) return [];
   return (exams || []).filter((exam) => {
     if (examOwnerKey(exam) !== owner) return false;
-    if (resolveExamStatus(exam) === 'Draft') return false;
-    return listedAsPublic(exam);
+    return keepPublicCatalogExam(exam);
   });
+}
+
+export function keepPublicCatalogExam(exam) {
+  if (!exam || (exam.id == null && exam.Id == null)) return false;
+  if (resolveExamStatus(exam) === 'Draft') return false;
+  const weekly = isStudentWeeklyExam(exam) || isLiveWeeklyExamId(exam.id ?? exam.Id);
+  if (weekly) return true;
+  if (!canShareExamPublic(exam)) return false;
+  return listedAsPublic(exam) || examVisibility(exam) === 'public';
 }
 
 export function examSubject(exam) {

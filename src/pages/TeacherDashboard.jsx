@@ -12,7 +12,7 @@ import { republicAdminExams, republicMonthLabel } from '../lib/republicExam';
 import TokenBanner from '../components/TokenBanner';
 import { filterPublicExams, uniqueSubjects } from '../lib/publicExams';
 import { driveFileViewUrl, EXAM_CREATE_OPEN, parseDriveFileId } from '../lib/driveLinks';
-import { withMixedMark } from '../lib/syllabus';
+import { resolvedShareVisibility, withMixedMark } from '../lib/syllabus';
 import { durationHint, durationMinutesForQuestionCount } from '../lib/examDuration';
 
 const MONTHS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
@@ -250,6 +250,10 @@ export default function TeacherDashboard() {
       })();
 
       const mixed = Boolean(form.mixedTopics);
+      const vis = resolvedShareVisibility(
+        { title: form.title, description: withMixedMark(form.description, mixed), kind: 'teacher', subjectName: subject?.name },
+        !mixed && form.visibility === 'public',
+      );
       const payload = {
         title: form.title,
         description: withMixedMark(form.description, mixed),
@@ -262,8 +266,8 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
-        visibility: mixed ? 'private' : form.visibility === 'public' ? 'public' : 'private',
-        isPublic: !mixed && form.visibility === 'public',
+        visibility: vis,
+        isPublic: vis === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(form.driveFileLink)) || undefined,
         rankingEnabled: form.rankingEnabled !== false,
         kind: 'teacher',
@@ -343,6 +347,10 @@ export default function TeacherDashboard() {
         }
       })();
 
+      const vis = resolvedShareVisibility(
+        { title, description: withMixedMark(description, mixedTopics), kind: 'teacher', subjectName: subject?.name },
+        !mixedTopics && visibility === 'public',
+      );
       const payload = {
         title,
         description: withMixedMark(description, mixedTopics),
@@ -355,8 +363,8 @@ export default function TeacherDashboard() {
         endTime: end.toISOString(),
         isDraft: true,
         status: 'Draft',
-        visibility: mixedTopics ? 'private' : visibility === 'public' ? 'public' : 'private',
-        isPublic: !mixedTopics && visibility === 'public',
+        visibility: vis,
+        isPublic: vis === 'public',
         pdfFileUrl: driveFileViewUrl(parseDriveFileId(driveFileLink)) || undefined,
         rankingEnabled,
         kind: 'teacher',
@@ -756,6 +764,7 @@ export default function TeacherDashboard() {
             <button
               type="button"
               disabled={mixedTopics}
+              title={mixedTopics ? 'Qarışıq sınaq yalnız öz tələbələrlə paylaşılır' : undefined}
               onClick={() => setVisibility('public')}
               className={`rounded-xl border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                 visibility === 'public' && !mixedTopics

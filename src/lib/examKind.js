@@ -1,5 +1,5 @@
-import { localDb } from './localDb';
-import { isStudentWeeklyExam } from './weeklyMath';
+import { localDb } from './localDb.js';
+import { isStudentWeeklyExam } from './weeklyMath.js';
 
 function blob(exam) {
   return `${exam?.title || exam?.Title || ''} ${exam?.description || exam?.Description || ''}`;

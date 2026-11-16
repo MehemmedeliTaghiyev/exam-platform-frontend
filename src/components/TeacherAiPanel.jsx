@@ -8,6 +8,7 @@ import { addQuestion, applyAiAnswers, createExam, createSubject, fetchSubjects, 
 import { recordAiUsage } from '../lib/aiUsage';
 import { hasRealChoiceOptions, normalizeGeneratedQuestions, parseQuestionsFromText, toAddQuestionPayload } from '../lib/parseExamText';
 import { errorMessage } from '../lib/utils';
+import { canShareExamPublic, resolvedShareVisibility } from '../lib/syllabus';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -189,6 +190,11 @@ export default function TeacherAiPanel() {
         fallbackTitle: 'AI',
       });
       if (publish) {
+        const vis = resolvedShareVisibility(exam, visibility);
+        if (visibility === 'public' && vis !== 'public') {
+          setError('Qarışıq / çox mövzulu sınaq yalnız öz tələbələrinizlə paylaşılır.');
+          return;
+        }
         const start = new Date(startLocal);
         const duration = Number(durationMinutes) || 45;
         const end = new Date((Number.isNaN(start.getTime()) ? Date.now() : start.getTime()) + duration * 60 * 1000);
@@ -202,10 +208,10 @@ export default function TeacherAiPanel() {
           endTime: end.toISOString(),
           status,
           isDraft: false,
-          visibility,
-          isPublic: visibility === 'public',
+          visibility: vis,
+          isPublic: vis === 'public',
         });
-        setMessage(visibility === 'public'
+        setMessage(vis === 'public'
           ? `${cleaned.length} sual açıq dərc olundu.`
           : `${cleaned.length} sual özəl dərc olundu.`);
       } else {
@@ -341,7 +347,8 @@ Cavab: B`}</pre>
                 </Button>
                 <Button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !canShareExamPublic({ title, description: `${topic} ${brief}` })}
+                  title={!canShareExamPublic({ title, description: `${topic} ${brief}` }) ? 'Qarışıq sınaq yalnız öz tələbələrlə' : undefined}
                   className="bg-amber-400 text-indigo-950 hover:bg-amber-300"
                   onClick={() => saveGenerated({ publish: true, visibility: 'public' })}
                 >

@@ -10,6 +10,7 @@ import { addQuestion, fetchExam, fetchOwnProfile, fetchQuestions, paperQuestions
 import { localDb } from '../lib/localDb';
 import { errorMessage, examCanEdit, isLetterOption, isOpenChoiceOption, optionLetter } from '../lib/utils';
 import { driveFileViewUrl, examDriveFileId, parseDriveFileId } from '../lib/driveLinks';
+import { canShareExamPublic, resolvedShareVisibility } from '../lib/syllabus';
 import DrivePreview from '../components/DrivePreview';
 import { dropTeacherPdf, peekTeacherPdf, stashTeacherPdf } from '../lib/teacherPdfCache';
 import { exportExamToDocx } from '../lib/exportDocx';
@@ -247,6 +248,11 @@ export default function QuestionBuilder() {
     if (refuseEdit()) return;
     if (!exam) return;
     try {
+      const vis = resolvedShareVisibility(exam, visibility);
+      if (visibility === 'public' && vis !== 'public') {
+        setMessage('Qarışıq / çox mövzulu sınaq yalnız öz tələbələrinizlə paylaşılır.');
+        return;
+      }
       const start = exam.startTime || new Date().toISOString();
       const duration = exam.durationMinutes || 45;
       const end = exam.endTime || new Date(Date.now() + duration * 60 * 1000).toISOString();
@@ -267,8 +273,8 @@ export default function QuestionBuilder() {
         endTime: end,
         status,
         isDraft: false,
-        visibility,
-        isPublic: visibility === 'public',
+        visibility: vis,
+        isPublic: vis === 'public',
         description: exam.description,
         pdfFileUrl: driveFileViewUrl(examDriveFileId({ ...exam, pdfFileUrl: driveLink || exam.pdfFileUrl })),
       });
@@ -317,7 +323,13 @@ export default function QuestionBuilder() {
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <Button variant="secondary" onClick={() => publishDraft('private')}>Özəl dərc</Button>
-            <Button onClick={() => publishDraft('public')}>Açıq dərc</Button>
+            <Button
+              disabled={exam && !canShareExamPublic(exam)}
+              title={exam && !canShareExamPublic(exam) ? 'Qarışıq sınaq yalnız öz tələbələrlə' : undefined}
+              onClick={() => publishDraft('public')}
+            >
+              Açıq dərc
+            </Button>
             <Button variant="secondary" onClick={() => navigate(`/teacher/exams/${id}/stats`)}>
               <BarChart3 size={16} /> Statistika
             </Button>

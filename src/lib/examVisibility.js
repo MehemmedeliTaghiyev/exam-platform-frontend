@@ -1,4 +1,4 @@
-import { localDb } from './localDb';
+import { localDb } from './localDb.js';
 
 export function examVisibility(exam) {
   if (!exam) return 'private';

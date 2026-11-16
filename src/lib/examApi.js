@@ -7,12 +7,12 @@ import { examVisibility, withExamVisibility } from './examVisibility';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
 import { decorateTeacher, directoryRowFromUser, mergeTeacherDirectory } from './teacherMarketplace';
-import { publicExamsOfTeacher } from './publicExams';
-import { subscribedTeacherIds } from './groupSubscriptions';
+import { publicExamCatalogPathsForTeacher, PUBLIC_EXAM_CATALOG_PATHS, keepPublicCatalogExam, publicExamsOfTeacher } from './publicExams';
+import { resolvedShareVisibility, studentCanSeeExam } from './syllabus';
 import { examRankingEnabled } from './examKind';
 import { examSortNewest } from './dailyTopicQuiz';
 import { durationMinutesForQuestionCount } from './examDuration';
-import { examKindOf, examPulseAudience, isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath';
+import { examKindOf, isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
 import { gradeExam } from './gradeExam';
@@ -940,16 +940,8 @@ function visibleForCurrentUser(exams) {
     if (scope == null) return [];
     return exams.filter((exam) => String(examOwnerId(exam)) === String(scope));
   }
-  const followed = new Set(localDb.followedTeacherIds(id));
-  const subscribedTeachers = new Set(subscribedTeacherIds(id));
-  return exams.filter((exam) => {
-    if (examPulseAudience(exam) === 'hidden') return false;
-    const owner = String(examOwnerId(exam) ?? '');
-    if (isStudentWeeklyExam(exam)) return true;
-    if (scope != null && owner === String(scope)) return true;
-    if (subscribedTeachers.has(owner)) return true;
-    return examVisibility(exam) === 'public' && followed.has(owner);
-  }).map(withExamVisibility);
+  const user = { id, role: 'Student', teacherId: scope };
+  return exams.filter((exam) => studentCanSeeExam(user, exam)).map(withExamVisibility);
 }
 
 export async function fetchExams() {
@@ -1029,15 +1021,10 @@ export async function fetchPublicExamsForTeacher(teacherId) {
   const listed = await collectTeacherExams(teacherId);
   let extra = [];
   if (!isPractice()) {
-    const id = encodeURIComponent(teacherId);
-    extra = await tryExamLists([
-      `/Exams?teacherId=${id}&isPublic=true`,
-      `/Exams?teacherId=${id}&visibility=public`,
-      `/Exams/public?teacherId=${id}`,
-    ]);
+    extra = await tryExamLists(publicExamCatalogPathsForTeacher(teacherId));
     try {
       extra.push(
-        ...unwrapList(await tryGet('/Exams')).filter((exam) => String(examOwnerId(exam)) === String(teacherId)),
+        ...unwrapList(await tryGet('/Exams?pageSize=50')).filter((exam) => String(examOwnerId(exam)) === String(teacherId)),
       );
     } catch {
       /* student GET /Exams may be 401/403 or only the caller's papers */
@@ -1101,18 +1088,22 @@ export async function fetchMarketplaceTeachers() {
 
 export async function fetchAllPublicExams() {
   if (isPractice()) {
-    return practiceFetchExams()
-      .map((exam) => withExamVisibility({ ...exam, isPublic: true, visibility: 'public' }))
-      .filter((exam) => resolveExamStatus(exam) !== 'Draft');
+    const listed = [...practiceFetchExams(), ...defaultStudentExams(), ...practiceTeacherExams()];
+    const map = new Map();
+    listed.forEach((exam) => {
+      const vis = withExamVisibility(exam);
+      if (!keepPublicCatalogExam(vis)) return;
+      map.set(String(vis.id), vis);
+    });
+    return Array.from(map.values()).sort(examSortNewest);
   }
   const teachers = await fetchTeacherDirectory().catch(() => []);
   const names = new Map(teachers.map((t) => [String(t.id), t.fullName]));
-  let remote = [];
-  try {
-    remote = unwrapList(await tryGet('/Exams'));
-  } catch {
-    remote = [];
-  }
+  const remote = await tryExamLists([
+    ...PUBLIC_EXAM_CATALOG_PATHS,
+    '/Exams?pageSize=50',
+    '/Exams',
+  ]);
   const perTeacher = (await Promise.all(
     teachers.map((t) => fetchPublicExamsForTeacher(t.id).catch(() => [])),
   )).flat();
@@ -1122,9 +1113,7 @@ export async function fetchAllPublicExams() {
     const item = withCounts([exam])[0];
     if (item?.id == null) return;
     const vis = withExamVisibility(item);
-    if (resolveExamStatus(vis) === 'Draft') return;
-    const weekly = isStudentWeeklyExam(vis) || isLiveWeeklyExamId(vis.id);
-    if (!weekly && examVisibility(vis) !== 'public') return;
+    if (!keepPublicCatalogExam(vis)) return;
     const owner = String(examOwnerId(vis) ?? '');
     map.set(String(vis.id), {
       ...vis,
@@ -1170,7 +1159,11 @@ function toLocalExam(payload, created = {}, source = 'remote') {
 }
 
 export async function createExam(payload) {
-  if (isPractice()) return practiceCreateExam(payload);
+  if (isPractice()) {
+    const vis = resolvedShareVisibility(payload, payload.visibility === 'public' || payload.isPublic === true);
+    return practiceCreateExam({ ...payload, visibility: vis, isPublic: vis === 'public' });
+  }
+  const vis = resolvedShareVisibility(payload, payload.visibility === 'public' || payload.isPublic === true);
   const totalQuestions = Number(payload.totalQuestions) || 10;
   const durationMinutes = Number(payload.durationMinutes) > 0
     ? Number(payload.durationMinutes)
@@ -1190,9 +1183,9 @@ export async function createExam(payload) {
       isAiGenerated: payload.isAiGenerated === true,
       pdfFileUrl: payload.pdfFileUrl,
       pdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
-      description: wrapExamDescription(payload.description, payload.pdfFileUrl, payload.visibility),
-      isPublic: payload.visibility === 'public' || payload.isPublic === true,
-      visibility: payload.visibility || (payload.isPublic ? 'public' : 'private'),
+      description: wrapExamDescription(payload.description, payload.pdfFileUrl, vis),
+      isPublic: vis === 'public',
+      visibility: vis,
       kind: payload.kind,
       rankingEnabled: payload.rankingEnabled,
     },
@@ -1211,9 +1204,9 @@ export async function createExam(payload) {
       IsAiGenerated: payload.isAiGenerated === true,
       PdfFileUrl: payload.pdfFileUrl,
       PdfFilePath: payload.pdfFilePath || payload.pdfFileUrl,
-      Description: wrapExamDescription(payload.description, payload.pdfFileUrl, payload.visibility),
-      IsPublic: payload.visibility === 'public' || payload.isPublic === true,
-      Visibility: payload.visibility || (payload.isPublic ? 'public' : 'private'),
+      Description: wrapExamDescription(payload.description, payload.pdfFileUrl, vis),
+      IsPublic: vis === 'public',
+      Visibility: vis,
       Kind: payload.kind,
       RankingEnabled: payload.rankingEnabled,
     },
@@ -1329,8 +1322,13 @@ export async function copyFromBank(examId, quota = {}) {
 }
 
 export async function updateExam(id, payload) {
-  if (isPractice()) return practiceUpdateExam(id, payload);
-  const vis = payload.visibility || (payload.isPublic === true ? 'public' : payload.isPublic === false ? 'private' : undefined);
+  if (isPractice()) {
+    const vis = payload.visibility || (payload.isPublic === true ? 'public' : payload.isPublic === false ? 'private' : undefined);
+    const clamped = vis ? resolvedShareVisibility(payload, vis === 'public') : vis;
+    return practiceUpdateExam(id, clamped ? { ...payload, visibility: clamped, isPublic: clamped === 'public' } : payload);
+  }
+  const requested = payload.visibility || (payload.isPublic === true ? 'public' : payload.isPublic === false ? 'private' : undefined);
+  const vis = requested ? resolvedShareVisibility(payload, requested === 'public') : undefined;
   const description = wrapExamDescription(payload.description, payload.pdfFileUrl || payload.pdfFilePath, vis);
   const body = {
     subjectId: payload.subjectId,

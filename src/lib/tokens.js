@@ -11,12 +11,6 @@ export const TOKEN_COSTS = {
   asan: 5,
   orta: 7,
   çətin: 8,
-  sınaq: 7,
-};
-export const KIND_TOKEN_COSTS = {
-  sınaq: 7,
-  buraxılış: 10,
-  blok: 12,
 };
 /** Anbar: 3 tip — çətinlik seçimi yoxdur, sabit daxili bölgü. */
 export const KIND_TOKEN_COSTS = {
@@ -83,19 +77,6 @@ export function tokenCostForStorageOrder(kind, _mix = {}, standardCount = 1) {
 
 export function tokenCostForQuestions(questions = []) {
   return (questions || []).reduce((sum, question) => sum + tokenCostForLevel(question?.difficultyLevel), 0);
-}
-
-export function tokenCostForStorageOrder(kind, mix = {}, standardCount = 1) {
-  const raw = String(kind || '').toLocaleLowerCase('az');
-  if (/blok|block/.test(raw)) {
-    return KIND_TOKEN_COSTS.blok * Math.max(1, Number(standardCount) || 1);
-  }
-  if (/burax/.test(raw)) {
-    return KIND_TOKEN_COSTS.buraxılış * Math.max(1, Number(standardCount) || 1);
-  }
-  const n = Math.max(0, Number(standardCount) || 0)
-    || ((Number(mix.asan) || 0) + (Number(mix.orta) || 0) + (Number(mix.çətin) || 0));
-  return KIND_TOKEN_COSTS.sınaq * Math.max(0, n);
 }
 
 function emptyAccount() {

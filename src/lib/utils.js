@@ -1,4 +1,5 @@
 import { isWeeklyQuiz } from './examKind.js';
+import { isPublicExam } from './examVisibility.js';
 
 export function unwrapList(data) {
   if (Array.isArray(data)) return data;
@@ -312,6 +313,7 @@ export function studentResultsReady(exam, user) {
   if (user?.role && user.role !== 'Student') return true;
   if (!exam) return false;
   if (isWeeklyQuiz(exam)) return true;
+  if (isPublicExam(exam)) return true;
   return isExamEnded(exam);
 }
 

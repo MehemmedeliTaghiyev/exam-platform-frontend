@@ -10,6 +10,8 @@ import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE, PUBLIC_GROUP_N
 import { groupNeedsApproval } from '../lib/groupApproval';
 import { buildStudentEmail, STUDENT_EMAIL_HINT, STUDENT_EMAIL_RE } from '../lib/studentEmail';
 import { localDb } from '../lib/localDb';
+import { persistStudentGrade } from '../lib/gradeSyllabus';
+import { PREFERENCE_OPTIONS, gradeLabel } from '../lib/storageCatalog';
 import { subscribeToGroup } from '../lib/groupSubscriptions';
 import '../components/home/home.css';
 
@@ -60,6 +62,7 @@ export default function JoinStudent() {
     phone: '',
     email: '',
     password: '',
+    grade: '11',
     dreamUniversity: '',
     dreamMajor: '',
   });
@@ -152,8 +155,10 @@ export default function JoinStudent() {
         phone: form.phone.trim(),
         email,
         password: form.password,
+        grade: form.grade,
         independent: openJoin,
       });
+      persistStudentGrade({ id: result?.id || result?.userId, email }, form.grade);
       if (openJoin) {
         try {
           const token = result?.token || result?.Token || result?.accessToken;
@@ -168,7 +173,9 @@ export default function JoinStudent() {
           } else {
             signed = await login({ email, password: form.password });
           }
-          const row = subscribeToGroup(signed || { id: result?.id, role: 'Student', email }, subscriptionFromInvite({
+          const signedUser = signed || { id: result?.id, role: 'Student', email };
+          persistStudentGrade(signedUser, form.grade);
+          subscribeToGroup(signedUser, subscriptionFromInvite({
             inviteCode,
             preview,
             namedGroup,
@@ -305,6 +312,22 @@ export default function JoinStudent() {
                     onChange={onChange}
                     placeholder="Arzu etdiyiniz ixtisas"
                   />
+                </div>
+                <div className="sm:col-span-2">
+                  <Select
+                    label="Sinif"
+                    name="grade"
+                    value={form.grade}
+                    onChange={onChange}
+                    required
+                  >
+                    {PREFERENCE_OPTIONS.grades.map((row) => (
+                      <option key={row} value={row}>{gradeLabel(row)} sinif</option>
+                    ))}
+                  </Select>
+                  <p className="mt-1.5 text-xs text-[var(--hp-muted)]">
+                    10-cu sinif bankda ayrıca test yoxdur — 9 və 11-ci sinifdən eyni mövzular açılır.
+                  </p>
                 </div>
                 <div className="sm:col-span-2">
                   <Input

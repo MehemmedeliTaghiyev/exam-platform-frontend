@@ -297,6 +297,8 @@ export async function registerStudentInvite(payload) {
     Password: password,
     role: 'Student',
     Role: 'Student',
+    grade: payload.grade != null && payload.grade !== '' ? String(payload.grade) : undefined,
+    Grade: payload.grade != null && payload.grade !== '' ? String(payload.grade) : undefined,
     independent,
     Independent: independent,
     isAccessEnabled: independent ? true : undefined,
@@ -1192,10 +1194,19 @@ export async function copyFromBank(examId, quota = {}) {
   }
   // API Topics = List<string>; string göndərmək 400 BadRequest verir.
   const topics = normalizeBankTopics(quota.topics ?? quota.Topics);
+  const grades = Array.isArray(quota.grades || quota.Grades)
+    ? (quota.grades || quota.Grades).map((row) => String(row || '').trim()).filter(Boolean)
+    : String(quota.grades || quota.Grades || '')
+      .split(/[;,]/)
+      .map((row) => row.trim())
+      .filter(Boolean);
   const body = {
     audience: quota.audience || undefined,
     kind: quota.kind || undefined,
     grade: quota.grade != null && quota.grade !== '' ? String(quota.grade) : undefined,
+    Grade: quota.grade != null && quota.grade !== '' ? String(quota.grade) : undefined,
+    grades: grades.length ? grades : undefined,
+    Grades: grades.length ? grades : undefined,
     gradeStrict: quota.gradeStrict === true ? true : quota.gradeStrict === false ? false : undefined,
     difficultyLevel: quota.difficultyLevel || quota.DifficultyLevel || undefined,
     difficultyStrict: quota.difficultyStrict === true ? true : quota.difficultyStrict === false ? false : undefined,

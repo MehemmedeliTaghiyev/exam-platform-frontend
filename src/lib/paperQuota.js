@@ -22,7 +22,7 @@ export function bankKindForExam(kind) {
 
 /**
  * from-bank body: Blok/Buraxılış tip kvotaları (MCQ/yazılı/situasiya).
- * Sınaq: yalnız ümumi count.
+ * Sınaq: yalnız ümumi count. Question tiers mix inside; the exam has no difficulty.
  */
 export function paperCopyQuota(kind, difficultyLevel, grade = '11') {
   const bankKind = bankKindForExam(kind);

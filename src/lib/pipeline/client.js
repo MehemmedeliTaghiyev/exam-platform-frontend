@@ -34,14 +34,13 @@ export function orderTeacherQuiz(input) {
       language: parseLang(input.language),
       grade: String(input.grade || '11'),
       count: Number(input.count) || 10,
-      level: input.level || 'medium',
       topics: String(input.topics || '').trim(),
       order: input.order || 'difficulty',
     },
   });
 }
 
-export function ensureWeeklyPair(input = {}) {
+export function ensureWeeklyPaper(input = {}) {
   return pipelineFetch('/weekly', {
     method: 'POST',
     body: {
@@ -55,6 +54,9 @@ export function ensureWeeklyPair(input = {}) {
     },
   });
 }
+
+/** @deprecated One paper per window. */
+export const ensureWeeklyPair = ensureWeeklyPaper;
 
 export function fetchWeeklyArchive({ week, grade = '11', groupId = 'general', subject = 'math' } = {}) {
   const q = new URLSearchParams({

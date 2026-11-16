@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, FormError, Select } from './ui';
-import { GRADES, LANGS, WEEKLY_BANDS, isoWeek, isPastWeek } from '../lib/pipeline/contract';
+import { GRADES, LANGS, isoWeek, isPastWeek } from '../lib/pipeline/contract';
 import { useWeeklyPapers } from '../lib/pipeline/hooks';
 
 export default function WeeklyDimPapers() {
@@ -11,7 +11,7 @@ export default function WeeklyDimPapers() {
   const weekly = useWeeklyPapers({
     grade, groupId: 'general', subject: 'math', language, ensureOnLoad: true,
   });
-  const pair = weekly.payload?.pair || {};
+  const paper = weekly.payload?.paper || weekly.payload?.pair?.easy || weekly.payload?.pair?.weekly || null;
   const current = isoWeek();
 
   const openPaper = (examId) => {
@@ -28,9 +28,9 @@ export default function WeeklyDimPapers() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-wider text-[var(--muted)]">DİM · həftəlik riyaziyyat</p>
-          <h2 className="mt-1 text-lg font-extrabold">Hər həftə iki imtahan: asan və orta</h2>
+          <h2 className="mt-1 text-lg font-extrabold">Hər pəncərədə bir imtahan</h2>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Hamı eyni kağızı alır. Köhnə həftəni açsanız arxiv gəlir — suallar yenidən yığılmır.
+            Hamı eyni kağızı alır. Asan+orta cüt yoxdur. Köhnə həftəni açsanız arxiv gəlir — suallar yenidən yığılmır.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -75,33 +75,26 @@ export default function WeeklyDimPapers() {
         ))}
       </div>
 
-      {weekly.busy && <p className="mt-3 text-sm text-[var(--muted)]">Kağızlar yüklənir…</p>}
+      {weekly.busy && <p className="mt-3 text-sm text-[var(--muted)]">Kağız yüklənir…</p>}
       <FormError message={weekly.error} />
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {WEEKLY_BANDS.map((band) => {
-          const paper = pair[band.code];
-          return (
-            <div key={band.code} className="rounded-2xl border border-[var(--line)] p-4">
-              <p className="text-sm font-extrabold">{band.label}</p>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {paper?.exam_id
-                  ? `Arxiv #${paper.exam_id}${paper.title ? ` · ${paper.title}` : ''}`
-                  : isPastWeek(weekly.week)
-                    ? 'Bu həftə arxivdə yoxdur (yeni sual yığılmayacaq).'
-                    : 'Hələ yığılmayıb.'}
-              </p>
-              <Button
-                className="mt-3"
-                size="sm"
-                disabled={!paper?.exam_id}
-                onClick={() => openPaper(paper?.exam_id)}
-              >
-                Aç
-              </Button>
-            </div>
-          );
-        })}
+      <div className="mt-4 rounded-2xl border border-[var(--line)] p-4">
+        <p className="text-sm font-extrabold">Həftəlik sınaq</p>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          {paper?.exam_id
+            ? `Arxiv #${paper.exam_id}${paper.title ? ` · ${paper.title}` : ''}`
+            : isPastWeek(weekly.week)
+              ? 'Bu həftə arxivdə yoxdur (yeni sual yığılmayacaq).'
+              : 'Hələ yığılmayıb.'}
+        </p>
+        <Button
+          className="mt-3"
+          size="sm"
+          disabled={!paper?.exam_id}
+          onClick={() => openPaper(paper?.exam_id)}
+        >
+          Aç
+        </Button>
       </div>
     </Card>
   );

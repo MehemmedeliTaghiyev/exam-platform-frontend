@@ -352,6 +352,19 @@ export const localDb = {
     const byEmail = read('teacher_subjects_email', {});
     return byEmail[String(email || '').trim().toLowerCase()] || '';
   },
+  getStudentGrade(userId) {
+    const byId = read('student_grades', {});
+    return byId[String(userId || '')] || '';
+  },
+  setStudentGrade(userId, grade) {
+    if (!userId) return '';
+    const value = String(grade || '').trim();
+    const byId = read('student_grades', {});
+    if (value) byId[String(userId)] = value;
+    else delete byId[String(userId)];
+    write('student_grades', byId);
+    return value;
+  },
   setTeacherSubject(userId, subject, email = '') {
     const value = String(subject || '').trim();
     if (userId) {

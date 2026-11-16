@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ensureWeeklyPair,
+  ensureWeeklyPaper,
   fetchPipelineExam,
   fetchPreviousWeeks,
   fetchWeeklyArchive,
@@ -70,7 +70,7 @@ export function useWeeklyPapers({
 
   const generateThisWeek = useCallback(async () => {
     const current = isoWeek();
-    const data = await run(() => ensureWeeklyPair({
+    const data = await run(() => ensureWeeklyPaper({
       grade, groupId, subject, language, week: current,
     }));
     setWeek(current);

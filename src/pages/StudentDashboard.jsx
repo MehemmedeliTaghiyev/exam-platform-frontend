@@ -40,11 +40,8 @@ import {
 import { studentSubscriptions } from '../lib/groupSubscriptions';
 import { studentCanSeeExam } from '../lib/syllabus';
 import { tbilisiYmd } from '../lib/mathCalendar';
-import {
-  LIVE_WEEKLY_EASY_EXAM_ID,
-  LIVE_WEEKLY_MEDIUM_EXAM_ID,
-  WEEKLY_SMOKE_EXAM_ID,
-} from '../lib/weeklyMath';
+import { LIVE_WEEKLY_EXAM_ID, WEEKLY_SMOKE_EXAM_ID } from '../lib/weeklyMath';
+import { resolveStudentGrade } from '../lib/gradeSyllabus';
 import StreakFlame from '../components/StreakFlame';
 import LatexText from '../components/LatexText';
 import { Check } from 'lucide-react';
@@ -94,21 +91,19 @@ export default function StudentDashboard() {
           ...studentSubscriptions(user?.id).map((row) => row.teacherId),
         ].filter((id) => id != null && id !== ''))];
         const dailyIds = [...new Set(DAILY_TOPIC_SENDS.map((row) => row.examId).filter(Boolean))];
-        const [examList, hist, pubs, listed, easy, medium, ...dailyExams] = await Promise.all([
+        const [examList, hist, pubs, listed, weekly, ...dailyExams] = await Promise.all([
           fetchExams().catch(() => []),
           fetchStudentHistory(user?.id),
           fetchAllPublicExams().catch(() => []),
           Promise.all(teacherIds.map((id) => fetchListedExamsForTeacher(id).catch(() => []))),
-          fetchExam(LIVE_WEEKLY_EASY_EXAM_ID).catch(() => null),
-          fetchExam(LIVE_WEEKLY_MEDIUM_EXAM_ID).catch(() => null),
+          fetchExam(LIVE_WEEKLY_EXAM_ID).catch(() => null),
           ...dailyIds.map((id) => fetchExam(id).catch(() => null)),
         ]);
         const merged = [
           ...examList,
           ...pubs,
           ...listed.flat(),
-          easy,
-          medium,
+          weekly,
           ...dailyExams,
         ].filter((exam, index, all) => (
           exam?.id != null
@@ -156,8 +151,8 @@ export default function StudentDashboard() {
 
   const todayKey = tbilisiYmd();
   const quizPlan = useMemo(
-    () => dailyTopicQuizPlan(boardExams, todayKey),
-    [boardExams, todayKey],
+    () => dailyTopicQuizPlan(boardExams, todayKey, resolveStudentGrade(user)),
+    [boardExams, todayKey, user],
   );
   const dayQuiz = quizPlan.primary;
   const reviewQuiz = quizPlan.review;
@@ -356,8 +351,7 @@ export default function StudentDashboard() {
                   dayQuiz.bandLabel,
                   String(dayQuiz.exam.title || '').replace(/VIS:(public|private)\s*/gi, '').trim(),
                 ].filter(Boolean).join(' · ')
-                : `${dayQuiz.bandLabel || 'Orta'} · ${primaryPaper?.questions?.length || 10} sual · son keçilən mövzu`)}
-          </p>
+                : `${dayQuiz.bandLabel || 'Orta'} · ${primaryPaper?.questions?.length || 10} sual · son keçilən mövzu`)}          </p>
           <span className="mt-4 flex min-h-12 items-center justify-center rounded-full bg-[linear-gradient(180deg,#ffb84a,#f5a623)] text-sm font-extrabold text-[#3a2200]">
             {dayQuizDoneLabel(dayQuiz, primaryDone) ? 'Nəticəyə bax' : 'Sınağı aç'}
           </span>

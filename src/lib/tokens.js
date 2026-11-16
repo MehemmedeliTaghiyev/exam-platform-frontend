@@ -282,8 +282,7 @@ export async function requestStorageExam(user, _mix, extras = {}) {
     seen: false,
     status: 'ready',
     examId: one.exam?.id,
-    title: one.pack?.title || `${kind} · ${standardCount}`,
-    paper: {
+    title: one.pack?.title || `${kind} · ${standardCount}`,    paper: {
       exam_id: one.exam?.id,
       title: one.pack?.title,
       questions: one.questions,

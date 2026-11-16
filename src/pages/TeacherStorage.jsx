@@ -552,7 +552,7 @@ export default function TeacherStorage() {
           <section className="rounded-[28px] bg-[#171a22] p-4 ring-1 ring-white/[0.06] min-[768px]:p-5">
             <h2 className="text-xl font-black">Quiz tələb et · PDF</h2>
             <p className="mt-1 text-sm font-semibold text-white/45">
-              Sınaq · Buraxılış · Blok — çətinlik seçimi yoxdur. Hər kağız {perPaper} sual, sabit daxili bölgü.
+              Sınaq · Buraxılış · Blok — çətinlik seçimi yoxdur. Hər kağız {perPaper} sual, sabit daxili bölgü. 10-cu sinif 9 və 11 mövzularından götürülür.
             </p>
             <div className="mt-4 grid gap-4 min-[768px]:grid-cols-3">
               <div>
@@ -612,7 +612,7 @@ export default function TeacherStorage() {
                   className="mt-2 h-12 w-full rounded-[18px] bg-[#12141a] px-4 text-sm font-semibold text-white outline-none ring-1 ring-white/10"
                 />
                 <datalist id="anbar-topic-suggestions">
-                  {calendarTopicSuggestions().map((title) => (
+                  {calendarTopicSuggestions(prefs.grade).map((title) => (
                     <option key={title} value={title} />
                   ))}
                 </datalist>

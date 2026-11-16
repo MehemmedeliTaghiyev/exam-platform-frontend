@@ -7,23 +7,23 @@ import {
   weeklyIntervals,
 } from './mathCalendar.js';
 
-function parseBand(raw) {
-  const key = String(raw || '').trim().toLowerCase().replace(/ı/g, 'i').replace(/ə/g, 'e');
-  if (['easy', 'asan', 'sade', 'sadə'].includes(key)) return 'easy';
-  if (['medium', 'middle', 'orta'].includes(key)) return 'medium';
-  return null;
-}
-
 /** Empty Respublika listing — never bind as weekly. */
 export const REPUBLIC_NOV_2026_EXAM_ID = '94';
 /** Leftover smoke copy — do not show as weekly. */
 export const WEEKLY_SMOKE_EXAM_ID = '96';
-/** Live weekly copies for 8–21 Nov 2026. */
-export const LIVE_WEEKLY_EASY_EXAM_ID = '97';
+/** Leftover orta half of the cancelled asan+orta pair. */
 export const LIVE_WEEKLY_MEDIUM_EXAM_ID = '98';
+/** Live weekly copy for 8–21 Nov 2026 (one paper; not labeled asan/orta). */
+export const LIVE_WEEKLY_EXAM_ID = '97';
+/** @deprecated Use LIVE_WEEKLY_EXAM_ID — pair UI is gone. */
+export const LIVE_WEEKLY_EASY_EXAM_ID = LIVE_WEEKLY_EXAM_ID;
 export const LIVE_WEEKLY_INTERVAL_START = '2026-11-08';
 
-const HIDDEN_WEEKLY_IDS = new Set([REPUBLIC_NOV_2026_EXAM_ID, WEEKLY_SMOKE_EXAM_ID]);
+const HIDDEN_WEEKLY_IDS = new Set([
+  REPUBLIC_NOV_2026_EXAM_ID,
+  WEEKLY_SMOKE_EXAM_ID,
+  LIVE_WEEKLY_MEDIUM_EXAM_ID,
+]);
 
 export function examIdOf(exam) {
   return String(exam?.id ?? exam?.Id ?? '');
@@ -51,8 +51,7 @@ export function isHiddenWeeklyExam(examOrId) {
 }
 
 export function isLiveWeeklyExamId(id) {
-  const key = String(id ?? '');
-  return key === LIVE_WEEKLY_EASY_EXAM_ID || key === LIVE_WEEKLY_MEDIUM_EXAM_ID;
+  return String(id ?? '') === LIVE_WEEKLY_EXAM_ID;
 }
 
 /**
@@ -61,7 +60,7 @@ export function isLiveWeeklyExamId(id) {
  */
 export function examPulseAudience(exam) {
   const id = examIdOf(exam);
-  if (id === WEEKLY_SMOKE_EXAM_ID) return 'hidden';
+  if (id === WEEKLY_SMOKE_EXAM_ID || id === LIVE_WEEKLY_MEDIUM_EXAM_ID) return 'hidden';
   if (id === REPUBLIC_NOV_2026_EXAM_ID) return 'mixed';
   if (isLiveWeeklyExamId(id)) return 'weekly';
 
@@ -78,15 +77,6 @@ export function examPulseAudience(exam) {
   return 'other';
 }
 
-export function weeklyBandOf(exam) {
-  const id = examIdOf(exam);
-  if (id === LIVE_WEEKLY_EASY_EXAM_ID) return 'easy';
-  if (id === LIVE_WEEKLY_MEDIUM_EXAM_ID) return 'medium';
-  const marked = parseBand(exam?.weeklyBand || exam?.band || exam?.level || '');
-  if (marked) return marked;
-  return parseBand(examBlob(exam));
-}
-
 function examInInterval(exam, interval) {
   if (!interval) return false;
   const start = exam?.startTime || exam?.StartTime || exam?.createdAt || exam?.CreatedAt;
@@ -99,44 +89,54 @@ function pickFromList(exams, id) {
   return (exams || []).find((exam) => examIdOf(exam) === String(id)) || null;
 }
 
-function matchBandInInterval(exams, interval, band) {
-  return (exams || []).find((exam) => {
+function matchWeeklyInInterval(exams, interval) {
+  const hits = (exams || []).filter((exam) => {
     if (isHiddenWeeklyExam(exam)) return false;
     if (examPulseAudience(exam) !== 'weekly') return false;
-    if (weeklyBandOf(exam) !== band) return false;
-    if (examInInterval(exam, interval)) return true;
-    return false;
-  }) || null;
+    return examInInterval(exam, interval);
+  });
+  hits.sort((a, b) => Number(examIdOf(a) || 0) - Number(examIdOf(b) || 0));
+  return hits[0] || null;
 }
 
-export function weeklyPairForInterval(interval, exams = []) {
-  if (!interval?.send?.weekly) return { easy: null, medium: null, archived: true };
+/** One weekly paper per calendar window. No asan/orta pair. */
+export function weeklyPaperForInterval(interval, exams = []) {
+  if (!interval?.send?.weekly) return { exam: null, archived: true };
   const live = interval.start === LIVE_WEEKLY_INTERVAL_START;
-  let easy = live
-    ? pickFromList(exams, LIVE_WEEKLY_EASY_EXAM_ID) || matchBandInInterval(exams, interval, 'easy')
-    : matchBandInInterval(exams, interval, 'easy');
-  let medium = live
-    ? pickFromList(exams, LIVE_WEEKLY_MEDIUM_EXAM_ID) || matchBandInInterval(exams, interval, 'medium')
-    : matchBandInInterval(exams, interval, 'medium');
-  if (easy && isHiddenWeeklyExam(easy)) easy = null;
-  if (medium && isHiddenWeeklyExam(medium)) medium = null;
+  let exam = live
+    ? pickFromList(exams, LIVE_WEEKLY_EXAM_ID) || matchWeeklyInInterval(exams, interval)
+    : matchWeeklyInInterval(exams, interval);
+  if (exam && isHiddenWeeklyExam(exam)) exam = null;
   const today = tbilisiYmd();
   return {
-    easy,
-    medium,
+    exam,
     archived: interval.end < today,
   };
 }
 
-export function weeklyPairForDate(ymd, exams = []) {
+/** @deprecated One paper now — use weeklyPaperForInterval. */
+export function weeklyPairForInterval(interval, exams = []) {
+  const row = weeklyPaperForInterval(interval, exams);
+  return { easy: row.exam, medium: null, exam: row.exam, archived: row.archived };
+}
+
+export function weeklyPaperForDate(ymd, exams = []) {
   const interval = lastWeeklyOnOrBefore(intervalContaining(ymd) || findIntervalByStart(MATH_CALENDAR.from));
-  return { interval, ...weeklyPairForInterval(interval, exams) };
+  return { interval, ...weeklyPaperForInterval(interval, exams) };
+}
+
+/** @deprecated Use weeklyPaperForDate. */
+export function weeklyPairForDate(ymd, exams = []) {
+  const row = weeklyPaperForDate(ymd, exams);
+  return { ...row, easy: row.exam, medium: null };
 }
 
 export function republicMixedExams(exams = []) {
   return (exams || []).filter((exam) => {
     const id = examIdOf(exam);
-    if (id === WEEKLY_SMOKE_EXAM_ID || isLiveWeeklyExamId(id)) return false;
+    if (id === WEEKLY_SMOKE_EXAM_ID || isLiveWeeklyExamId(id) || id === LIVE_WEEKLY_MEDIUM_EXAM_ID) {
+      return false;
+    }
     if (id === REPUBLIC_NOV_2026_EXAM_ID) return true;
     if (examPulseAudience(exam) !== 'mixed') return false;
     const blob = `${exam?.title || exam?.Title || ''} ${examKindOf(exam)}`;

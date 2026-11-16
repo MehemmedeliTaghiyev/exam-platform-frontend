@@ -4,8 +4,10 @@ import { latexToPlain } from './examPaperText.js';
 import {
   examPaperBodyHtml,
   examPaperDocumentHtml,
+  extraGapLines,
   FIGURES_PER_PAGE,
   packBlocksOntoPages,
+  PAPER_CSS,
   questionPageChunks,
   QUESTIONS_PER_PAGE,
 } from './examPaperLayout.js';
@@ -167,6 +169,20 @@ describe('packBlocksOntoPages', () => {
   });
 });
 
+describe('extraGapLines', () => {
+  it('spreads leftover A4 height evenly between questions', () => {
+    const gaps = extraGapLines(40, 10);
+    assert.equal(gaps.length, 9);
+    assert.equal(gaps.reduce((a, b) => a + b, 0), 40);
+    assert.ok(gaps.every((n) => n >= 4));
+  });
+
+  it('adds no gaps when the page is already full', () => {
+    assert.deepEqual(extraGapLines(0, 10), []);
+    assert.deepEqual(extraGapLines(12, 1), []);
+  });
+});
+
 describe('questionPageChunks', () => {
   it('splits figured questions so a page never has more than 10 şəkil', () => {
     const qs = Array.from({ length: 12 }, (_, i) => ({
@@ -211,6 +227,14 @@ describe('exam paper html', () => {
     const html = examPaperDocumentHtml(samplePaper(25), 'Riyaziyyat · Sınaq · Həqiqi ədədlər');
     assert.match(html, /imtahan vərəqi/);
     assert.doesNotMatch(html, /müəllim vərəqi/);
+  });
+
+  it('spreads questions down the A4 page instead of packing them at the top', () => {
+    assert.match(PAPER_CSS, /\.ep-body[\s\S]*justify-content:\s*space-between/);
+    assert.match(PAPER_CSS, /min-height:\s*272mm/);
+    const html = examPaperDocumentHtml(samplePaper(25), 'Test');
+    assert.match(html, /class="ep-body"/);
+    assert.doesNotMatch(html, /Cavablar/);
   });
 
   it('embeds figure images, not extracted figure text', () => {

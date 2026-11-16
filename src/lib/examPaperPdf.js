@@ -1,6 +1,7 @@
 import {
   answerLetter,
   examPaperDocumentHtml,
+  extraGapLines,
   FIGURES_PER_PAGE,
   formatPaperDate,
   isFullImageQuestion,
@@ -16,7 +17,12 @@ import { latexToPlain } from './examPaperText.js';
 import { isNativeApp } from './runtime.js';
 
 export { latexToPlain } from './examPaperText.js';
-export { packBlocksOntoPages, QUESTIONS_PER_PAGE, FIGURES_PER_PAGE } from './examPaperLayout.js';
+export {
+  extraGapLines,
+  packBlocksOntoPages,
+  QUESTIONS_PER_PAGE,
+  FIGURES_PER_PAGE,
+} from './examPaperLayout.js';
 
 /** Marker kept through Helvetica sanitize → drawn with Symbol font as √ */
 const SQRT_MARK = '\x01';
@@ -432,7 +438,9 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
     const continued = pageIndex > 0;
     const lines = [...headerLines(title, metaLine, continued), ''];
     const images = [];
-    pack.indices.forEach((bi) => {
+    const leftover = Math.max(0, PAGE_CONTENT_LINES - (headerH + 1) - pack.used);
+    const gaps = extraGapLines(leftover, pack.indices.length);
+    pack.indices.forEach((bi, j) => {
       const block = blocks[bi];
       const startLine = lines.length;
       block.lines.forEach((ln) => lines.push(ln));
@@ -443,6 +451,8 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
           fullImage: Boolean(block.fullImage),
         });
       }
+      const blank = gaps[j] || 0;
+      for (let s = 0; s < blank; s += 1) lines.push('');
     });
     return { lines, images, used: pack.used };
   });

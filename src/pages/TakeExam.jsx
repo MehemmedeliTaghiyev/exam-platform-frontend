@@ -247,6 +247,8 @@ export default function TakeExam() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const wantsRetry = searchParams.get('yeniden') === '1';
+  const autoStart = searchParams.get('basla') === '1';
+  const autoStartedRef = useRef(false);
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { dark } = useTheme();
@@ -284,6 +286,10 @@ export default function TakeExam() {
       document.body.style.overflow = previous;
     };
   }, []);
+
+  useEffect(() => {
+    autoStartedRef.current = false;
+  }, [id, autoStart]);
 
   useEffect(() => {
     const run = async () => {
@@ -444,6 +450,14 @@ export default function TakeExam() {
       setStarting(false);
     }
   }, [exam, id, navigate, pendingQuestions, secondsBudget, started, starting, user?.id, wantsRetry]);
+
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current) return;
+    if (loading || started || starting || !exam || isExamScheduled(exam)) return;
+    if (!pendingQuestions.length) return;
+    autoStartedRef.current = true;
+    beginExam();
+  }, [autoStart, beginExam, exam, loading, pendingQuestions.length, started, starting]);
 
   const submitRef = useRef(handleSubmit);
   submitRef.current = handleSubmit;

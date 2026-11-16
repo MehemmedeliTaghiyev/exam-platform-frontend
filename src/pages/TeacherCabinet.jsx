@@ -62,6 +62,7 @@ export default function TeacherCabinet() {
     position: '',
     teachingSubject: '',
     phone: '',
+    bio: '',
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
@@ -105,6 +106,7 @@ export default function TeacherCabinet() {
           position: me.position || me.Position || '',
           teachingSubject: subject,
           phone: me.phone || me.Phone || '',
+          bio: me.bio || me.Bio || me.about || localDb.getTeacherBio(me.id || user?.id) || '',
         });
         setSubjectDraft(subject);
         setSubjectLocked(true);
@@ -218,7 +220,8 @@ export default function TeacherCabinet() {
     setProfileMsg('');
     setError('');
     try {
-      await updateOwnProfile({
+      const bio = String(profile.bio || '').trim();
+      const payload = {
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
         fatherName: profile.fatherName.trim(),
@@ -226,15 +229,32 @@ export default function TeacherCabinet() {
         teachingSubject: nextSubject,
         TeachingSubject: nextSubject,
         phone: profile.phone.trim(),
-      });
+      };
+      try {
+        await updateOwnProfile({ ...payload, bio, Bio: bio, about: bio });
+      } catch (err) {
+        if (err?.response?.status === 400) await updateOwnProfile(payload);
+        else throw err;
+      }
       localDb.setTeacherSubject(user?.id, nextSubject, user?.email);
+      if (user?.id) {
+        localDb.setTeacherBio(user.id, bio);
+        localDb.upsertPublicTeacher({
+          id: user.id,
+          fullName: [profile.firstName, profile.lastName].filter(Boolean).join(' ') || user.fullName,
+          position: profile.position.trim() || user.position || 'Digər',
+          email: user.email,
+          subjects: nextSubject ? [nextSubject] : [],
+          bio,
+        });
+      }
       if (subjectChanged) {
         localDb.markTeacherSubjectChangeUsed(user?.id, user?.email);
         setProfileMsg('Fənn dəyişildi. Daha fənn dəyişmək mümkün olmayacaq.');
       } else {
         setProfileMsg('Məlumat saxlanıldı.');
       }
-      setProfile((prev) => ({ ...prev, teachingSubject: nextSubject }));
+      setProfile((prev) => ({ ...prev, teachingSubject: nextSubject, bio }));
       setSubjectDraft(nextSubject);
       setSubjectLocked(true);
     } catch (err) {
@@ -485,6 +505,14 @@ export default function TeacherCabinet() {
               )}
             </div>
             <Input label="Əlaqə nömrəsi" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="+994 …" className="border-white/5 bg-[#12141a]" />
+            <Textarea
+              label="Haqqında"
+              rows={4}
+              value={profile.bio}
+              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+              placeholder="Şagirdlər Müəllim tap səhifənizdə bunu oxuyacaq."
+              className="border-white/5 bg-[#12141a]"
+            />
             <button
               type="submit"
               disabled={profileSaving}

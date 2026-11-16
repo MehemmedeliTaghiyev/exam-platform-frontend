@@ -16,7 +16,7 @@ import BrandLogo from '../components/BrandLogo';
 import ExamCard from '../components/ExamCard';
 import { EmptyState, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
-import { fetchListedExamsForTeacher, fetchMarketplaceTeachers } from '../lib/examApi';
+import { fetchMarketplaceTeachers, fetchPublicExamsForTeacher, fetchTeacherPublicProfile } from '../lib/examApi';
 import { examVisibility } from '../lib/examVisibility';
 import { localDb } from '../lib/localDb';
 import { canEnterExam } from '../lib/teacherAccess';
@@ -156,6 +156,7 @@ export default function BrowseTeachers({ embedded = false }) {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const [teachers, setTeachers] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [exams, setExams] = useState([]);
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState('all');
@@ -176,9 +177,15 @@ export default function BrowseTeachers({ embedded = false }) {
       setTeachers(list);
       if (id) {
         if (user?.role === 'Student' && user.id) localDb.followTeacher(user.id, id);
-        setExams(await fetchListedExamsForTeacher(id));
+        const [publicExams, row] = await Promise.all([
+          fetchPublicExamsForTeacher(id),
+          fetchTeacherPublicProfile(id, list).catch(() => list.find((t) => String(t.id) === String(id)) || null),
+        ]);
+        setExams(publicExams);
+        setProfile(row);
       } else {
         setExams([]);
+        setProfile(null);
       }
     } finally {
       setLoading(false);
@@ -199,7 +206,17 @@ export default function BrowseTeachers({ embedded = false }) {
   );
   const regions = useMemo(() => uniqueRegions(teachers), [teachers]);
   const subjects = useMemo(() => uniqueTeacherSubjects(teachers), [teachers]);
-  const selected = teachers.find((t) => String(t.id) === String(id));
+  const listedTeacher = teachers.find((t) => String(t.id) === String(id));
+  const selected = listedTeacher || profile
+    ? {
+      ...(listedTeacher || {}),
+      ...(profile || {}),
+      weeklyExamCount: listedTeacher?.weeklyExamCount ?? profile?.weeklyExamCount ?? 0,
+      avgScore: listedTeacher?.avgScore ?? profile?.avgScore ?? 0,
+      subjects: [...new Set([...(listedTeacher?.subjects || []), ...(profile?.subjects || [])].filter(Boolean))],
+      bio: profile?.bio || listedTeacher?.bio || '',
+    }
+    : (id ? { id, fullName: 'Müəllim' } : null);
   const filteredOn = teacherSearchActive(applied);
   const sortMeta = SORTS.find((row) => row.id === sortBy) || SORTS[0];
 
@@ -221,7 +238,7 @@ export default function BrowseTeachers({ embedded = false }) {
   const openExam = (exam) => {
     if (isExamScheduled(exam)) return;
     if (!user) {
-      navigate('/login');
+      navigate(`/login?next=${encodeURIComponent(`/student/exams/${exam.id}?basla=1`)}`);
       return;
     }
     if (!canEnterExam(user, exam)) return;
@@ -230,10 +247,10 @@ export default function BrowseTeachers({ embedded = false }) {
         navigate(`/student/exams/${exam.id}/review`);
         return;
       }
-      navigate(`/student/exams/${exam.id}`);
+      navigate(`/student/exams/${exam.id}?basla=1`);
       return;
     }
-    navigate('/login');
+    navigate(`/login?next=${encodeURIComponent(`/student/exams/${exam.id}?basla=1`)}`);
   };
 
   const list = (
@@ -447,6 +464,16 @@ export default function BrowseTeachers({ embedded = false }) {
           </p>
         </div>
       </div>
+      <section className="card-vector mt-4 rounded-[22px] bg-[var(--card)] p-4 ring-1 ring-[var(--line)]">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--muted)]">Haqqında</p>
+        <p className="mt-2 text-[15px] font-semibold leading-relaxed text-[var(--text)]">
+          {selected?.bio || [
+            selected?.fullName || 'Müəllim',
+            selected?.position,
+            (selected?.subjects || []).join(', '),
+          ].filter(Boolean).join(' · ') || 'Bu müəllim haqqında məlumat hələ yazılmayıb.'}
+        </p>
+      </section>
       <div className="mt-4 grid grid-cols-2 gap-2">
         <div className="card-vector rounded-[16px] bg-[var(--card)] px-3 py-3 ring-1 ring-[var(--line)]">
           <p className="text-[11px] font-bold text-[var(--muted)]">Bu həftə</p>
@@ -459,11 +486,12 @@ export default function BrowseTeachers({ embedded = false }) {
           </p>
         </div>
       </div>
-      {loading ? <Skeleton className="mt-6 h-40 rounded-[22px]" /> : null}
+      <h3 className="mt-6 text-[17px] font-black">Açıq imtahanlar</h3>
+      {loading ? <Skeleton className="mt-4 h-40 rounded-[22px]" /> : null}
       {!loading && !exams.length ? (
-        <EmptyState title="İmtahan yoxdur" text="Bu müəllim hələ dərc edilmiş imtahan qoymayıb." />
+        <EmptyState title="Açıq imtahan yoxdur" text="Bu müəllim hələ ictimai imtahan dərc etməyib." />
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {exams.map((exam) => {
             const locked = examVisibility(exam) === 'private' && !canEnterExam(user, exam);
             return (
@@ -483,7 +511,7 @@ export default function BrowseTeachers({ embedded = false }) {
                 } : undefined}
                 onRetake={
                   (user?.role === 'Student' || user?.practice) && examRetakeReady(exam) && canEnterExam(user, exam)
-                    ? () => navigate(`/student/exams/${exam.id}?yeniden=1`)
+                    ? () => navigate(`/student/exams/${exam.id}?yeniden=1&basla=1`)
                     : undefined
                 }
                 onOpen={isExamScheduled(exam) || locked ? undefined : () => openExam(exam)}
@@ -498,7 +526,7 @@ export default function BrowseTeachers({ embedded = false }) {
   const body = id ? detail : list;
 
   if (embedded) {
-    return <AppShell title={id ? 'Müəllimin imtahanları' : ''}>{body}</AppShell>;
+    return <AppShell title={id ? (selected?.fullName || 'Müəllim') : ''}>{body}</AppShell>;
   }
 
   return (

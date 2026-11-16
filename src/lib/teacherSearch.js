@@ -16,12 +16,16 @@ export function directoryRowFromUser(teacher, prev = null) {
     ...(teaching ? [teaching] : []),
   ].filter(Boolean))];
   const id = teacher?.id ?? teacher?.Id;
+  const incomingBio = String(
+    teacher?.bio || teacher?.Bio || teacher?.about || teacher?.About || teacher?.aboutMe || teacher?.AboutMe || '',
+  ).trim();
   return {
     id,
     fullName: teacher?.fullName || teacher?.FullName || teacher?.email || teacher?.Email || prev?.fullName || `Müəllim #${id}`,
     position: teacher?.position || teacher?.Position || prev?.position || 'Digər',
     email: teacher?.email || teacher?.Email || prev?.email,
     subjects,
+    bio: incomingBio || prev?.bio || '',
     isAccessEnabled: (teacher?.isAccessEnabled ?? teacher?.IsAccessEnabled) !== false,
   };
 }
@@ -61,7 +65,7 @@ export function filterSortTeachers(teachers, {
     if (region !== 'all' && String(t.position || 'Digər') !== region) return false;
     if (subject !== 'all' && !(t.subjects || []).includes(subject)) return false;
     if (!q) return true;
-    const hay = `${t.fullName} ${t.position} ${(t.subjects || []).join(' ')}`.toLowerCase();
+    const hay = `${t.fullName} ${t.position} ${t.bio || ''} ${(t.subjects || []).join(' ')}`.toLowerCase();
     return hay.includes(q);
   });
   const sign = dir === 'asc' ? 1 : -1;

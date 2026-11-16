@@ -230,10 +230,12 @@ export function savePracticeTeacherExams(list) {
 }
 
 export function practiceQuestions(examId) {
-  if (String(examId).startsWith('demo-')) return defaultStudentQuestions(examId);
-  if (practiceRole() === 'Student') return [];
+  const key = String(examId);
+  if (key.startsWith('demo-')) return defaultStudentQuestions(examId);
+  if (key === 'pt-demo-public') return defaultStudentQuestions('demo-az');
+  if (key === 'pt-demo-live') return defaultStudentQuestions('demo-math');
   const all = read(TEACHER_QS, {});
-  return all[String(examId)] || [];
+  return all[key] || [];
 }
 
 export function savePracticeQuestions(examId, list) {
@@ -264,12 +266,16 @@ export function practiceFetchExams() {
 }
 
 export function practiceFetchExam(id) {
-  const list = practiceRole() === 'Student'
-    ? defaultStudentExams()
-    : practiceRole() === 'Admin'
-      ? [...practiceTeacherExams(), ...defaultStudentExams()]
-      : practiceTeacherExams();
-  return list.find((e) => String(e.id) === String(id)) || null;
+  const list = [
+    ...practiceFetchExams(),
+    ...defaultStudentExams(),
+    ...practiceTeacherExams(),
+  ];
+  const map = new Map();
+  list.forEach((exam) => {
+    if (exam?.id != null) map.set(String(exam.id), exam);
+  });
+  return map.get(String(id)) || null;
 }
 
 export function practiceAdminTeachers() {
@@ -295,6 +301,7 @@ export function practiceAdminTeachers() {
       driveFolderUrl: 'https://drive.google.com/drive/folders/practice',
       teachingSubject: 'Riyaziyyat',
       position: 'Bakı',
+      bio: 'Məşq kabineti. Açıq Azərbaycan dili sınağı hamıya açıqdır.',
     },
     {
       id: 'practice-teacher-elvin',
@@ -313,6 +320,7 @@ export function practiceAdminTeachers() {
       aiEnabled: false,
       teachingSubject: 'Riyaziyyat',
       position: 'Bakı',
+      bio: 'Bakıda riyaziyyat müəllimi. Açıq imtahan hələ dərc olunmayıb.',
     },
   ];
 }
@@ -560,6 +568,7 @@ export function practiceUser(role) {
       email: 'practice.teacher@local',
       position: 'Bakı',
       teachingSubject: 'Riyaziyyat',
+      bio: 'Məşq kabineti. Açıq Azərbaycan dili sınağı hamıya açıqdır.',
     };
   }
   return {

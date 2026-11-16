@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import DualExamRanking from '../components/DualExamRanking';
 import QuestionReviewList from '../components/QuestionReviewList';
@@ -17,7 +17,8 @@ import { examTeacherId } from '../lib/teacherAccess';
 import { teacherWatermarkText } from '../lib/storageAccess';
 import { examRankingEnabled } from '../lib/examKind';
 import { isPublicExam } from '../lib/examVisibility';
-import { gradeExam } from '../lib/gradeExam';
+import { gradeExam, latestLocalSubmission, questionsHaveAnswerKeys, reviewCounts, reviewItemStatus } from '../lib/gradeExam';
+import { localDb } from '../lib/localDb';
 import ScreenGuard from '../components/ScreenGuard';
 
 function ScoreRing({ correct, total, label }) {
@@ -81,38 +82,67 @@ function toReviewQuestions(list = []) {
   });
 }
 
+function asReviewPayload(row) {
+  if (!row) return null;
+  return {
+    examEnded: true,
+    answers: row.answers || [],
+    questions: row.questions || [],
+    result: row.result || row,
+  };
+}
+
 export default function ExamResult() {
   const { submissionId, examId } = useParams();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { t } = useLocale();
   const queryStudentExamId = searchParams.get('studentExamId');
   const queryStudentId = searchParams.get('studentId');
   const reviewId = queryStudentExamId || submissionId;
+  const navSubmission = location.state?.submission;
   const [review, setReview] = useState(null);
   const [paper, setPaper] = useState([]);
   const [examMeta, setExamMeta] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [boards, setBoards] = useState({ own: [], general: [] });
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     const run = async () => {
       setLoading(true);
       setError('');
       try {
-        const data = reviewId
-          ? await fetchExamReview(reviewId)
-          : examId
-            ? await fetchExamReviewByExam(examId)
-            : await fetchExamReview(submissionId);
+        const local = latestLocalSubmission(localDb.getSubmissions(), examId || navSubmission?.examId, user?.id);
+        let data = asReviewPayload(navSubmission) || asReviewPayload(local);
+        try {
+          const api = reviewId
+            ? await fetchExamReview(reviewId)
+            : examId
+              ? await fetchExamReviewByExam(examId)
+              : await fetchExamReview(submissionId);
+          data = {
+            ...(data || {}),
+            ...api,
+            answers: api?.answers || api?.result?.answers || data?.answers || [],
+            questions: questionsHaveAnswerKeys(api?.questions)
+              ? api.questions
+              : (data?.questions?.length ? data.questions : api?.questions),
+            result: { ...(data?.result || {}), ...(api?.result || api || {}) },
+          };
+        } catch {
+          if (!data) throw new Error('missing-review');
+        }
         setReview(data);
 
-        const fallbackId = examId || data?.result?.examId;
+        const fallbackId = examId || data?.result?.examId || navSubmission?.examId || local?.examId;
+        let examData = null;
         if (fallbackId) {
           try {
-            const examData = await fetchExam(fallbackId);
+            examData = await fetchExam(fallbackId);
             setExamMeta(examData);
           } catch {
             setExamMeta(null);
@@ -120,11 +150,15 @@ export default function ExamResult() {
         }
 
         const reviewQuestions = toReviewQuestions(data?.questions || []);
-        const answers = data?.answers || data?.result?.answers || [];
-        if (reviewQuestions.length && reviewQuestions.some((q) => q.isCorrect || q.options?.some((o) => o.isSelected))) {
+        const answers = data?.answers || data?.result?.answers || local?.answers || [];
+        const hasKeys = questionsHaveAnswerKeys(reviewQuestions);
+        const hasAttempt = reviewQuestions.some((q) => (
+          q.isCorrect || q.selectedText || q.options?.some((o) => o.isSelected)
+        ));
+        if (hasKeys && hasAttempt) {
           setPaper(reviewQuestions);
         } else if (fallbackId) {
-          const qs = await fetchQuestions(fallbackId);
+          const qs = await fetchQuestions(fallbackId, examData);
           if (answers.length) {
             const graded = gradeExam(qs, answers);
             setPaper(toReviewQuestions(graded.questions));
@@ -145,13 +179,17 @@ export default function ExamResult() {
       } catch {
         try {
           if (examId) {
+            const local = latestLocalSubmission(localDb.getSubmissions(), examId, user?.id);
             const [qs, examData] = await Promise.all([fetchQuestions(examId), fetchExam(examId)]);
-            setPaper(toReviewQuestions(qs));
+            const answers = local?.answers || navSubmission?.answers || [];
+            const graded = answers.length ? gradeExam(qs, answers) : null;
+            setPaper(toReviewQuestions(graded?.questions || local?.questions || qs));
             setExamMeta(examData);
             setReview({
-              examEnded: isExamEnded(examData),
-              result: { examId: Number(examId) },
-              questions: [],
+              examEnded: isExamEnded(examData) || isPublicExam(examData),
+              result: local || navSubmission || { examId },
+              answers,
+              questions: graded?.questions || local?.questions || [],
               leaderboard: [],
             });
           } else {
@@ -165,7 +203,7 @@ export default function ExamResult() {
       }
     };
     run();
-  }, [submissionId, examId, reviewId, user?.role, navigate]);
+  }, [submissionId, examId, reviewId, user?.id, user?.role, navigate, navSubmission]);
 
   useEffect(() => {
     const eid = examMeta?.id || examId;
@@ -220,6 +258,18 @@ export default function ExamResult() {
     });
   }, [loading, boards, examMeta, examId, review, paper, user, reviewId]);
 
+  const result = review?.result || review;
+  const questions = paper.length ? paper : toReviewQuestions(review?.questions || []);
+  const counts = reviewCounts(questions);
+  const total = questions.length || result?.totalQuestions || 1;
+  const correctFromPaper = counts.correct;
+  const correct = questions.length ? correctFromPaper : Number(result?.correctAnswersCount) || 0;
+  const wrong = questions.length ? counts.wrong : Number(result?.wrongAnswersCount) || 0;
+  const blank = questions.length ? counts.blank : Math.max(total - correct - wrong, 0);
+  const visibleQuestions = filter === 'all'
+    ? questions
+    : questions.filter((q) => reviewItemStatus(q) === filter);
+
   if (loading) {
     return (
       <AppShell title="Nəticə">
@@ -228,7 +278,6 @@ export default function ExamResult() {
     );
   }
 
-  const result = review?.result || review;
   if ((!result && !paper.length) || error) {
     return (
       <AppShell title="Nəticə">
@@ -237,10 +286,6 @@ export default function ExamResult() {
     );
   }
 
-  const questions = paper.length ? paper : toReviewQuestions(review?.questions || []);
-  const total = questions.length || result?.totalQuestions || 1;
-  const correctFromPaper = questions.filter((q) => q.isCorrect).length;
-  const correct = Math.max(correctFromPaper, Number(result?.correctAnswersCount) || 0);
   const weightedMax = Number(result?.maxPoints ?? result?.MaxPoints) || questions.reduce((sum, q) => sum + (q.points || pointsForDifficulty(q.difficultyLevel)), 0);
   const weightedEarned = Number(result?.earnedPoints ?? result?.EarnedPoints)
     || questions.filter((q) => q.isCorrect).reduce((sum, q) => sum + (q.points || pointsForDifficulty(q.difficultyLevel)), 0);
@@ -251,7 +296,9 @@ export default function ExamResult() {
   );
   const aiWeighted = isAiExam(examMeta) || questions.some((q) => q.difficultyLevel);
   const examEnded = Boolean(user?.practice) || (examMeta ? isExamEnded(examMeta) : Boolean(review?.examEnded));
-  const resultsReady = studentResultsReady(examMeta, user) || (examMeta == null && examEnded);
+  const resultsReady = studentResultsReady(examMeta, user)
+    || isPublicExam(examMeta)
+    || (examMeta == null && (examEnded || Boolean(navSubmission)));
   const showRanking = examRankingEnabled(examMeta);
   const isStudent = user?.role === 'Student';
   const isPersonal = Boolean(result?.studentExamId || reviewId) || (isStudent && resultsReady);
@@ -281,18 +328,19 @@ export default function ExamResult() {
             </div>
             <div className="mt-6 grid grid-cols-3 gap-2">
               <div className="score-stat">
-                <p className="text-xl font-black text-[var(--accent)]">{scorePercentage}%</p>
-                <p className="text-[11px] font-bold text-[var(--muted)]">{t('result.success')}</p>
-              </div>
-              <div className="score-stat">
                 <p className="text-xl font-black text-[#22c55e]">{correct}</p>
                 <p className="text-[11px] font-bold text-[var(--muted)]">{t('result.correct')}</p>
               </div>
               <div className="score-stat">
-                <p className="text-xl font-black text-[#ef4444]">{result.wrongAnswersCount ?? Math.max(total - correct, 0)}</p>
+                <p className="text-xl font-black text-[#ef4444]">{wrong}</p>
                 <p className="text-[11px] font-bold text-[var(--muted)]">{t('result.wrong')}</p>
               </div>
+              <div className="score-stat">
+                <p className="text-xl font-black text-[var(--muted)]">{blank}</p>
+                <p className="text-[11px] font-bold text-[var(--muted)]">{t('result.blank')}</p>
+              </div>
             </div>
+            <p className="mt-3 text-sm font-semibold text-[var(--muted)]">{scorePercentage}% · {t('result.success')}</p>
             {!isStudent && showRanking ? (
               <p className="mt-4 text-sm font-medium text-[var(--muted)]">
                 Öz şagirdlər: {ownRank ? `#${ownRank}` : '—'} · Ümumi: {generalRank ? `#${generalRank}` : '—'}
@@ -344,7 +392,28 @@ export default function ExamResult() {
             <div id="exam-paper">
                 <h3 className="mb-4 text-lg font-bold">{t('result.paper')}</h3>
                 {questions.length ? (
-                  <QuestionReviewList questions={questions} />
+                  <>
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {[
+                        ['all', t('result.all')],
+                        ['correct', t('result.correct')],
+                        ['wrong', t('result.wrong')],
+                        ['blank', t('result.blank')],
+                      ].map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setFilter(key)}
+                          className={`rounded-full px-3 py-1.5 text-sm font-extrabold ${
+                            filter === key ? 'bg-[var(--accent)] text-[#3a2200]' : 'bg-[var(--card)] text-[var(--muted)] ring-1 ring-[var(--line)]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <QuestionReviewList questions={visibleQuestions} reveal />
+                  </>
                 ) : (
                   <Card className="text-sm text-gray-500">{t('result.noQuestions')}</Card>
                 )}

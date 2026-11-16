@@ -382,7 +382,7 @@ export default function TakeExam() {
     try {
       const examKey = Number.isNaN(Number(id)) ? id : parseInt(id, 10);
       const paperQs = paperQuestionsOf(questionsRef.current);
-      await submitExam({
+      const submitted = await submitExam({
         studentExamId: sessionRef.current || 0,
         examId: examKey,
         studentId: user?.id,
@@ -395,7 +395,7 @@ export default function TakeExam() {
         /* day-6 pool optional */
       }
       if (studentResultsReady(exam, user)) {
-        navigate(`/student/exams/${examKey}/review`, { replace: true });
+        navigate(`/student/exams/${examKey}/review`, { replace: true, state: { submission: submitted } });
       } else {
         navigate('/student?teslim=1', { replace: true });
       }

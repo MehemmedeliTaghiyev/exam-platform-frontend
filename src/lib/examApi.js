@@ -15,7 +15,7 @@ import { durationMinutesForQuestionCount } from './examDuration';
 import { examKindOf, isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath';
 import { parseQuestionImage, stripQuestionImage } from './questionImage';
 import { pointsForDifficulty } from './questionDifficulty';
-import { gradeExam } from './gradeExam';
+import { gradeExam, questionsHaveAnswerKeys } from './gradeExam';
 import { publicWebOrigin } from './runtime';
 import {
   isPractice,
@@ -2038,19 +2038,26 @@ export async function fetchWeeklyRankingSource() {
 
 function enrichReview(data, examId) {
   const row = data?.result || data || {};
-  const answers = data?.answers || row.answers || [];
+  const local = !isPractice() && examId
+    ? localDb.getSubmissions().find((s) => String(s.examId ?? s.ExamId) === String(examId))
+    : null;
+  const answers = data?.answers || row.answers || local?.answers || [];
   const paper = (data?.questions || []).length
     ? data.questions
-    : (examId ? (isPractice() ? practiceQuestions(examId) : localDb.getQuestions(examId)) : []);
+    : (local?.questions?.length
+      ? local.questions
+      : (examId ? (isPractice() ? practiceQuestions(examId) : localDb.getQuestions(examId)) : []));
+  const hasKeys = questionsHaveAnswerKeys(data?.questions || row.questions || []);
   if (answers.length && paper.length) {
     const graded = gradeExam(paper.map((q) => ({
       ...q,
       options: q.options || q.Options,
     })), answers);
     const apiCorrect = Number(row.correctAnswersCount ?? row.percent ?? 0);
-    if (apiCorrect === 0 && graded.correct > 0) {
+    if (!hasKeys || (apiCorrect === 0 && graded.correct > 0)) {
       return {
         ...data,
+        answers,
         questions: graded.questions,
         result: {
           ...row,
@@ -2062,6 +2069,15 @@ function enrichReview(data, examId) {
         examEnded: true,
       };
     }
+  }
+  if (hasKeys && data?.questions?.length) return data;
+  if (local?.questions?.length) {
+    return {
+      ...data,
+      answers: answers.length ? answers : local.answers,
+      questions: local.questions,
+      result: { ...row, ...local, ...(data?.result || {}) },
+    };
   }
   if (data?.questions?.length) return data;
   if (row.questions?.length) return { ...data, questions: row.questions };

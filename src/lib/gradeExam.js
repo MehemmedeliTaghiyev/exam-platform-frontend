@@ -1,4 +1,4 @@
-import { isOpenChoiceOption, unwrapOptions } from './utils';
+import { isOpenChoiceOption, unwrapOptions } from './utils.js';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -128,6 +128,36 @@ export function gradeQuestion(question, answer) {
       isSelected: Boolean(selected && opt.letter === selected.letter),
     })),
   };
+}
+
+export function reviewItemStatus(q) {
+  if (!q || q.unanswered) return 'blank';
+  return q.isCorrect ? 'correct' : 'wrong';
+}
+
+export function questionsHaveAnswerKeys(questions = []) {
+  return (questions || []).some((q) => {
+    if (q?.correctText || q?.CorrectText) return true;
+    const opts = q?.options || q?.Options || [];
+    return opts.some((opt) => opt?.isCorrect || opt?.IsCorrect);
+  });
+}
+
+export function reviewCounts(questions = []) {
+  const counts = { correct: 0, wrong: 0, blank: 0, total: (questions || []).length };
+  (questions || []).forEach((q) => {
+    counts[reviewItemStatus(q)] += 1;
+  });
+  return counts;
+}
+
+export function latestLocalSubmission(submissions = [], examId, studentId) {
+  if (examId == null || examId === '') return null;
+  return (submissions || []).find((row) => {
+    if (String(row?.examId ?? row?.ExamId) !== String(examId)) return false;
+    if (studentId != null && row?.studentId != null && String(row.studentId) !== String(studentId)) return false;
+    return true;
+  }) || null;
 }
 
 export function gradeExam(questions = [], answers) {

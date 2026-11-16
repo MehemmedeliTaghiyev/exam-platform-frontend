@@ -12,6 +12,7 @@ import {
   QUESTIONS_PER_PAGE,
 } from './examPaperLayout.js';
 import { buildExamPaperPdf, openExamPaperPrint } from './examPaperPdf.js';
+import { collectKatexCssText, showHtmlPaperOverlay, showPdfBlobOverlay } from './pdfOverlay.js';
 import { paperCopyQuota, questionsPerPaper } from './paperQuota.js';
 
 describe('latexToPlain', () => {
@@ -238,6 +239,15 @@ describe('exam paper html', () => {
     assert.doesNotMatch(html, /Cavablar/);
   });
 
+  it('inlines KaTeX CSS instead of the jsdelivr CDN when provided', () => {
+    const html = examPaperDocumentHtml(samplePaper(2), 'Test', {
+      katexCssText: '.katex { color: #111; }</style><script>alert(1)</script>',
+    });
+    assert.match(html, /\.katex \{ color: #111; \}/);
+    assert.match(html, /<\\\/style/);
+    assert.doesNotMatch(html, /cdn\.jsdelivr\.net\/npm\/katex/);
+  });
+
   it('embeds figure images, not extracted figure text', () => {
     const html = examPaperDocumentHtml([{
       text: '3,7 ədədinə uyğun nöqtə',
@@ -291,5 +301,13 @@ describe('buildExamPaperPdf', () => {
 
   it('does not open a print window in Node', () => {
     assert.equal(openExamPaperPrint(samplePaper(25), 'Həqiqi ədədlər'), false);
+  });
+});
+
+describe('pdf overlay', () => {
+  it('is a no-op without a document (Node)', () => {
+    assert.equal(collectKatexCssText(), '');
+    assert.equal(showHtmlPaperOverlay('<p>x</p>'), false);
+    assert.equal(showPdfBlobOverlay(new Blob(['%PDF'], { type: 'application/pdf' }), 't.pdf'), false);
   });
 });

@@ -14,6 +14,7 @@ import {
 } from './examPaperLayout.js';
 import { questionIsPipelineFullImage } from './questionImage.js';
 import { latexToPlain } from './examPaperText.js';
+import { collectKatexCssText, showHtmlPaperOverlay } from './pdfOverlay.js';
 import { isNativeApp } from './runtime.js';
 
 export { latexToPlain } from './examPaperText.js';
@@ -474,42 +475,10 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
   return assemblePdf(pages);
 }
 
-function printExamPaperHtml(html) {
-  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-  const popup = window.open(url, '_blank');
-  if (popup) {
-    const printWhenReady = () => {
-      try { popup.focus(); popup.print(); } catch { /* print may be blocked */ }
-    };
-    popup.addEventListener('load', printWhenReady);
-    window.setTimeout(printWhenReady, 1200);
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    return true;
-  }
-  URL.revokeObjectURL(url);
-  // Popup blocked — same-window iframe still opens Chrome’s print / Save as PDF.
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('title', 'ExamPulse PDF');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none;';
-  iframe.srcdoc = html;
-  document.body.appendChild(iframe);
-  const done = () => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch { /* print may be blocked */ }
-    window.setTimeout(() => iframe.remove(), 60_000);
-  };
-  iframe.addEventListener('load', done);
-  window.setTimeout(done, 1500);
-  return true;
-}
-
 /**
- * Open the DİM student sheet (KaTeX HTML, figure images) in a print window.
- * Chrome “Save as PDF” is vector — no html2canvas. Native apps return false
- * so the caller can fall back to buildExamPaperPdf.
+ * Open the DİM sheet in the same window (srcdoc overlay).
+ * Blob tabs + auto-print() look blank after await (popup blocker / iOS).
+ * Native apps return false so the caller can fall back to buildExamPaperPdf.
  */
 export function openExamPaperPrint(questions = [], title = 'Sinag', options = {}) {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
@@ -518,8 +487,9 @@ export function openExamPaperPrint(questions = [], title = 'Sinag', options = {}
     preferFigures: options.preferFigures !== false,
     includeAnswerKey: options.includeAnswerKey === true,
     meta: options.meta || '',
+    katexCssText: options.katexCssText || collectKatexCssText(),
   });
-  return printExamPaperHtml(html);
+  return showHtmlPaperOverlay(html, { title: title || 'ExamPulse PDF' });
 }
 
 /**

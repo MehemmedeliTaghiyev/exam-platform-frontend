@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import { EmptyState } from '../components/ui';
-import { createExam, fetchQuestions } from '../lib/examApi';
+import { createExam, fetchExams, fetchQuestions } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
 import {
   canUseStorageSelection,
@@ -16,6 +16,7 @@ import { PREFERENCE_OPTIONS, defaultPreferences, driveDownloadUrl, driveViewUrl,
 import { loadQuizCatalog } from '../lib/quizPipeline';
 import { compileLatexPdf, saveAndOpenPdf } from '../lib/latexPdf';
 import { buildExamPaperPdf, openExamPaperPrint } from '../lib/examPaperPdf';
+import { showPdfBlobOverlay } from '../lib/pdfOverlay';
 import LatexText from '../components/LatexText';
 import { errorMessage } from '../lib/utils';
 import { isMixedExamKind, withMixedMark } from '../lib/syllabus';
@@ -229,6 +230,46 @@ export default function TeacherStorage() {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!user?.id || user.practice) return undefined;
+    let cancelled = false;
+    fetchExams()
+      .then((exams) => {
+        if (cancelled) return;
+        const local = teacherOrderedPacks(user.id);
+        const seen = new Set(local.map((pack) => String(pack.examId || '')).filter(Boolean));
+        const extras = (exams || [])
+          .filter((exam) => {
+            const id = exam?.id ?? exam?.Id;
+            if (id == null || seen.has(String(id))) return false;
+            const kind = String(exam.kind || exam.Kind || '');
+            const desc = String(exam.description || exam.Description || '');
+            return kind === 'teacher' || /\[\[STORAGE:/i.test(desc);
+          })
+          .map((exam) => ({
+            id: `order-${exam.id ?? exam.Id}`,
+            examId: exam.id ?? exam.Id,
+            title: exam.title || exam.Title || 'Sınaq',
+            subject: exam.subjectName || exam.SubjectName || subject || 'Riyaziyyat',
+            grade: String(exam.grade || exam.Grade || prefs.grade || '11'),
+            kind: 'Sınaq',
+            durationMinutes: exam.durationMinutes || exam.DurationMinutes || 50,
+            totalQuestions: exam.totalQuestions || exam.TotalQuestions || 25,
+            at: exam.createdAt || exam.CreatedAt || exam.startTime || exam.StartTime,
+            questions: [],
+            fromLive: true,
+          }));
+        if (!extras.length) return;
+        setOrderedPacks((prev) => {
+          const have = new Set(prev.map((pack) => String(pack.examId || '')).filter(Boolean));
+          const add = extras.filter((pack) => !have.has(String(pack.examId)));
+          return add.length ? [...prev, ...add] : prev;
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id, user?.practice, subject, prefs.grade]);
+
+  useEffect(() => {
     if (!subject) return;
     setPrefs((prev) => (prev.subject === subject ? prev : { ...prev, subject }));
   }, [subject]);
@@ -339,9 +380,10 @@ export default function TeacherStorage() {
     return blob;
   };
 
-  const saveQuestionsPdf = async (questions, title, opts, filename) => {
+  const saveQuestionsPdf = async (questions, title, opts, filename, { preview = true } = {}) => {
     const blob = await buildExamPaperPdf(questions || [], title, opts);
     await saveAndOpenPdf(blob, filename);
+    if (preview) showPdfBlobOverlay(blob, filename, { title: title || filename });
     return blob;
   };
 
@@ -349,17 +391,14 @@ export default function TeacherStorage() {
     if (!unlocked) return;
     const title = pack.title || 'Sınaq';
     const opts = paperOpts(pack);
-    // Cached questions: print in the same click (popup blockers skip delayed window.open).
     const cached = packQuestions(pack);
     if (cached.length && openExamPaperPrint(cached, title, opts)) return;
     try {
       const qs = await resolvePackQuestions(pack);
-      if (qs.length) {
-        await saveQuestionsPdf(qs, title, opts, packFilename(pack, 'sınaq'));
-        return;
-      }
+      if (qs.length && openExamPaperPrint(qs, title, opts)) return;
       const blob = await pdfForPack(pack);
-      await saveAndOpenPdf(blob, packFilename(pack, 'sınaq'), { openPreview: true });
+      await saveAndOpenPdf(blob, packFilename(pack, 'sınaq'));
+      showPdfBlobOverlay(blob, packFilename(pack, 'sınaq'), { title });
     } catch (err) {
       const url = driveViewUrl(pack.driveFileId || pack.pdfUrl);
       if (url) {
@@ -376,7 +415,7 @@ export default function TeacherStorage() {
     setError('');
     try {
       const filename = packFilename(pack);
-      // Always write a real .pdf — print-to-HTML is “PDF-ə bax”, not download.
+      // Always write a real .pdf — overlay stays if the browser swallows <a download> after await.
       const qs = await resolvePackQuestions(pack);
       if (qs.length) {
         await saveQuestionsPdf(qs, pack.title || 'Sınaq', paperOpts(pack), filename);
@@ -384,6 +423,7 @@ export default function TeacherStorage() {
       }
       const blob = await pdfForPack(pack);
       await saveAndOpenPdf(blob, filename);
+      showPdfBlobOverlay(blob, filename, { title: pack.title || filename });
     } catch (err) {
       const driveUrl = driveDownloadUrl(pack.driveFileId || pack.pdfUrl);
       if (driveUrl && (pack.driveFileId || /^https?:/i.test(String(pack.pdfUrl || '')))) {

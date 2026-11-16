@@ -416,8 +416,12 @@ export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options 
   const date = formatPaperDate(options.date);
   const preferFigures = options.preferFigures !== false;
   const includeKey = options.includeAnswerKey === true;
+  const katexCss = String(options.katexCssText || '').trim();
   const katexHref = options.katexCssHref
     || 'https://cdn.jsdelivr.net/npm/katex@0.19.1/dist/katex.min.css';
+  const katexTag = katexCss
+    ? `<style>${katexCss.replace(/<\/style/gi, '<\\/style')}</style>`
+    : `<link rel="stylesheet" href="${escapeHtml(katexHref)}" />`;
   const chunks = questionPageChunks(qs, QUESTIONS_PER_PAGE);
   const lastShort = chunks[chunks.length - 1].items.length < QUESTIONS_PER_PAGE;
   const extraKeyPage = includeKey && !lastShort;
@@ -456,7 +460,7 @@ export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options 
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(title || 'ExamPulse')}</title>
-  <link rel="stylesheet" href="${escapeHtml(katexHref)}" />
+  ${katexTag}
   <style>${PAPER_CSS}</style>
 </head>
 <body>

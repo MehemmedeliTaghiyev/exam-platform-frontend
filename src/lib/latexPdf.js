@@ -1,5 +1,6 @@
 import { isNativeApp } from './runtime';
 import { latexToPlain } from './examPaperText';
+import { showPdfBlobOverlay } from './pdfOverlay';
 
 function pdfLatin(text) {
   return String(text || '')
@@ -95,14 +96,15 @@ export function downloadBlob(blob, filename) {
   link.rel = 'noopener';
   link.style.display = 'none';
   document.body.appendChild(link);
-  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+  link.click();
   link.remove();
   try {
     window.__exampulseLastPdf = { filename, size: blob.size, type: blob.type, url };
   } catch {
     /* ignore */
   }
-  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+  // 4s revoke cancelled Chrome downloads after await (user-gesture already gone).
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
   return url;
 }
 
@@ -141,7 +143,7 @@ export async function saveAndOpenPdf(blob, filename, { openPreview = false } = {
   }
   const url = downloadBlob(blob, safeName);
   if (openPreview) {
-    try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* popup blocked */ }
+    showPdfBlobOverlay(blob, safeName, { title: safeName });
   }
   return url;
 }

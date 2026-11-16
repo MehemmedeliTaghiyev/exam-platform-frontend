@@ -41,6 +41,30 @@ export function unwrapList(data) {
   return [];
 }
 
+export function unwrapPageMeta(data, rowCount = 0) {
+  if (Array.isArray(data) || !data || typeof data !== 'object') {
+    return {
+      pageNumber: 1,
+      pageSize: rowCount,
+      totalPages: 1,
+      totalCount: rowCount,
+      hasNext: false,
+    };
+  }
+  const pageNumber = Number(data.pageNumber ?? data.PageNumber ?? 1) || 1;
+  const pageSize = Number(data.pageSize ?? data.PageSize ?? 0) || 0;
+  const totalPages = Number(data.totalPages ?? data.TotalPages ?? 1) || 1;
+  const totalCount = Number(data.totalCount ?? data.TotalCount ?? rowCount) || 0;
+  const hasNext = data.hasNext ?? data.HasNext;
+  return {
+    pageNumber,
+    pageSize,
+    totalPages,
+    totalCount,
+    hasNext: typeof hasNext === 'boolean' ? hasNext : pageNumber < totalPages,
+  };
+}
+
 export function unwrapOptions(raw) {
   if (Array.isArray(raw)) return raw;
   return unwrapList(raw);

@@ -1,4 +1,4 @@
-import { isWeeklyQuiz } from './examKind';
+import { isWeeklyQuiz } from './examKind.js';
 
 export function unwrapList(data) {
   if (Array.isArray(data)) return data;

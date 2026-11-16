@@ -1,4 +1,4 @@
-import { localDb } from './localDb';
+import { localDb } from './localDb.js';
 
 const SUBS_KEY = 'group_subscriptions';
 const CATALOG_KEY = 'group_catalog';

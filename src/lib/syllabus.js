@@ -1,10 +1,10 @@
-import { displayExamDescription } from './driveLinks';
-import { examVisibility } from './examVisibility';
-import { subscribedTeacherIds } from './groupSubscriptions';
-import { studentResultsReady } from './utils';
-import { MATH_CALENDAR, allCalendarTopics, calendarTopicId } from './mathCalendar';
-import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath';
-import { allowedTopicsForGrade, normalizeGrade } from './gradeSyllabus';
+import { displayExamDescription } from './driveLinks.js';
+import { examVisibility } from './examVisibility.js';
+import { subscribedTeacherIds } from './groupSubscriptions.js';
+import { studentResultsReady } from './utils.js';
+import { MATH_CALENDAR, allCalendarTopics, calendarTopicId } from './mathCalendar.js';
+import { examPulseAudience, isStudentWeeklyExam } from './weeklyMath.js';
+import { allowedTopicsForGrade, normalizeGrade } from './gradeSyllabus.js';
 
 const MIXED_MARK = '[[MIXED]]';
 
@@ -203,7 +203,16 @@ export function withMixedMark(description, mixed) {
 }
 
 export function canShareExamPublic(exam) {
+  if (!exam) return false;
+  if (isMixedExamKind(exam.kind || exam.Kind)) return false;
   return !isMixedSyllabusExam(exam);
+}
+
+/** Public only for a single-topic sınaq. Multi-topic / blok / buraxılış stay private. */
+export function resolvedShareVisibility(exam, requested) {
+  const wantPublic = requested === 'public' || requested === true;
+  if (!wantPublic) return 'private';
+  return canShareExamPublic(exam) ? 'public' : 'private';
 }
 
 export function examAudience(exam) {

@@ -193,6 +193,22 @@ export function defaultTeacherExams() {
       ...liveWindow(30),
     },
     {
+      id: 'pt-demo-mixed',
+      title: 'Blok qarışıq sınaq',
+      description: '[[MIXED]] bir neçə mövzu',
+      subjectName: 'Riyaziyyat',
+      teacherId: PRACTICE_TEACHER_ID,
+      teacherName: 'Məşq müəllimi',
+      visibility: 'private',
+      isPublic: false,
+      kind: 'Blok',
+      totalQuestions: 30,
+      durationMinutes: 90,
+      submissionsCount: 4,
+      source: 'practice',
+      ...liveWindow(90),
+    },
+    {
       id: 'pt-demo-draft',
       title: 'Yeni mövzu qaralaması',
       description: 'Hələ dərc olunmayıb',
@@ -213,11 +229,18 @@ export function defaultTeacherExams() {
 }
 
 export function ensurePracticeTeacherData() {
-  const list = read(TEACHER_EXAMS, []);
-  if (Array.isArray(list) && list.length) return list;
   const seeded = defaultTeacherExams();
-  write(TEACHER_EXAMS, seeded);
-  return seeded;
+  const list = read(TEACHER_EXAMS, []);
+  if (!Array.isArray(list) || !list.length) {
+    write(TEACHER_EXAMS, seeded);
+    return seeded;
+  }
+  const have = new Set(list.map((exam) => String(exam.id)));
+  const add = seeded.filter((exam) => !have.has(String(exam.id)));
+  if (!add.length) return list;
+  const next = [...list, ...add];
+  write(TEACHER_EXAMS, next);
+  return next;
 }
 
 export function practiceTeacherExams() {

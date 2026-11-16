@@ -4,6 +4,8 @@ import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import { EmptyState } from '../components/ui';
 import { createExam, fetchExams, fetchQuestions } from '../lib/examApi';
+import { practiceTeacherExams } from '../lib/practice';
+import { errorMessage, resolveExamStatus } from '../lib/utils';
 import { localDb } from '../lib/localDb';
 import {
   canUseStorageSelection,
@@ -18,8 +20,7 @@ import { compileLatexPdf, saveAndOpenPdf } from '../lib/latexPdf';
 import { buildExamPaperPdf, openExamPaperPrint } from '../lib/examPaperPdf';
 import { showPdfBlobOverlay } from '../lib/pdfOverlay';
 import LatexText from '../components/LatexText';
-import { errorMessage } from '../lib/utils';
-import { isMixedExamKind, withMixedMark } from '../lib/syllabus';
+import { canShareExamPublic, isMixedExamKind, resolvedShareVisibility, withMixedMark } from '../lib/syllabus';
 import {
   markStorageRequestSeen,
   requestStorageExam,
@@ -83,13 +84,17 @@ function Seg({ options, value, onChange }) {
   );
 }
 
-function ShareChoice({ active, children, onClick }) {
+function ShareChoice({ active, children, onClick, disabled = false }) {
   return (
     <button
       type="button"
+      disabled={disabled}
+      title={disabled ? 'Qarışıq sınaq yalnız öz tələbələrlə paylaşılır' : undefined}
       onClick={onClick}
       className={`min-h-10 flex-1 rounded-full px-2 text-[13px] font-extrabold ${
-        active ? 'bg-[#7c6aff] text-white' : 'text-white/40'
+        disabled
+          ? 'cursor-not-allowed text-white/25'
+          : active ? 'bg-[#7c6aff] text-white' : 'text-white/40'
       }`}
     >
       {children}
@@ -230,6 +235,45 @@ export default function TeacherStorage() {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!user?.practice) return undefined;
+    const extras = practiceTeacherExams()
+      .filter((exam) => resolveExamStatus(exam) !== 'Draft')
+      .map((exam) => ({
+        id: `order-${exam.id}`,
+        examId: exam.id,
+        title: exam.title,
+        subject: exam.subjectName || subject || 'Riyaziyyat',
+        grade: String(prefs.grade || '11'),
+        kind: exam.kind || (isMixedExamKind(exam.kind) ? 'Blok' : 'Sınaq'),
+        durationMinutes: exam.durationMinutes || 50,
+        totalQuestions: exam.totalQuestions || 25,
+        at: exam.createdAt || exam.startTime,
+        questions: [],
+        fromLive: false,
+      }));
+    setOrderedPacks((prev) => {
+      const have = new Set(prev.map((pack) => String(pack.examId || '')).filter(Boolean));
+      const add = extras.filter((pack) => !have.has(String(pack.examId)));
+      return add.length ? [...prev, ...add] : prev;
+    });
+    setShared((prev) => {
+      const next = { ...prev };
+      practiceTeacherExams().forEach((exam) => {
+        if (resolveExamStatus(exam) === 'Draft') return;
+        const key = `order-${exam.id}`;
+        if (next[key]?.examId) return;
+        next[key] = {
+          examId: exam.id,
+          visibility: exam.visibility === 'public' ? 'public' : 'private',
+          at: exam.startTime || new Date().toISOString(),
+        };
+      });
+      return next;
+    });
+    return undefined;
+  }, [user?.id, user?.practice, subject, prefs.grade]);
+
+  useEffect(() => {
     if (!user?.id || user.practice) return undefined;
     let cancelled = false;
     fetchExams()
@@ -295,11 +339,21 @@ export default function TeacherStorage() {
     localStorage.setItem(sharedKey(user?.id), JSON.stringify(next));
   };
 
+  const packShareExam = (pack) => ({
+    title: pack.title,
+    description: pack.title,
+    kind: pack.kind,
+    subjectName: pack.subject,
+  });
+
+  const packIsMixed = (pack) => isMixedExamKind(pack.kind) || !canShareExamPublic(packShareExam(pack));
+
   const share = async (pack, visibility) => {
     if (!unlocked || busyId) return;
-    const mixed = isMixedExamKind(pack.kind);
-    if (mixed && visibility === 'public') {
-      setError('Blok və Buraxılış (qarışıq mövzu) yalnız öz tələbələrinizlə paylaşılır.');
+    const mixed = packIsMixed(pack);
+    const vis = resolvedShareVisibility(packShareExam(pack), visibility);
+    if (visibility === 'public' && vis !== 'public') {
+      setError('Qarışıq / çox mövzulu sınaq yalnız öz tələbələrinizlə paylaşılır.');
       return;
     }
     setBusyId(pack.id);
@@ -316,15 +370,16 @@ export default function TeacherStorage() {
         subjectName: pack.subject,
         startTime: new Date().toISOString(),
         endTime: end.toISOString(),
-        visibility: mixed ? 'private' : visibility,
+        visibility: vis,
+        isPublic: vis === 'public',
         status: 'Live',
-        kind: 'teacher',
+        kind: pack.kind || 'teacher',
         rankingEnabled: true,
         pdfFileUrl: driveViewUrl(pack.driveFileId || pack.pdfUrl) || pack.pdfUrl,
       });
       remember({
         ...shared,
-        [pack.id]: { examId: exam?.id, visibility, at: new Date().toISOString() },
+        [pack.id]: { examId: exam?.id, visibility: vis, at: new Date().toISOString() },
       });
     } catch (err) {
       setError(errorMessage(err, 'Paylaşılmadı.'));
@@ -816,7 +871,7 @@ export default function TeacherStorage() {
               const state = shared[pack.id];
               const sharedOut = state?.examId;
               const vis = sharedOut ? state.visibility : state?.visibility;
-              const mixed = isMixedExamKind(pack.kind);
+              const mixed = packIsMixed(pack);
               const arrived = formatArrived(pack);
               const shortTitle = pack.weeklyGift
                 ? (pack.title || 'Həftəlik sınaq')
@@ -873,11 +928,13 @@ export default function TeacherStorage() {
                     <ShareChoice active={vis === 'private' && Boolean(sharedOut)} onClick={() => unlocked && share(pack, 'private')}>
                       {busyId === pack.id ? '...' : 'Şəxsi'}
                     </ShareChoice>
-                    {mixed ? null : (
-                      <ShareChoice active={vis === 'public' && Boolean(sharedOut)} onClick={() => unlocked && share(pack, 'public')}>
-                        Hamı ilə
-                      </ShareChoice>
-                    )}
+                    <ShareChoice
+                      disabled={mixed}
+                      active={!mixed && vis === 'public' && Boolean(sharedOut)}
+                      onClick={() => unlocked && !mixed && share(pack, 'public')}
+                    >
+                      Hamı ilə
+                    </ShareChoice>
                   </div>
                 </article>
               );

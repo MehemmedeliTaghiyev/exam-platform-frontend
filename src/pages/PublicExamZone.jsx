@@ -6,12 +6,14 @@ import Header from '../components/home/Header';
 import '../components/home/home.css';
 import { Button, Skeleton } from '../components/ui';
 import { AuthContext } from '../context/AuthContext';
+import ExamCard from '../components/ExamCard';
 import { fetchAllPublicExams, fetchStudentHistory } from '../lib/examApi';
 import { localDb } from '../lib/localDb';
-import ExamRow from '../components/ExamRow';
 import { examSortNewest } from '../lib/dailyTopicQuiz';
 import { filterPublicExams, uniqueSubjects } from '../lib/publicExams';
-import { isExamEnded, isExamLive, isExamScheduled } from '../lib/utils';
+import { examVisibility } from '../lib/examVisibility';
+import { canEnterExam } from '../lib/teacherAccess';
+import { isExamEnded, isExamScheduled } from '../lib/utils';
 
 const MONTHS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
 
@@ -121,7 +123,7 @@ export default function PublicExamZone({ embedded = false }) {
       navigate(`/student/exams/${exam.id}/review`);
       return;
     }
-    navigate(`/student/exams/${exam.id}`);
+    navigate(`/student/exams/${exam.id}?basla=1`);
   };
 
   const setSubject = (name) => {
@@ -240,14 +242,36 @@ export default function PublicExamZone({ embedded = false }) {
             <Skeleton className="h-16 rounded-[22px]" />
           </>
         ) : filtered.length ? (
-          filtered.map((exam) => (
-            <ExamRow
-              key={exam.id}
-              exam={exam}
-              mine={history.find((row) => String(row.examId) === String(exam.id))}
-              onOpen={isExamScheduled(exam) ? undefined : () => openExam(exam)}
-            />
-          ))
+          <div className="grid gap-4 sm:grid-cols-2">
+            {filtered.map((exam) => {
+              const attempt = history.find((row) => String(row.examId) === String(exam.id));
+              const locked = examVisibility(exam) === 'private' && !canEnterExam(user, exam);
+              const entered = Boolean(attempt?.submittedAt || attempt?.SubmittedAt);
+              return (
+                <ExamCard
+                  key={exam.id}
+                  exam={exam}
+                  teacherName={exam.teacherName || exam.TeacherName || ''}
+                  locked={locked}
+                  entered={entered}
+                  resultText={entered && attempt?.percent != null ? `${Math.round(Number(attempt.percent))}%` : ''}
+                  actionLabel={
+                    locked
+                      ? 'Yalnız öz şagirdləri'
+                      : isExamEnded(exam) || entered
+                        ? 'Nəticələrə bax'
+                        : (student ? 'İmtahana başla' : 'Daxil olub bax')
+                  }
+                  saved={savedIds.has(String(exam.id))}
+                  onToggleSave={student ? (item) => {
+                    localDb.toggleSavedExam(user.id, item);
+                    setSavedRev((n) => n + 1);
+                  } : undefined}
+                  onOpen={isExamScheduled(exam) || locked ? undefined : () => openExam(exam)}
+                />
+              );
+            })}
+          </div>
         ) : (
           <div className="card-vector rounded-[24px] bg-[var(--card)] px-4 py-10 text-center ring-1 ring-[var(--line)]">
             <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[var(--bg)] text-[var(--muted)]">

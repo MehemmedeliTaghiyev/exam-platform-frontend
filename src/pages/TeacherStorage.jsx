@@ -306,45 +306,60 @@ export default function TeacherStorage() {
     meta: [pack.subject, pack.grade, pack.kind].filter(Boolean).join(' · ').slice(0, 60),
   });
 
-  const deliverQuestionsPdf = async (questions, title, opts, filename) => {
-    if (questions?.length && openExamPaperPrint(questions, title, opts)) return;
-    const blob = await buildExamPaperPdf(questions || [], title, opts);
-    await saveAndOpenPdf(blob, filename);
+  const packFilename = (pack, fallback = 'material') => (
+    `${String(pack?.title || fallback).replace(/[^\w.\-əöüğçşıİƏÖÜĞÇŞ ]+/gi, '') || fallback}.pdf`
+  );
+
+  const packQuestions = (pack) => {
+    const embedded = pack?.questions || pack?.paper?.questions || [];
+    if (Array.isArray(embedded) && embedded.length) return embedded;
+    if (pack?.examId) {
+      const local = localDb.getQuestions(pack.examId) || [];
+      if (local.length) return local;
+    }
+    return [];
+  };
+
+  const resolvePackQuestions = async (pack) => {
+    const cached = packQuestions(pack);
+    if (cached.length) return cached;
+    if (pack?.examId) {
+      const qs = await fetchQuestions(pack.examId).catch(() => []);
+      if (qs?.length) return qs;
+    }
+    return [];
   };
 
   const pdfForPack = async (pack) => {
-    if (pack.examId) {
-      const qs = await fetchQuestions(pack.examId).catch(() => []);
-      if (qs?.length) {
-        return buildExamPaperPdf(qs, pack.title || 'Sınaq', paperOpts(pack));
-      }
-    }
-    if (pack.latexSource) {
-      const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
-      return blob;
+    const qs = await resolvePackQuestions(pack);
+    if (qs.length) {
+      return buildExamPaperPdf(qs, pack.title || 'Sınaq', paperOpts(pack));
     }
     const { blob } = await compileLatexPdf(packLatexSource(pack), { title: pack.title });
     return blob;
   };
 
+  const saveQuestionsPdf = async (questions, title, opts, filename) => {
+    const blob = await buildExamPaperPdf(questions || [], title, opts);
+    await saveAndOpenPdf(blob, filename);
+    return blob;
+  };
+
   const openPdf = async (pack) => {
     if (!unlocked) return;
-    // Həmişə lokal rebuild — Drive köhnə PDF saxlayır, parser düzəlişləri görünmür.
+    const title = pack.title || 'Sınaq';
+    const opts = paperOpts(pack);
+    // Cached questions: print in the same click (popup blockers skip delayed window.open).
+    const cached = packQuestions(pack);
+    if (cached.length && openExamPaperPrint(cached, title, opts)) return;
     try {
-      if (pack.examId) {
-        const qs = await fetchQuestions(pack.examId).catch(() => []);
-        if (qs?.length) {
-          await deliverQuestionsPdf(
-            qs,
-            pack.title || 'Sınaq',
-            paperOpts(pack),
-            `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`,
-          );
-          return;
-        }
+      const qs = await resolvePackQuestions(pack);
+      if (qs.length) {
+        await saveQuestionsPdf(qs, title, opts, packFilename(pack, 'sınaq'));
+        return;
       }
       const blob = await pdfForPack(pack);
-      await saveAndOpenPdf(blob, `${String(pack.title || 'sınaq').slice(0, 40)}.pdf`);
+      await saveAndOpenPdf(blob, packFilename(pack, 'sınaq'), { openPreview: true });
     } catch (err) {
       const url = driveViewUrl(pack.driveFileId || pack.pdfUrl);
       if (url) {
@@ -360,29 +375,21 @@ export default function TeacherStorage() {
     setDownloadId(pack.id);
     setError('');
     try {
-      const filename = `${String(pack.title || 'material').replace(/[^\w.\-əöüğçşıİƏÖÜĞÇŞ ]+/gi, '') || 'material'}.pdf`;
-      // Əvvəl lokal rebuild (təzə DİM vərəqi); Drive yalnız rebuild alınmasa.
-      try {
-        if (pack.examId) {
-          const qs = await fetchQuestions(pack.examId).catch(() => []);
-          if (qs?.length) {
-            await deliverQuestionsPdf(qs, pack.title || 'Sınaq', paperOpts(pack), filename);
-            return;
-          }
-        }
-        const blob = await pdfForPack(pack);
-        await saveAndOpenPdf(blob, filename);
+      const filename = packFilename(pack);
+      // Always write a real .pdf — print-to-HTML is “PDF-ə bax”, not download.
+      const qs = await resolvePackQuestions(pack);
+      if (qs.length) {
+        await saveQuestionsPdf(qs, pack.title || 'Sınaq', paperOpts(pack), filename);
         return;
-      } catch {
-        /* fall through to Drive */
       }
+      const blob = await pdfForPack(pack);
+      await saveAndOpenPdf(blob, filename);
+    } catch (err) {
       const driveUrl = driveDownloadUrl(pack.driveFileId || pack.pdfUrl);
       if (driveUrl && (pack.driveFileId || /^https?:/i.test(String(pack.pdfUrl || '')))) {
         window.open(driveUrl, '_blank', 'noopener,noreferrer');
         return;
       }
-      setError('PDF yüklənmədi.');
-    } catch (err) {
       setError(errorMessage(err, 'PDF yüklənmədi.'));
     } finally {
       setDownloadId('');
@@ -413,28 +420,20 @@ export default function TeacherStorage() {
         const papers = row?.results?.length ? row.results : [row];
         for (let i = 0; i < papers.length; i += 1) {
           const paper = papers[i];
-          const questions = paper?.paper?.questions || [];
+          const questions = paper?.paper?.questions || paper?.questions || [];
           const opts = {
             preferFigures: true,
             includeAnswerKey: false,
             meta: [paper.subject, paper.grade, paper.kind].filter(Boolean).join(' · ').slice(0, 60),
           };
-          if (i === 0 && questions.length) {
-            await deliverQuestionsPdf(
-              questions,
-              paper.title || 'Quiz',
-              opts,
-              `${String(paper.title || 'quiz').slice(0, 40)}.pdf`,
-            );
+          if (i !== 0) continue;
+          const filename = packFilename(paper, 'quiz');
+          if (paper?.pdfBlob instanceof Blob) {
+            await saveAndOpenPdf(paper.pdfBlob, filename);
             continue;
           }
-          const blob = paper?.pdfBlob
-            || (questions.length
-              ? await buildExamPaperPdf(questions, paper.title || 'Quiz', opts)
-              : null)
-            || (await compileLatexPdf(paper?.paper?.latexSource || '', { title: paper.title || 'Quiz' })).blob;
-          if (i === 0 && blob) {
-            await saveAndOpenPdf(blob, `${String(paper.title || 'quiz').slice(0, 40)}.pdf`);
+          if (questions.length) {
+            await saveQuestionsPdf(questions, paper.title || 'Quiz', opts, filename);
           }
         }
         const n = row?.paperCount || papers.length;
@@ -673,7 +672,11 @@ export default function TeacherStorage() {
                   id: note.row.id,
                   examId: note.row.examId,
                   title: note.row.title || note.title,
+                  subject: note.row.subject,
+                  grade: note.row.grade,
+                  kind: note.row.kind,
                   latexSource: note.row.paper?.latexSource,
+                  questions: note.row.paper?.questions || note.row.questions,
                   at: note.row.at,
                 }
                 : null;

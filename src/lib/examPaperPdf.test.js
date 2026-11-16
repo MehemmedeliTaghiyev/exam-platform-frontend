@@ -209,6 +209,7 @@ describe('exam paper html', () => {
   it('student sheet omits Cavablar by default', () => {
     const html = examPaperDocumentHtml(samplePaper(25), 'Test');
     assert.doesNotMatch(html, /Cavablar \(müəllim\)|<section class="ep-key">/);
+    assert.match(html, /Çap et \/ PDF saxla/);
     const withKey = examPaperDocumentHtml(samplePaper(25), 'Test', { includeAnswerKey: true });
     assert.match(withKey, /Cavablar \(müəllim\)/);
   });

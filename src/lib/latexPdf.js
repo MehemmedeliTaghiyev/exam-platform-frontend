@@ -92,10 +92,17 @@ export function downloadBlob(blob, filename) {
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  link.rel = 'noopener';
+  link.style.display = 'none';
   document.body.appendChild(link);
-  link.click();
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 2500);
+  try {
+    window.__exampulseLastPdf = { filename, size: blob.size, type: blob.type, url };
+  } catch {
+    /* ignore */
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
   return url;
 }
 
@@ -110,8 +117,11 @@ async function blobToBase64(blob) {
   return btoa(binary);
 }
 
-export async function saveAndOpenPdf(blob, filename) {
+export async function saveAndOpenPdf(blob, filename, { openPreview = false } = {}) {
   const safeName = String(filename || 'material.pdf').replace(/[^\w.\-əöüğçşıİƏÖÜĞÇŞ ]+/gi, '_') || 'material.pdf';
+  if (!/\.pdf$/i.test(safeName)) {
+    return saveAndOpenPdf(blob, `${safeName}.pdf`, { openPreview });
+  }
   if (isNativeApp()) {
     const [{ Filesystem, Directory }, { Share }] = await Promise.all([
       import('@capacitor/filesystem'),
@@ -129,10 +139,10 @@ export async function saveAndOpenPdf(blob, filename) {
     });
     return written.uri;
   }
-  const url = URL.createObjectURL(blob);
-  downloadBlob(blob, safeName);
-  window.open(url, '_blank', 'noopener,noreferrer');
-  window.setTimeout(() => URL.revokeObjectURL(url), 8000);
+  const url = downloadBlob(blob, safeName);
+  if (openPreview) {
+    try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* popup blocked */ }
+  }
   return url;
 }
 

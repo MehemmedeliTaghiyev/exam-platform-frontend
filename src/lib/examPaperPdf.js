@@ -474,6 +474,38 @@ async function buildTextExamPaperPdf(questions = [], title = 'Sinag', options = 
   return assemblePdf(pages);
 }
 
+function printExamPaperHtml(html) {
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const popup = window.open(url, '_blank');
+  if (popup) {
+    const printWhenReady = () => {
+      try { popup.focus(); popup.print(); } catch { /* print may be blocked */ }
+    };
+    popup.addEventListener('load', printWhenReady);
+    window.setTimeout(printWhenReady, 1200);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return true;
+  }
+  URL.revokeObjectURL(url);
+  // Popup blocked — same-window iframe still opens Chrome’s print / Save as PDF.
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('title', 'ExamPulse PDF');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+  iframe.srcdoc = html;
+  document.body.appendChild(iframe);
+  const done = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch { /* print may be blocked */ }
+    window.setTimeout(() => iframe.remove(), 60_000);
+  };
+  iframe.addEventListener('load', done);
+  window.setTimeout(done, 1500);
+  return true;
+}
+
 /**
  * Open the DİM student sheet (KaTeX HTML, figure images) in a print window.
  * Chrome “Save as PDF” is vector — no html2canvas. Native apps return false
@@ -487,27 +519,15 @@ export function openExamPaperPrint(questions = [], title = 'Sinag', options = {}
     includeAnswerKey: options.includeAnswerKey === true,
     meta: options.meta || '',
   });
-  const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
-  const popup = window.open(url, '_blank');
-  if (!popup) {
-    URL.revokeObjectURL(url);
-    return false;
-  }
-  const printWhenReady = () => {
-    try { popup.print(); } catch { /* print may be blocked */ }
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
-  popup.addEventListener('load', printWhenReady);
-  window.setTimeout(printWhenReady, 1500);
-  return true;
+  return printExamPaperHtml(html);
 }
 
 /**
  * Student exam PDF: Times text + embedded figure images (never extracted
  * figure text). Ten questions per A4, at most 10 şəkil per page, overflow
  * to the next sheet. No Cavablar unless options.includeAnswerKey is true.
- * Browser: prefer openExamPaperPrint (DİM HTML). This Blob is the native
- * / fallback file — not an html2canvas page snapshot.
+ * Browser download uses this Blob. “PDF-ə bax” uses openExamPaperPrint (DİM HTML).
+ * Not an html2canvas page snapshot.
  */
 export async function buildExamPaperPdf(questions = [], title = 'Sinag', options = {}) {
   return buildTextExamPaperPdf(questions, title, options);

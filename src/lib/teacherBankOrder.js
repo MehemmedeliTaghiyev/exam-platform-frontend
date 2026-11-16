@@ -52,6 +52,34 @@ function writePacks(userId, list) {
   localStorage.setItem(PACKS_KEY(userId), JSON.stringify((list || []).slice(0, 40)));
 }
 
+function slimPaperQuestion(q) {
+  return {
+    id: q?.id ?? q?.Id,
+    text: q?.text || q?.Text || '',
+    imageUrl: q?.imageUrl || q?.ImageUrl || '',
+    options: (q?.options || q?.Options || []).map((o) => ({
+      optionText: o?.optionText || o?.OptionText || o?.text || o?.Text || '',
+      isCorrect: Boolean(o?.isCorrect ?? o?.IsCorrect),
+    })),
+    correctAnswer: q?.correctAnswer || q?.CorrectAnswer || q?.correct_answer || '',
+    type: q?.type || q?.Type,
+  };
+}
+
+function persistOrderedPacks(userId, pack, prev) {
+  const next = [pack, ...prev];
+  try {
+    writePacks(userId, next);
+  } catch {
+    const slim = { ...pack, questions: undefined };
+    try {
+      writePacks(userId, [slim, ...prev]);
+    } catch {
+      /* quota — pack still returned in-memory */
+    }
+  }
+}
+
 export function teacherOrderedPacks(userId) {
   return readPacks(userId);
 }
@@ -612,6 +640,7 @@ async function createFilledTeacherExam(user, input = {}) {
       }
       : { asan, orta, çətin: hard },
     latexSource,
+    questions: questions.map(slimPaperQuestion),
     difficultyUsed,
     difficultyFallback: Boolean(fallback),
     copiedQnums: bank.copiedQnums || [],
@@ -621,7 +650,7 @@ async function createFilledTeacherExam(user, input = {}) {
   };
 
   const prev = readPacks(user?.id).filter((row) => String(row.examId) !== String(exam.id));
-  writePacks(user?.id, [pack, ...prev]);
+  persistOrderedPacks(user?.id, pack, prev);
 
   return {
     exam,

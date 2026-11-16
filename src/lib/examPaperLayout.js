@@ -273,6 +273,20 @@ html, body {
   font-size: 11px;
 }
 .ep-key-note { font-size: 9px; color: #555; margin-top: 5px; }
+.ep-print-btn {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  font: 700 14px/1.2 system-ui, sans-serif;
+  background: #7c6aff;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+}
 @media print {
   .ep-print-host { width: auto; }
   .ep-paper-page {
@@ -446,6 +460,7 @@ export function examPaperDocumentHtml(questions = [], title = 'Sınaq', options 
   <style>${PAPER_CSS}</style>
 </head>
 <body>
+  <button type="button" class="ep-screen-only ep-print-btn" onclick="window.print()">Çap et / PDF saxla</button>
   ${pages.join('\n')}
 </body>
 </html>`;

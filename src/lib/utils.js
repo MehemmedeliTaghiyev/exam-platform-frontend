@@ -89,6 +89,34 @@ export function uid(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/** LocalStorage fallback from createExam when POST /Exams returns no id (`exam-<ms>-<rand>`). */
+export function isClientGeneratedExamId(id) {
+  return /^exam-\d+-[a-z0-9]+$/i.test(String(id ?? ''));
+}
+
+export function examIdFromStorageMark(examOrText) {
+  const raw = typeof examOrText === 'string'
+    ? examOrText
+    : `${examOrText?.description || ''} ${examOrText?.Description || ''}`;
+  const match = raw.match(/\[\[STORAGE:([^\]]+)\]\]/i);
+  if (!match) return '';
+  return String(match[1] || '').trim().replace(/^order-/i, '');
+}
+
+export function questionSourceExamIds(examId, exam = null) {
+  const ids = [];
+  const push = (value) => {
+    if (value == null || value === '') return;
+    const key = String(value);
+    if (ids.includes(key)) return;
+    ids.push(key);
+  };
+  push(examId);
+  push(exam?.id ?? exam?.Id);
+  push(examIdFromStorageMark(exam));
+  return ids;
+}
+
 export function isLetterOption(opt) {
   return /^[A-E]$/i.test(String(opt?.optionText || opt?.text || '').trim());
 }

@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import AppShell from '../components/AppShell';
 import { EmptyState } from '../components/ui';
-import { createExam, fetchExams, fetchQuestions } from '../lib/examApi';
+import { attachQuestionsToExam, createExam, fetchExam, fetchExams, fetchQuestions, paperQuestionsOf, updateExam } from '../lib/examApi';
 import { practiceTeacherExams } from '../lib/practice';
-import { errorMessage, resolveExamStatus } from '../lib/utils';
+import { errorMessage, isClientGeneratedExamId, resolveExamStatus } from '../lib/utils';
 import { localDb } from '../lib/localDb';
 import {
   canUseStorageSelection,
@@ -359,12 +359,14 @@ export default function TeacherStorage() {
     setBusyId(pack.id);
     setError('');
     try {
+      const qs = await resolvePackQuestions(pack);
+      const description = withMixedMark(`${pack.title}\n[[STORAGE:${pack.id}]]`, mixed);
       const end = new Date();
       end.setDate(end.getDate() + 7);
-      const exam = await createExam({
+      const payload = {
         title: pack.title,
-        description: withMixedMark(`${pack.title}\n[[STORAGE:${pack.id}]]`, mixed),
-        totalQuestions: pack.totalQuestions,
+        description,
+        totalQuestions: pack.totalQuestions || qs.length || 25,
         durationMinutes: pack.durationMinutes,
         teacherId: user?.id,
         subjectName: pack.subject,
@@ -375,11 +377,28 @@ export default function TeacherStorage() {
         status: 'Live',
         kind: pack.kind || 'teacher',
         rankingEnabled: true,
-        pdfFileUrl: driveViewUrl(pack.driveFileId || pack.pdfUrl) || pack.pdfUrl,
-      });
+      };
+      const reuseId = pack.examId && !isClientGeneratedExamId(pack.examId) ? pack.examId : '';
+      let exam = null;
+      if (reuseId) {
+        await updateExam(reuseId, payload);
+        exam = (await fetchExam(reuseId).catch(() => null)) || { id: reuseId, ...payload };
+      } else {
+        exam = await createExam(payload);
+      }
+      const examId = exam?.id ?? exam?.Id;
+      if (!examId || (!user?.practice && (exam.source === 'local' || isClientGeneratedExamId(examId)))) {
+        const err = new Error('İmtahan serverdə yaradılmadı. Yenidən daxil olub cəhd edin.');
+        err.code = 'EXAM_CREATE';
+        throw err;
+      }
+      const paper = await attachQuestionsToExam(examId, qs);
+      if (vis === 'public' && !user?.practice && !paperQuestionsOf(paper).length) {
+        throw new Error(`Suallar yazılmadı. GET /Questions/exam/${examId} boş qayıtdı; POST /Questions/exam/${examId} və ya POST /Exams/${examId}/from-bank.`);
+      }
       remember({
         ...shared,
-        [pack.id]: { examId: exam?.id, visibility: vis, at: new Date().toISOString() },
+        [pack.id]: { examId, visibility: vis, at: new Date().toISOString() },
       });
     } catch (err) {
       setError(errorMessage(err, 'Paylaşılmadı.'));

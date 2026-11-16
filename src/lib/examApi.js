@@ -1,7 +1,7 @@
 import API from '../api/axios';
 import axios from 'axios';
 import { localDb } from './localDb';
-import { unwrapList, unwrapItem, unwrapOptions, unwrapPageMeta, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption, errorMessage } from './utils';
+import { unwrapList, unwrapItem, unwrapOptions, unwrapPageMeta, uid, percent, resolveExamStatus, examPdfUrl, isOpenChoiceOption, errorMessage, isClientGeneratedExamId, questionSourceExamIds } from './utils';
 import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapExamDescription, wrapTrialMessage } from './driveLinks';
 import { examVisibility, withExamVisibility } from './examVisibility';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
@@ -1239,6 +1239,53 @@ export async function createExam(payload) {
   return localExam;
 }
 
+function questionToAddPayload(q) {
+  const options = (q?.options || q?.Options || []).map((opt) => ({
+    optionText: opt.optionText || opt.OptionText || opt.text || opt.Text || '',
+    isCorrect: Boolean(opt.isCorrect ?? opt.IsCorrect),
+  }));
+  return {
+    text: q?.text || q?.Text || '',
+    imageUrl: q?.imageUrl || q?.ImageUrl || null,
+    ImageUrl: q?.imageUrl || q?.ImageUrl || null,
+    points: Number(q?.points ?? q?.Points ?? 1) || 1,
+    type: q?.type || q?.Type || 'SingleChoice',
+    inputKind: q?.inputKind || q?.InputKind || 'Choice',
+    difficultyLevel: q?.difficultyLevel || q?.DifficultyLevel,
+    options,
+    correctText: q?.correctText || q?.CorrectText || '',
+  };
+}
+
+export async function attachQuestionsToExam(examId, questions) {
+  const paper = paperQuestionsOf(questions).filter((q) => String(q?.text || q?.Text || '').trim());
+  if (!examId || !paper.length) return [];
+  if (isPractice() || isClientGeneratedExamId(examId)) {
+    if (isPractice()) savePracticeQuestions(examId, paper);
+    localDb.saveQuestions(examId, paper);
+    return paper;
+  }
+  const existing = paperQuestionsOf(await fetchQuestions(examId).catch(() => []));
+  if (existing.length) {
+    localDb.saveQuestions(examId, existing);
+    return existing;
+  }
+  for (const q of paper) {
+    try {
+      await addQuestion(examId, questionToAddPayload(q));
+    } catch {
+      /* try next question / contract */
+    }
+  }
+  const next = paperQuestionsOf(await fetchQuestions(examId).catch(() => []));
+  if (next.length) {
+    localDb.saveQuestions(examId, next);
+    return next;
+  }
+  localDb.saveQuestions(examId, paper);
+  return [];
+}
+
 function normalizeBankTopics(raw) {
   if (Array.isArray(raw)) {
     return raw.map((row) => String(row || '').trim()).filter(Boolean);
@@ -1440,8 +1487,7 @@ export function paperQuestionsOf(list) {
   return (list || []).filter((q) => !isDriveMarkerQuestion(q));
 }
 
-export async function fetchQuestions(examId, exam = null) {
-  if (isPractice()) return practiceQuestions(examId);
+async function fetchQuestionsForId(examId, exam = null) {
   const paths = [`/Questions/exam/${examId}`, `/Exams/${examId}/questions`];
   const found = [];
   for (const path of paths) {
@@ -1465,6 +1511,27 @@ export async function fetchQuestions(examId, exam = null) {
   const extraPaper = paperQuestionsOf([...embedded, ...local]);
   if (extraPaper.length) return dedupeQuestions([...embedded, ...local, ...found]);
   return dedupeQuestions(found.length ? found : local);
+}
+
+export async function fetchQuestions(examId, exam = null) {
+  const ids = questionSourceExamIds(examId, exam);
+  if (isPractice()) {
+    for (const id of ids) {
+      const list = practiceQuestions(id);
+      if (paperQuestionsOf(list).length) return list;
+    }
+    return practiceQuestions(examId);
+  }
+  let last = [];
+  for (const id of ids) {
+    const list = await fetchQuestionsForId(id, exam);
+    if (paperQuestionsOf(list).length) {
+      if (String(id) !== String(examId)) localDb.saveQuestions(examId, list);
+      return list;
+    }
+    if (list.length) last = list;
+  }
+  return last;
 }
 
 function rawQuestionOptions(q) {

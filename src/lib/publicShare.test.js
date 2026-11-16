@@ -17,6 +17,7 @@ import {
   publicExamsOfTeacher,
 } from './publicExams.js';
 import { canShareExamPublic, resolvedShareVisibility, studentCanSeeExam } from './syllabus.js';
+import { examIdFromStorageMark, isClientGeneratedExamId, questionSourceExamIds } from './utils.js';
 
 describe('teacher public share rules', () => {
   it('allows public only for a one-topic sınaq', () => {
@@ -90,5 +91,30 @@ describe('teacher public share rules', () => {
       studentCanSeeExam(otherStudent, { ...exam, isPublic: false, visibility: 'private' }),
       false,
     );
+  });
+
+  it('drops localStorage-only exam-<timestamp> ids from the student catalog', () => {
+    assert.equal(isClientGeneratedExamId('exam-1794866275654-nygp8'), true);
+    assert.equal(isClientGeneratedExamId('42'), false);
+    assert.equal(isClientGeneratedExamId('pt-demo-public'), false);
+    assert.equal(
+      keepPublicCatalogExam({
+        id: 'exam-1794866275654-nygp8',
+        isPublic: true,
+        visibility: 'public',
+        status: 'Live',
+        title: 'Riyaziyyat sınaq',
+      }),
+      false,
+    );
+  });
+
+  it('resolves Anbar STORAGE marks to the real pack exam id for questions', () => {
+    const exam = {
+      id: 'exam-1794866275654-nygp8',
+      description: 'Riyaziyyat\n[[STORAGE:order-42]]\nVIS:public',
+    };
+    assert.equal(examIdFromStorageMark(exam), '42');
+    assert.deepEqual(questionSourceExamIds(exam.id, exam), ['exam-1794866275654-nygp8', '42']);
   });
 });

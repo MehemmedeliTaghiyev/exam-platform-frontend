@@ -437,10 +437,14 @@ export default function TakeExam() {
 
       const seed = examShuffleSeed(examId, user?.id);
       const cached = readPersistedShuffle(examId, user?.id);
-      const source = pendingQuestions.length ? pendingQuestions : [];
+      const source = paperQuestionsOf(pendingQuestions);
       const shuffled = source.length
         ? (cached?.length ? cached : shuffleExamPaper(source, seed))
         : [];
+      if (!shuffled.length) {
+        setFlash({ id: 'no-questions', n: Date.now() });
+        return;
+      }
       if (source.length && !cached?.length) persistShuffle(examId, user?.id, shuffled);
       setQuestions(shuffled);
       setCurrentIndex(0);
@@ -454,10 +458,10 @@ export default function TakeExam() {
   useEffect(() => {
     if (!autoStart || autoStartedRef.current) return;
     if (loading || started || starting || !exam || isExamScheduled(exam)) return;
-    if (!pendingQuestions.length) return;
+    if (!paperQuestionsOf(pendingQuestions).length) return;
     autoStartedRef.current = true;
     beginExam();
-  }, [autoStart, beginExam, exam, loading, pendingQuestions.length, started, starting]);
+  }, [autoStart, beginExam, exam, loading, pendingQuestions, started, starting]);
 
   const submitRef = useRef(handleSubmit);
   submitRef.current = handleSubmit;
@@ -568,7 +572,9 @@ export default function TakeExam() {
   const personalQuiz = !isPublicExam(exam);
   const watermarkName = teacherWatermarkText(examTeacherId(exam)) || (personalQuiz ? (user?.fullName || user?.email || 'ExamPulse') : '');
   const showGate = !loading && !scheduled && !started;
-  const pendingCount = pendingQuestions.length || Number(exam?.totalQuestions) || 0;
+  const pendingPaper = paperQuestionsOf(pendingQuestions);
+  const pendingCount = pendingPaper.length || 0;
+  const publicQuiz = isPublicExam(exam) || isStudentWeeklyExam(exam) || isLiveWeeklyExamId(id);
   const stageTitle = String(displayExamDescription(exam) || exam?.title || exam?.subjectName || 'İmtahan')
     .replace(/VIS:(public|private)\s*/gi, '')
     .replace(/DRVFILE:\S+\s*/gi, '')
@@ -689,15 +695,20 @@ export default function TakeExam() {
                   <li>Sual və variant sırası hər şagird üçün avtomatik qarışdırılır.</li>
                   {pendingCount ? <li>Sual sayı: {pendingCount}. Vaxt sayacı başlayandan sonra işə düşür.</li> : null}
                 </ul>
+                {!pendingCount ? (
+                  <p className="mt-4 text-sm font-semibold text-[var(--danger,#f0b429)]">
+                    Bu imtahanda sual yoxdur. Müəllim Anbardan yenidən «Hamı ilə» paylaşmalıdır.
+                  </p>
+                ) : null}
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Button variant="secondary" onClick={() => navigate('/student')}>Geri</Button>
-                  <Button onClick={beginExam} disabled={starting}>
+                  <Button onClick={beginExam} disabled={starting || !pendingCount}>
                     {starting ? '...' : 'Qaydaları qəbul edirəm — başla'}
                   </Button>
                 </div>
               </Card>
             </div>
-          ) : examDriveFileId(exam) ? (
+          ) : !publicQuiz && examDriveFileId(exam) ? (
             <div className="flex flex-1 items-center justify-center p-6">
               <div className="w-full max-w-3xl">
                 <DrivePreview exam={exam} title="İmtahan PDF" mode="iframe" />
@@ -706,7 +717,7 @@ export default function TakeExam() {
           ) : (
             <div className="flex flex-1 items-center justify-center p-6">
               <Card className="border-[#E5E7EB] bg-white text-[#1F2937] shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                Bu imtahanda PDF və ya sual yoxdur.
+                Bu imtahanda sual yoxdur.
               </Card>
             </div>
           )}

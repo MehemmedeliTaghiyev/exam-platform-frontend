@@ -1,6 +1,6 @@
 import { examVisibility } from './examVisibility.js';
 import { canShareExamPublic } from './syllabus.js';
-import { parseExamDate, resolveExamStatus, toDateInput } from './utils.js';
+import { isClientGeneratedExamId, parseExamDate, resolveExamStatus, toDateInput } from './utils.js';
 import { isLiveWeeklyExamId, isStudentWeeklyExam } from './weeklyMath.js';
 
 /**
@@ -61,6 +61,7 @@ export function publicExamsOfTeacher(exams, teacherId) {
 
 export function keepPublicCatalogExam(exam) {
   if (!exam || (exam.id == null && exam.Id == null)) return false;
+  if (isClientGeneratedExamId(exam.id ?? exam.Id)) return false;
   if (resolveExamStatus(exam) === 'Draft') return false;
   const weekly = isStudentWeeklyExam(exam) || isLiveWeeklyExamId(exam.id ?? exam.Id);
   if (weekly) return true;

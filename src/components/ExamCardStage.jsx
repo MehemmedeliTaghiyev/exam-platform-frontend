@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Flag } from 'lucide-react';
 import LatexText from './LatexText';
-import { formatHms } from '../lib/utils';
+import { formatHms, isOpenChoiceOption } from '../lib/utils';
 import './examCardStage.css';
 
 function optionLetter(index) {
@@ -9,7 +9,9 @@ function optionLetter(index) {
 }
 
 function normalizeOptions(question) {
-  const raw = question?.options || question?.Options || [];
+  const raw = (question?.options || question?.Options || []).filter((item) => (
+    typeof item === 'string' || !isOpenChoiceOption(item)
+  ));
   return raw.map((item, index) => {
     if (typeof item === 'string') {
       return { id: `${question?.id || 'q'}-${index}`, letter: optionLetter(index), text: item, index };

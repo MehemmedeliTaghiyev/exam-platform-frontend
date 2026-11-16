@@ -60,15 +60,17 @@ describe('teacher marketplace search', () => {
     );
   });
 
-  it('maps teachingSubject onto the directory row and keeps disabled teachers', () => {
+  it('maps teachingSubject and bio onto the directory row and keeps disabled teachers', () => {
     const row = directoryRowFromUser({
       id: 9,
       fullName: 'Sevinc',
       position: 'Şəki',
       teachingSubject: 'Kimya',
+      about: 'Şəkidə kimya müəllimi.',
       isAccessEnabled: false,
     });
     assert.equal(row.isAccessEnabled, false);
+    assert.equal(row.bio, 'Şəkidə kimya müəllimi.');
     assert.deepEqual(row.subjects, ['Kimya']);
     const merged = mergeTeacherDirectory([
       [{ id: 9, fullName: 'Sevinc', isAccessEnabled: false, teachingSubject: 'Kimya' }],

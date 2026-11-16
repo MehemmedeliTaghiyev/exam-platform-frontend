@@ -1,4 +1,27 @@
-import { parseExamDate, toDateInput } from './utils';
+import { parseExamDate, resolveExamStatus, toDateInput } from './utils';
+
+export function examOwnerKey(exam) {
+  const tid = exam?.teacherId ?? exam?.TeacherId;
+  return tid == null || tid === '' ? '' : String(tid);
+}
+
+function listedAsPublic(exam) {
+  if (!exam) return false;
+  const flag = exam.isPublic ?? exam.IsPublic ?? exam.visibility ?? exam.Visibility;
+  if (flag === true || String(flag).toLowerCase() === 'public') return true;
+  if (flag === false || String(flag).toLowerCase() === 'private') return false;
+  return /VIS:public/i.test(String(exam.description || exam.Description || ''));
+}
+
+export function publicExamsOfTeacher(exams, teacherId) {
+  const owner = String(teacherId ?? '');
+  if (!owner) return [];
+  return (exams || []).filter((exam) => {
+    if (examOwnerKey(exam) !== owner) return false;
+    if (resolveExamStatus(exam) === 'Draft') return false;
+    return listedAsPublic(exam);
+  });
+}
 
 export function examSubject(exam) {
   return String(exam?.subjectName || exam?.subject || exam?.SubjectName || 'Digər').trim() || 'Digər';

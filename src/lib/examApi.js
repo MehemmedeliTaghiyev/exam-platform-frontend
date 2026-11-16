@@ -6,7 +6,8 @@ import { driveFolderOpenUrl, isDriveMarkerQuestion, teacherDriveFolderUrl, wrapE
 import { examVisibility, withExamVisibility } from './examVisibility';
 import { isPublicGroupCode, isPublicGroupName, PUBLIC_GROUP_CODE } from './publicGroup';
 import { groupNeedsApproval, stripApprovalMark, studentMatchesGroup, withApprovalMark } from './groupApproval';
-import { decorateTeacher, mergeTeacherDirectory } from './teacherMarketplace';
+import { decorateTeacher, directoryRowFromUser, mergeTeacherDirectory } from './teacherMarketplace';
+import { publicExamsOfTeacher } from './publicExams';
 import { subscribedTeacherIds } from './groupSubscriptions';
 import { examRankingEnabled } from './examKind';
 import { examSortNewest } from './dailyTopicQuiz';
@@ -21,6 +22,8 @@ import {
   practiceRole,
   practiceFetchExams,
   practiceFetchExam,
+  defaultStudentExams,
+  practiceTeacherExams,
   practiceCreateExam,
   practiceUpdateExam,
   practiceDeleteExam,
@@ -226,6 +229,7 @@ export function mapStudent(u) {
     createdAt: u.createdAt || u.CreatedAt,
     position: u.position || u.Position || '',
     teachingSubject: u.teachingSubject || u.TeachingSubject || u.subject || u.Subject || localDb.getTeacherSubject(u.id ?? u.Id, u.email || u.Email) || '',
+    bio: u.bio || u.Bio || u.about || u.About || u.aboutMe || u.AboutMe || localDb.getTeacherBio(u.id ?? u.Id) || '',
     phone: u.phone || u.Phone || localDb.getParentPhone(u.id ?? u.Id) || '',
     teacherId: u.teacherId ?? u.TeacherId ?? null,
     role: u.role || u.Role,
@@ -977,8 +981,13 @@ export async function fetchExams() {
 async function collectTeacherExams(teacherId) {
   if (!teacherId) return [];
   if (isPractice()) {
-    return practiceFetchExams()
-      .filter((e) => String(e.teacherId) === String(teacherId) || (teacherId === 'demo' && String(e.teacherId) === 'demo'))
+    const listed = [...defaultStudentExams(), ...practiceTeacherExams()];
+    const map = new Map();
+    listed.forEach((exam) => {
+      if (exam?.id != null) map.set(String(exam.id), exam);
+    });
+    return Array.from(map.values())
+      .filter((e) => String(e.teacherId) === String(teacherId) || (String(teacherId) === 'demo' && String(e.teacherId) === 'demo'))
       .map((exam) => withExamVisibility(exam))
       .filter((exam) => resolveExamStatus(exam) !== 'Draft');
   }
@@ -992,10 +1001,23 @@ async function collectTeacherExams(teacherId) {
   const local = localDb.getExams().filter((e) => String(examOwnerId(e)) === String(teacherId));
   const map = new Map();
   [...remote, ...local].forEach((exam) => {
-    const item = withCounts([exam])[0];
+    const stamped = { ...exam, teacherId: examOwnerId(exam) ?? teacherId };
+    const item = withCounts([stamped])[0];
     if (item?.id != null) map.set(String(item.id), withExamVisibility(item));
   });
   return Array.from(map.values()).filter((e) => resolveExamStatus(e) !== 'Draft');
+}
+
+async function tryExamLists(urls) {
+  const rows = [];
+  await Promise.all((urls || []).map(async (url) => {
+    try {
+      rows.push(...unwrapList(await tryGet(url)));
+    } catch {
+      /* live host may 401/403/404 this catalog route */
+    }
+  }));
+  return rows;
 }
 
 export async function fetchListedExamsForTeacher(teacherId) {
@@ -1003,8 +1025,58 @@ export async function fetchListedExamsForTeacher(teacherId) {
 }
 
 export async function fetchPublicExamsForTeacher(teacherId) {
-  const list = await collectTeacherExams(teacherId);
-  return list.filter((e) => examVisibility(e) === 'public');
+  if (!teacherId) return [];
+  const listed = await collectTeacherExams(teacherId);
+  let extra = [];
+  if (!isPractice()) {
+    const id = encodeURIComponent(teacherId);
+    extra = await tryExamLists([
+      `/Exams?teacherId=${id}&isPublic=true`,
+      `/Exams?teacherId=${id}&visibility=public`,
+      `/Exams/public?teacherId=${id}`,
+    ]);
+    try {
+      extra.push(
+        ...unwrapList(await tryGet('/Exams')).filter((exam) => String(examOwnerId(exam)) === String(teacherId)),
+      );
+    } catch {
+      /* student GET /Exams may be 401/403 or only the caller's papers */
+    }
+  }
+  const map = new Map();
+  [...listed, ...extra].forEach((exam) => {
+    const stamped = { ...exam, teacherId: examOwnerId(exam) ?? teacherId };
+    const item = withCounts([stamped])[0];
+    if (item?.id != null) map.set(String(item.id), withExamVisibility(item));
+  });
+  return publicExamsOfTeacher(Array.from(map.values()), teacherId).sort(examSortNewest);
+}
+
+export async function fetchTeacherPublicProfile(teacherId, directory = null) {
+  if (!teacherId) return null;
+  const teachers = directory || await fetchTeacherDirectory().catch(() => []);
+  const fromDir = (teachers || []).find((t) => String(t.id) === String(teacherId)) || null;
+  let remote = null;
+  if (!isPractice()) {
+    const paths = [`/Users/${encodeURIComponent(teacherId)}/profile`, `/Users/${encodeURIComponent(teacherId)}`];
+    for (const path of paths) {
+      try {
+        remote = mapStudent(unwrapItem(await tryGet(path)) || {});
+        if (remote?.id != null || remote?.fullName) break;
+      } catch {
+        remote = null;
+      }
+    }
+  }
+  const local = localDb.getPublicTeachers().find((t) => String(t.id) === String(teacherId)) || null;
+  const storedBio = localDb.getTeacherBio(teacherId);
+  return directoryRowFromUser({
+    ...(fromDir || {}),
+    ...(local || {}),
+    ...(remote || {}),
+    id: remote?.id ?? fromDir?.id ?? local?.id ?? teacherId,
+    bio: remote?.bio || fromDir?.bio || local?.bio || storedBio || '',
+  });
 }
 
 export async function fetchMarketplaceTeachers() {
@@ -1993,18 +2065,21 @@ export async function fetchTeacherDirectory() {
           fullName: 'ExamPulse',
           position: 'Bakı',
           subjects: ['Riyaziyyat', 'Azərbaycan dili'],
+          bio: 'ExamPulse riyaziyyat və Azərbaycan dili üzrə açıq sınaqlar təqdim edir. Hər kəs daxil olub imtahan verə bilər.',
         },
         {
           id: 'demo-paid',
           fullName: 'Nigar Həsənova',
           position: 'Gəncə',
           subjects: ['Riyaziyyat'],
+          bio: 'Gəncədə riyaziyyat müəllimi. Özəl hazırlıq sınaqları yalnız öz şagirdləri üçündür.',
         },
         {
           id: PRACTICE_TEACHER_ID,
           fullName: 'ExamPulse (məşq)',
           position: 'Bakı',
           subjects: ['Fizika'],
+          bio: 'Məşq kabineti. Açıq Azərbaycan dili sınağı hamıya açıqdır.',
         },
       ],
       practiceAdminTeachers(),

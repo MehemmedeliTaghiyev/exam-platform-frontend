@@ -345,6 +345,19 @@ export const localDb = {
     this.saveDiscountTickets(list);
     return list.find((t) => t.code === code) || null;
   },
+  getTeacherBio(userId) {
+    const byId = read('teacher_bios', {});
+    return byId[String(userId || '')] || '';
+  },
+  setTeacherBio(userId, bio) {
+    if (!userId) return '';
+    const value = String(bio || '').trim();
+    const byId = read('teacher_bios', {});
+    if (value) byId[String(userId)] = value;
+    else delete byId[String(userId)];
+    write('teacher_bios', byId);
+    return value;
+  },
   getTeacherSubject(userId, email = '') {
     const byId = read('teacher_subjects', {});
     const fromId = byId[String(userId || '')];
